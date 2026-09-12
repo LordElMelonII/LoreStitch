@@ -1,0 +1,18 @@
+# Build and dependencies
+dist/
+coverage/
+tmp/
+out-tsc/
+node_modules/
+package-lock.json
+example_card/
+
+# Tooling and caches
+.angular/
+.vscode/
+.history/
+.agents/
+.antigravity/
+.claude/
+.zcode/
+skills/

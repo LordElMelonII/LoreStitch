@@ -12,7 +12,7 @@
 // SillyTavern Character Card V2 spec
 // ============================================================================
 
-export type TavernCardV2 = {
+export interface TavernCardV2 {
   spec: 'chara_card_v2';
   spec_version: '2.0';
   data: {
@@ -25,30 +25,30 @@ export type TavernCardV2 = {
     creator_notes: string;
     system_prompt: string;
     post_history_instructions: string;
-    alternate_greetings: Array<string>;
+    alternate_greetings: string[];
     character_book?: CharacterBook;
-    tags: Array<string>;
+    tags: string[];
     creator: string;
     character_version: string;
-    extensions: Record<string, any>;
+    extensions: Record<string, unknown>;
   };
-};
+}
 
-export type CharacterBook = {
+export interface CharacterBook {
   name?: string;
   description?: string;
   scan_depth?: number;
   token_budget?: number;
   recursive_scanning?: boolean;
-  extensions: Record<string, any>;
-  entries: Array<CharacterBookEntry>;
-};
+  extensions: Record<string, unknown>;
+  entries: CharacterBookEntry[];
+}
 
-export type CharacterBookEntry = {
+export interface CharacterBookEntry {
   id?: number;
   name?: string;
-  keys: Array<string>;
-  secondary_keys?: Array<string>;
+  keys: string[];
+  secondary_keys?: string[];
   content: string;
   comment?: string;
   enabled: boolean;
@@ -58,8 +58,8 @@ export type CharacterBookEntry = {
   case_sensitive?: boolean;
   selective?: boolean;
   constant?: boolean;
-  extensions: Record<string, any>;
-};
+  extensions: Record<string, unknown>;
+}
 
 // ============================================================================
 // Insertion positions (every SillyTavern `world_info_position` value)
@@ -82,11 +82,11 @@ export type WiPosition =
   | 'outlet';
 
 /** Ordered like the World Info docs' "Insertion Position" list. */
-export const WI_POSITION_OPTIONS: ReadonlyArray<{
+export const WI_POSITION_OPTIONS: readonly {
   value: WiPosition;
   label: string;
   hint: string;
-}> = [
+}[] = [
   {
     value: 'before_char',
     label: 'Before Char Defs',
@@ -213,8 +213,8 @@ export function entryStPosition(entry: CharacterBookEntry): number {
   if (position && position in WI_POSITION_TO_ST) {
     return WI_POSITION_TO_ST[position as WiPosition];
   }
-  const ext = (entry.extensions ?? {}) as Record<string, any>;
-  return typeof ext['position'] === 'number' ? ext['position'] : ST_POSITION.before;
+  const ext = (entry.extensions ?? {}) as Record<string, unknown>;
+  return typeof ext['position'] === 'number' ? (ext['position'] as number) : ST_POSITION.before;
 }
 
 /**
@@ -226,12 +226,12 @@ export function normalizeBookPositions(book: CharacterBook): CharacterBook {
   return {
     ...book,
     entries: book.entries.map((entry) => {
-      const ext = (entry.extensions ?? {}) as Record<string, any>;
+      const ext = (entry.extensions ?? {}) as Record<string, unknown>;
       return typeof ext['position'] === 'number'
         ? {
             ...entry,
             position: stNumberToPosition(
-              ext['position'],
+              ext['position'] as number,
               (entry.position ?? 'before_char') as WiPosition,
             ),
           }
@@ -263,8 +263,8 @@ export function toSpecCompliantBook(book: CharacterBook): CharacterBook {
  */
 export interface SillyTavernEntry {
   uid: number;
-  key: Array<string>;
-  keysecondary?: Array<string>;
+  key: string[];
+  keysecondary?: string[];
   comment?: string;
   content: string;
   constant?: boolean;
@@ -294,8 +294,15 @@ export interface SillyTavernEntry {
   sticky?: number | null;
   cooldown?: number | null;
   delay?: number | null;
-  triggers?: Array<string>;
+  triggers?: string[];
   displayIndex?: number;
+  ignoreBudget?: boolean;
+  matchPersonaDescription?: boolean;
+  matchCharacterDescription?: boolean;
+  matchCharacterPersonality?: boolean;
+  matchCharacterDepthPrompt?: boolean;
+  matchScenario?: boolean;
+  matchCreatorNotes?: boolean;
   [key: string]: unknown;
 }
 
@@ -316,6 +323,15 @@ export interface SillyTavernWorldInfo {
 
 export type LoreFileFormat = 'character_book' | 'tavern_card_v2' | 'sillytavern_native' | 'stproj';
 
+interface LooseImportJson {
+  format?: unknown;
+  workspace?: unknown;
+  spec?: unknown;
+  data?: unknown;
+  entries?: unknown;
+  stlo?: unknown;
+}
+
 /**
  * Detects whether a parsed JSON document is a bare `CharacterBook`, a
  * `TavernCardV2`, a LoreStitch project archive, or a native SillyTavern
@@ -325,7 +341,7 @@ export function detectLoreFileFormat(json: unknown): LoreFileFormat | null {
   if (json === null || typeof json !== 'object') {
     return null;
   }
-  const obj: any = json;
+  const obj = json as LooseImportJson;
 
   if (obj.format === 'lorestitch-project' && obj.workspace && typeof obj.workspace === 'object') {
     return 'stproj';
@@ -344,8 +360,7 @@ export function detectLoreFileFormat(json: unknown): LoreFileFormat | null {
   }
   if (
     Array.isArray(obj.entries) &&
-    typeof obj.entries === 'object' &&
-    obj.entries.every((e: any) => typeof e === 'object' && e !== null && 'content' in e)
+    obj.entries.every((e: unknown) => typeof e === 'object' && e !== null && 'content' in e)
   ) {
     return 'character_book';
   }
@@ -370,7 +385,7 @@ export function estimateTokens(text: string): number {
 }
 
 /** Default extension payload carried on every new entry. */
-function defaultEntryExtensions(): Record<string, any> {
+function defaultEntryExtensions(): Record<string, unknown> {
   return {
     position: ST_POSITION.before,
     exclude_recursion: false,
@@ -450,7 +465,7 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
 
   const entries = sorted.map((st, index): CharacterBookEntry => {
     const position = st.position ?? ST_POSITION.before;
-    const extensions: Record<string, any> = {
+    const extensions: Record<string, unknown> = {
       // Unknown/extra native fields survive a round trip via extensions.
       ...Object.fromEntries(Object.entries(st).filter(([k]) => ST_PASSTHROUGH_FIELDS.has(k))),
       position,
@@ -477,13 +492,13 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
       cooldown: st.cooldown ?? null,
       delay: st.delay ?? null,
       triggers: st.triggers ?? [],
-      ignore_budget: (st as any).ignoreBudget ?? false,
-      match_persona_description: (st as any).matchPersonaDescription ?? false,
-      match_character_description: (st as any).matchCharacterDescription ?? false,
-      match_character_personality: (st as any).matchCharacterPersonality ?? false,
-      match_character_depth_prompt: (st as any).matchCharacterDepthPrompt ?? false,
-      match_scenario: (st as any).matchScenario ?? false,
-      match_creator_notes: (st as any).matchCreatorNotes ?? false,
+      ignore_budget: st.ignoreBudget ?? false,
+      match_persona_description: st.matchPersonaDescription ?? false,
+      match_character_description: st.matchCharacterDescription ?? false,
+      match_character_personality: st.matchCharacterPersonality ?? false,
+      match_character_depth_prompt: st.matchCharacterDepthPrompt ?? false,
+      match_scenario: st.matchScenario ?? false,
+      match_creator_notes: st.matchCreatorNotes ?? false,
     };
 
     return {
@@ -515,6 +530,34 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
   };
 }
 
+interface StNativeExtensions {
+  position?: number;
+  vectorized?: boolean;
+  selectiveLogic?: number;
+  exclude_recursion?: boolean;
+  prevent_recursion?: boolean;
+  delay_until_recursion?: boolean | number;
+  probability?: number;
+  useProbability?: boolean;
+  depth?: number;
+  outlet_name?: string;
+  group?: string;
+  group_override?: boolean;
+  group_weight?: number;
+  scan_depth?: number | null;
+  case_sensitive?: boolean | null;
+  match_whole_words?: boolean | null;
+  use_group_scoring?: number | null;
+  automation_id?: string;
+  role?: number | null;
+  sticky?: number | null;
+  cooldown?: number | null;
+  delay?: number | null;
+  triggers?: string[];
+  display_index?: number;
+  [key: string]: unknown;
+}
+
 /**
  * Converts a `CharacterBook` back to the native SillyTavern world-info shape,
  * compatible with direct import into SillyTavern.
@@ -522,9 +565,7 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
 export function characterBookToStNative(book: CharacterBook): SillyTavernWorldInfo {
   const entries: Record<string, SillyTavernEntry> = {};
   book.entries.forEach((entry, index) => {
-    // Extension payloads are schema-free; alias as any so index-signature
-    // members can be read with property access below.
-    const ext: any = entry.extensions ?? {};
+    const ext = (entry.extensions ?? {}) as StNativeExtensions;
     const uid = entry.id ?? index;
     // The spec-level string is canonical; extensions.position is the ST-native
     // numeric mirror (also the fallback for unknown/legacy values).

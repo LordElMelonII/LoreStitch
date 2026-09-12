@@ -88,11 +88,11 @@ export function rewrapContent(content: string, style: DelimiterStyle, name = '')
 }
 
 /** Options metadata for delimiter style selectors. */
-export const DELIMITER_STYLE_OPTIONS: ReadonlyArray<{
+export const DELIMITER_STYLE_OPTIONS: readonly {
   value: DelimiterStyle;
   label: string;
   hint: string;
-}> = [
+}[] = [
   { value: 'tag', label: 'Tag — <Name> … </Name>', hint: 'XML-style block' },
   { value: 'bracket', label: 'Bracket — [Name= … ]', hint: 'Assignment-style block' },
   { value: 'separator', label: 'Separator — ---', hint: 'Dashed line after the content' },
@@ -106,11 +106,15 @@ export const DELIMITER_STYLE_OPTIONS: ReadonlyArray<{
 export function entryDelimiterName(entry: {
   comment?: string;
   name?: string;
-  keys?: Array<string>;
+  keys?: string[];
 }): string {
   const raw =
     entry.comment?.trim() || entry.name?.trim() || entry.keys?.find((k) => k.trim())?.trim() || '';
-  const clean = raw.replace(/[<>=\[\]\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  const clean = raw
+    .replace(/[<>=[\]\n\r]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
   return clean || 'entry';
 }
 

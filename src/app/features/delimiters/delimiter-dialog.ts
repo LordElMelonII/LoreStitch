@@ -106,9 +106,7 @@ export class DelimiterDialog {
     });
   });
 
-  protected readonly changedCount = computed(
-    () => this.previews().filter((p) => p.changed).length,
-  );
+  protected readonly changedCount = computed(() => this.previews().filter((p) => p.changed).length);
 
   /** The diff shown in the preview pane: the active entry, else the first. */
   protected readonly previewEntry = computed<EntryPreview | null>(() => {

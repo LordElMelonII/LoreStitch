@@ -91,49 +91,49 @@
 
       <mat-divider class="toolbar-divider" [vertical]="true"></mat-divider>
     }
-      <mat-menu #exportMenu="matMenu" classList="export-menu">
-        <div class="menu-section">Use in SillyTavern</div>
-        <button mat-menu-item (click)="exportStNative()">
-          <mat-icon>data_object</mat-icon>
-          <span class="menu-text">
-            <span class="menu-title">World Info JSON</span>
-            <span class="menu-desc">Import via SillyTavern’s World Info panel</span>
-          </span>
-        </button>
-        <button mat-menu-item (click)="exportCard()">
-          <mat-icon>face</mat-icon>
-          <span class="menu-text">
-            <span class="menu-title">Character Card V2 JSON</span>
-            <span class="menu-desc">Character card with this lorebook embedded</span>
-          </span>
-        </button>
+    <mat-menu #exportMenu="matMenu" classList="export-menu">
+      <div class="menu-section">Use in SillyTavern</div>
+      <button mat-menu-item (click)="exportStNative()">
+        <mat-icon>data_object</mat-icon>
+        <span class="menu-text">
+          <span class="menu-title">World Info JSON</span>
+          <span class="menu-desc">Import via SillyTavern’s World Info panel</span>
+        </span>
+      </button>
+      <button mat-menu-item (click)="exportCard()">
+        <mat-icon>face</mat-icon>
+        <span class="menu-text">
+          <span class="menu-title">Character Card V2 JSON</span>
+          <span class="menu-desc">Character card with this lorebook embedded</span>
+        </span>
+      </button>
 
-        <div class="menu-section">Backup</div>
-        <button mat-menu-item (click)="exportProjectArchive()">
-          <mat-icon>archive</mat-icon>
-          <span class="menu-text">
-            <span class="menu-title">Project archive (.stproj)</span>
-            <span class="menu-desc">Full backup with version history — reopen in LoreStitch</span>
-          </span>
-        </button>
+      <div class="menu-section">Backup</div>
+      <button mat-menu-item (click)="exportProjectArchive()">
+        <mat-icon>archive</mat-icon>
+        <span class="menu-text">
+          <span class="menu-title">Project archive (.stproj)</span>
+          <span class="menu-desc">Full backup with version history — reopen in LoreStitch</span>
+        </span>
+      </button>
 
-        <mat-divider></mat-divider>
-        <div class="menu-section">Reference &amp; proofreading</div>
-        <button mat-menu-item (click)="exportBook()">
-          <mat-icon>book</mat-icon>
-          <span class="menu-text">
-            <span class="menu-title">Character Book JSON</span>
-            <span class="menu-desc">Bare V2-spec character_book (no card)</span>
-          </span>
-        </button>
-        <button mat-menu-item (click)="exportDigest()">
-          <mat-icon>description</mat-icon>
-          <span class="menu-text">
-            <span class="menu-title">Proofread digest (Markdown)</span>
-            <span class="menu-desc">All entries as readable text</span>
-          </span>
-        </button>
-      </mat-menu>
+      <mat-divider></mat-divider>
+      <div class="menu-section">Reference &amp; proofreading</div>
+      <button mat-menu-item (click)="exportBook()">
+        <mat-icon>book</mat-icon>
+        <span class="menu-text">
+          <span class="menu-title">Character Book JSON</span>
+          <span class="menu-desc">Bare V2-spec character_book (no card)</span>
+        </span>
+      </button>
+      <button mat-menu-item (click)="exportDigest()">
+        <mat-icon>description</mat-icon>
+        <span class="menu-text">
+          <span class="menu-title">Proofread digest (Markdown)</span>
+          <span class="menu-desc">All entries as readable text</span>
+        </span>
+      </button>
+    </mat-menu>
 
     <mat-menu #moreMenu="matMenu">
       <button mat-menu-item (click)="openSearch()">

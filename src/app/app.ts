@@ -150,7 +150,7 @@ export class App {
       return;
     }
 
-    let parsed: ParsedImport | null = null;
+    let parsed: ParsedImport | null;
     try {
       parsed = this.importer.parseImport(JSON.parse(await file.text()), file.name);
     } catch {

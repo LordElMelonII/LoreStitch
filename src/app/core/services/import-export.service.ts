@@ -3,6 +3,7 @@ import {
   CharacterBook,
   LoreFileFormat,
   ProjectWorkspace,
+  SillyTavernWorldInfo,
   TavernCardV2,
   characterBookToStNative,
   detectLoreFileFormat,
@@ -61,7 +62,7 @@ export class ImportExportService {
         };
       }
       case 'sillytavern_native': {
-        const book = stNativeToCharacterBook(json as any, fallbackTitle);
+        const book = stNativeToCharacterBook(json as SillyTavernWorldInfo, fallbackTitle);
         return {
           format,
           book,

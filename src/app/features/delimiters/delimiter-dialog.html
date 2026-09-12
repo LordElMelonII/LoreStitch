@@ -5,8 +5,8 @@
 
 <mat-dialog-content class="dialog-body">
   <p class="dialog-intro">
-    Wrap entry content so the model can tell where each block begins and ends. Existing
-    delimiters are recognized and replaced when you pick a new style.
+    Wrap entry content so the model can tell where each block begins and ends. Existing delimiters
+    are recognized and replaced when you pick a new style.
   </p>
 
   <div class="controls">
@@ -35,7 +35,11 @@
       <mat-form-field
         class="grow"
         subscriptSizing="dynamic"
-        [matTooltip]="nameResolvedFromEntries() ? 'Each entry uses the name from its comment or first key' : 'Name used in the wrapper'"
+        [matTooltip]="
+          nameResolvedFromEntries()
+            ? 'Each entry uses the name from its comment or first key'
+            : 'Name used in the wrapper'
+        "
       >
         <mat-label>Wrapper name</mat-label>
         <input
@@ -75,9 +79,7 @@
       }
     </span>
     <span class="meta">
-      {{ changedCount() }} of {{ targets().length }} entr{{
-        targets().length === 1 ? 'y' : 'ies'
-      }}
+      {{ changedCount() }} of {{ targets().length }} entr{{ targets().length === 1 ? 'y' : 'ies' }}
       will change
     </span>
   </div>

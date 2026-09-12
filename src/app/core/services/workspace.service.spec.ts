@@ -1,7 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { WorkspaceService } from './workspace.service';
 import { StorageService } from './storage.service';
-import { VcsService } from './vcs.service';
 import { createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
 
 /**
