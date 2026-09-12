@@ -1,9 +1,16 @@
 import { Injectable } from '@angular/core';
 import { CharacterBook, ProjectCommit, ProjectWorkspace } from '../models/lorebook.model';
+import { hasSubtleCrypto, sha256Hex } from './sha256';
 
 /** Creates a Git-style short display id from a full SHA-256 hash. */
 export function shortHash(id: string): string {
   return id.slice(0, 7);
+}
+
+function toHex(digest: ArrayBuffer): string {
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
@@ -14,14 +21,19 @@ export function shortHash(id: string): string {
  */
 @Injectable({ providedIn: 'root' })
 export class VcsService {
-  /** Hashes `parentId + serialized book` with the Web Crypto API. */
+  /**
+   * Hashes `parentId + serialized book` with SHA-256. WebCrypto is used when
+   * available; on insecure origins (e.g. plain http over the LAN, where
+   * `crypto.subtle` does not exist) a pure-JS fallback produces the same
+   * digest.
+   */
   private async hashBook(book: CharacterBook, parentId: string | null): Promise<string> {
     const payload = `${parentId ?? 'root'}\u0000${JSON.stringify(book)}`;
-    const data = new TextEncoder().encode(payload);
-    const digest = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(digest))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+    if (hasSubtleCrypto()) {
+      const data = new TextEncoder().encode(payload);
+      return toHex(await crypto.subtle.digest('SHA-256', data));
+    }
+    return sha256Hex(payload);
   }
 
   /**

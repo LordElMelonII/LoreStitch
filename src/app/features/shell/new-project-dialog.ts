@@ -58,7 +58,8 @@ export interface NewProjectResult {
       display: flex;
       flex-direction: column;
       gap: 16px;
-      min-width: 420px;
+      // Fits phones: never wider than the viewport minus dialog margins.
+      width: min(420px, calc(100vw - 48px));
     }
 
     .title-field {

@@ -48,6 +48,7 @@
       <button
         matIconButton
         type="button"
+        class="desktop-only"
         (click)="workspace.addEntry()"
         matTooltip="New entry"
         aria-label="New entry"
@@ -65,11 +66,12 @@
         <mat-icon>find_replace</mat-icon>
       </button>
 
-      <mat-divider class="toolbar-divider" [vertical]="true"></mat-divider>
+      <mat-divider class="toolbar-divider desktop-only" [vertical]="true"></mat-divider>
 
       <button
         matIconButton
         type="button"
+        class="desktop-only"
         [matMenuTriggerFor]="exportMenu"
         matTooltip="Export"
         aria-label="Export menu"
@@ -134,9 +136,17 @@
       </mat-menu>
 
     <mat-menu #moreMenu="matMenu">
+      <button mat-menu-item (click)="openSearch()">
+        <mat-icon>find_replace</mat-icon>
+        <span>Search &amp; replace…</span>
+      </button>
       <button mat-menu-item (click)="importMergeInput.click()">
         <mat-icon>merge_type</mat-icon>
         <span>Merge lorebook…</span>
+      </button>
+      <button mat-menu-item [matMenuTriggerFor]="exportMenu">
+        <mat-icon>file_download</mat-icon>
+        <span>Export</span>
       </button>
       <button mat-menu-item [matMenuTriggerFor]="themeMenu">
         <mat-icon>brightness_auto</mat-icon>

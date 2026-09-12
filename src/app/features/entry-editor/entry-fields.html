@@ -11,19 +11,17 @@
         />
       </mat-form-field>
 
-      <mat-form-field subscriptSizing="dynamic" matTooltip="Where in the prompt this entry is inserted">
-        <mat-label>Position</mat-label>
-        <mat-select
-          [value]="e.position ?? 'before_char'"
-          (selectionChange)="setPosition($event.value)"
-        >
-          @for (option of positionOptions; track option.value) {
-            <mat-option [value]="option.value" [matTooltip]="option.hint">
-              {{ option.label }}
-            </mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
+        <mat-form-field subscriptSizing="dynamic" matTooltip="Where in the prompt this entry is inserted">
+          <mat-label>Position</mat-label>
+          <mat-select
+            [value]="e.position ?? 'before_char'"
+            (selectionChange)="setPosition($event.value)"
+          >
+            @for (option of positionOptions; track option.value) {
+              <mat-option [value]="option.value">{{ option.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
 
       @if (isAtDepth()) {
         <mat-form-field class="num" subscriptSizing="dynamic" matTooltip="0 is the bottom of the prompt; messages deeper in the chat have larger depth">
@@ -140,7 +138,7 @@
             <mat-chip-row
               (removed)="removeKey('keys', $index)"
               (dblclick)="startEdit('keys', $index, key)"
-              matTooltip="Double-click to edit"
+
             >
               {{ key }}
               <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + key">
@@ -187,7 +185,7 @@
               <mat-chip-row
                 (removed)="removeKey('secondary_keys', $index)"
                 (dblclick)="startEdit('secondary_keys', $index, key)"
-                matTooltip="Double-click to edit"
+
               >
                 {{ key }}
                 <button
@@ -230,7 +228,7 @@
       matIconButton
       matTextSuffix
       type="button"
-      class="delimiter-btn"
+      class="delimiter-btn small-icon-btn"
       (click)="openDelimiterDialog()"
       [matTooltip]="delimiterTooltip()"
       aria-label="Content delimiters"

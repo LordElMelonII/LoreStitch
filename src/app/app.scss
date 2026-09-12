@@ -42,6 +42,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
+    flex: 0 1 auto;
     max-width: 320px;
     overflow: hidden;
 
@@ -54,8 +56,13 @@
     }
 
     &.no-project {
-      color: var(--mat-sys-outline);
+      display: block;
+      font: var(--mat-sys-body-large);
       font-style: italic;
+      color: var(--mat-sys-outline);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .unsaved-dot {
@@ -76,6 +83,18 @@
     height: 24px;
     align-self: center;
     margin: 0 4px;
+  }
+
+  // Compact phones: primary actions live in the overflow menu and the brand
+  // collapses to its icon so every action stays reachable.
+  @media (max-width: 599px) {
+    .desktop-only {
+      display: none;
+    }
+
+    .brand-name {
+      display: none;
+    }
   }
 
   .hidden-input {

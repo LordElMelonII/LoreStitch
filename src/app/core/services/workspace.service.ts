@@ -9,6 +9,7 @@ import {
   entryTitle,
   extractRawCardData,
 } from '../models/lorebook.model';
+import { randomUuid } from './sha256';
 import { LAST_PROJECT_KEY, StorageService } from './storage.service';
 import { VcsService } from './vcs.service';
 
@@ -88,7 +89,7 @@ export class WorkspaceService {
   async createProject(title: string, targetType: ProjectWorkspace['targetType']): Promise<void> {
     const now = Date.now();
     const project: ProjectWorkspace = {
-      id: crypto.randomUUID(),
+      id: randomUuid(),
       title: title.trim() || 'Untitled Project',
       createdAt: now,
       updatedAt: now,
@@ -137,7 +138,7 @@ export class WorkspaceService {
   ): Promise<void> {
     const now = Date.now();
     const project: ProjectWorkspace = {
-      id: crypto.randomUUID(),
+      id: randomUuid(),
       title,
       createdAt: now,
       updatedAt: now,
