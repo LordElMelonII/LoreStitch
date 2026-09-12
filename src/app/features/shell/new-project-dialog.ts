@@ -54,15 +54,18 @@ export interface NewProjectResult {
     </mat-dialog-actions>
   `,
   styles: `
+
     .body {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      padding: 20px 24px;
+      gap: 24px;
       // Fits phones: never wider than the viewport minus dialog margins.
       width: min(420px, calc(100vw - 48px));
     }
 
     .title-field {
+      padding-top: 8px;
       width: 100%;
     }
 

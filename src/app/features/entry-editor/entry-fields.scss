@@ -29,10 +29,16 @@
   row-gap: 8px;
 }
 
+.keys-row {
+  align-items: stretch;
+}
+
 // Key chip fields are real outlined form fields (label in the notch, hint
-// below). Only the in-place edit input needs custom styling.
+// below). Stretch both fields so their outline boxes and hints match heights.
 .keys-field {
   cursor: text;
+  display: flex;
+  flex-direction: column;
 
   .chip-edit {
     flex: 1;
