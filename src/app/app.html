@@ -1,0 +1,124 @@
+<mat-toolbar color="primary" class="app-toolbar">
+  <mat-icon class="toolbar-icon">auto_stories</mat-icon>
+  <span class="app-title">{{ title() }}</span>
+  <span class="spacer"></span>
+  <button
+    mat-icon-button
+    aria-label="Notifications"
+    [matBadge]="counter()"
+    [matBadgeHidden]="counter() === 0"
+    matBadgeColor="accent"
+  >
+    <mat-icon>notifications</mat-icon>
+  </button>
+  <button mat-icon-button aria-label="Settings">
+    <mat-icon>settings</mat-icon>
+  </button>
+</mat-toolbar>
+
+<main class="main-container">
+  <section class="hero-section">
+    <h1 class="hero-heading">Welcome to {{ title() }}</h1>
+    <p class="hero-subtitle">
+      Powered by Angular v22 &amp; Angular Material 3 with fine-grained Signals reactivity.
+    </p>
+  </section>
+
+  <div class="content-grid">
+    <!-- Interactive Signals Demo Card -->
+    <mat-card class="dashboard-card" appearance="outlined">
+      <mat-card-header>
+        <mat-icon mat-card-avatar class="card-avatar">touch_app</mat-icon>
+        <mat-card-title>Reactive State with Signals</mat-card-title>
+        <mat-card-subtitle>Live counter and computed derivation</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="counter-display">
+          <div class="metric-box">
+            <span class="metric-label">Current Count</span>
+            <span class="metric-value">{{ counter() }}</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Double Count (computed)</span>
+            <span class="metric-value">{{ doubleCount() }}</span>
+          </div>
+        </div>
+
+        @if (counter() > 10) {
+          <div class="status-banner milestone">
+            <mat-icon>star</mat-icon>
+            <span>Awesome milestone: counter exceeds 10!</span>
+          </div>
+        } @else if (counter() === 0) {
+          <div class="status-banner info">
+            <mat-icon>info</mat-icon>
+            <span>Counter is at zero. Click increment to begin.</span>
+          </div>
+        }
+
+        <div class="toggle-container">
+          <mat-slide-toggle [checked]="isFeatureEnabled()" (change)="toggleFeature()">
+            Interactive features {{ isFeatureEnabled() ? 'enabled' : 'disabled' }}
+          </mat-slide-toggle>
+        </div>
+      </mat-card-content>
+      <mat-card-actions align="end">
+        <button mat-button (click)="reset()" [disabled]="counter() === 0">
+          <mat-icon>restart_alt</mat-icon>
+          Reset
+        </button>
+        <button
+          mat-stroked-button
+          (click)="decrement()"
+          [disabled]="counter() === 0 || !isFeatureEnabled()"
+        >
+          <mat-icon>remove</mat-icon>
+          Decrement
+        </button>
+        <button
+          mat-flat-button
+          color="primary"
+          (click)="increment()"
+          [disabled]="!isFeatureEnabled()"
+        >
+          <mat-icon>add</mat-icon>
+          Increment
+        </button>
+      </mat-card-actions>
+    </mat-card>
+
+    <!-- Architecture & Tech Stack Card -->
+    <mat-card class="dashboard-card" appearance="outlined">
+      <mat-card-header>
+        <mat-icon mat-card-avatar class="card-avatar">layers</mat-icon>
+        <mat-card-title>Architecture &amp; Features</mat-card-title>
+        <mat-card-subtitle>Modern Angular 22 best practices</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <div class="features-list">
+          @for (item of techStack(); track item.title) {
+            <div class="feature-item">
+              <div class="feature-icon-wrapper">
+                <mat-icon class="feature-icon">{{ item.icon }}</mat-icon>
+              </div>
+              <div class="feature-details">
+                <div class="feature-header">
+                  <span class="feature-title">{{ item.title }}</span>
+                  <mat-chip-set>
+                    <mat-chip class="mini-chip">{{ item.tag }}</mat-chip>
+                  </mat-chip-set>
+                </div>
+                <p class="feature-description">{{ item.description }}</p>
+              </div>
+            </div>
+            @if (!$last) {
+              <mat-divider></mat-divider>
+            }
+          }
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <router-outlet></router-outlet>
+</main>
