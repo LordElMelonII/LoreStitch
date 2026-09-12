@@ -54,12 +54,80 @@ export type CharacterBookEntry = {
   enabled: boolean;
   insertion_order: number;
   priority?: number;
-  position?: 'before_char' | 'after_char';
+  position?: WiPosition;
   case_sensitive?: boolean;
   selective?: boolean;
   constant?: boolean;
   extensions: Record<string, any>;
 };
+
+// ============================================================================
+// Insertion positions (every SillyTavern `world_info_position` value)
+// ============================================================================
+
+/**
+ * UI-facing insertion positions. The V2 card spec only names `before_char` /
+ * `after_char`; every other SillyTavern position is stored in the spec field
+ * as its closest match and carried losslessly in `extensions.position`
+ * (exactly how SillyTavern's own `convertCharacterBook()` round-trips them).
+ */
+export type WiPosition =
+  | 'before_char'
+  | 'after_char'
+  | 'before_em'
+  | 'after_em'
+  | 'before_an'
+  | 'after_an'
+  | 'at_depth'
+  | 'outlet';
+
+/** Ordered like the World Info docs' "Insertion Position" list. */
+export const WI_POSITION_OPTIONS: ReadonlyArray<{
+  value: WiPosition;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: 'before_char',
+    label: 'Before Char Defs',
+    hint: 'Inserted before the character description & scenario — moderate impact',
+  },
+  {
+    value: 'after_char',
+    label: 'After Char Defs',
+    hint: 'Inserted after the character description & scenario — greater impact',
+  },
+  {
+    value: 'before_em',
+    label: 'Before Example Messages',
+    hint: 'Parsed as an example dialogue block before the card examples',
+  },
+  {
+    value: 'after_em',
+    label: 'After Example Messages',
+    hint: 'Parsed as an example dialogue block after the card examples',
+  },
+  {
+    value: 'before_an',
+    label: 'Top of Author’s Note',
+    hint: 'Inserted at the top of Author’s Note content',
+  },
+  {
+    value: 'after_an',
+    label: 'Bottom of Author’s Note',
+    hint: 'Inserted at the bottom of Author’s Note content',
+  },
+  {
+    value: 'at_depth',
+    label: '@ Depth',
+    hint: 'Inserted at a specific chat depth (0 = bottom of the prompt), as a system / user / assistant message',
+  },
+  {
+    value: 'outlet',
+    label: 'Outlet (manual)',
+    hint: 'Not injected automatically — pull it into the prompt with the outlet macro',
+  },
+];
 
 // ============================================================================
 // LoreStitch version-control model
@@ -115,6 +183,78 @@ export const ST_ROLE = {
   user: 1,
   assistant: 2,
 } as const;
+
+/** `WiPosition` -> `world_info_position` numeric value. */
+export const WI_POSITION_TO_ST: Record<WiPosition, number> = {
+  before_char: ST_POSITION.before,
+  after_char: ST_POSITION.after,
+  before_em: ST_POSITION.EMTop,
+  after_em: ST_POSITION.EMBottom,
+  before_an: ST_POSITION.ANTop,
+  after_an: ST_POSITION.ANBottom,
+  at_depth: ST_POSITION.atDepth,
+  outlet: ST_POSITION.outlet,
+};
+
+/** `world_info_position` numeric value -> `WiPosition` (unknown values fall back). */
+export function stNumberToPosition(
+  numeric: number | null | undefined,
+  fallback: WiPosition = 'before_char',
+): WiPosition {
+  const match = (Object.keys(WI_POSITION_TO_ST) as WiPosition[]).find(
+    (key) => WI_POSITION_TO_ST[key] === numeric,
+  );
+  return match ?? fallback;
+}
+
+/** Current effective SillyTavern numeric position of an entry. */
+export function entryStPosition(entry: CharacterBookEntry): number {
+  const position = entry.position;
+  if (position && position in WI_POSITION_TO_ST) {
+    return WI_POSITION_TO_ST[position as WiPosition];
+  }
+  const ext = (entry.extensions ?? {}) as Record<string, any>;
+  return typeof ext['position'] === 'number' ? ext['position'] : ST_POSITION.before;
+}
+
+/**
+ * Normalizes entries whose true position lives in `extensions.position`
+ * (e.g. books exported from SillyTavern or older LoreStitch versions) so the
+ * spec-level `position` field reflects the real value.
+ */
+export function normalizeBookPositions(book: CharacterBook): CharacterBook {
+  return {
+    ...book,
+    entries: book.entries.map((entry) => {
+      const ext = (entry.extensions ?? {}) as Record<string, any>;
+      return typeof ext['position'] === 'number'
+        ? {
+            ...entry,
+            position: stNumberToPosition(
+              ext['position'],
+              (entry.position ?? 'before_char') as WiPosition,
+            ),
+          }
+        : entry;
+    }),
+  };
+}
+
+/**
+ * Produces a spec-clean book for V2 exports: `position` collapses to the two
+ * spec-legal values (SillyTavern's own convention) while the true numeric
+ * position is preserved in `extensions.position`.
+ */
+export function toSpecCompliantBook(book: CharacterBook): CharacterBook {
+  return {
+    ...structuredClone(book),
+    entries: book.entries.map((entry) => ({
+      ...entry,
+      position: entryStPosition(entry) === ST_POSITION.before ? 'before_char' : 'after_char',
+      extensions: { ...entry.extensions, position: entryStPosition(entry) },
+    })),
+  };
+}
 
 /**
  * A native SillyTavern world-info entry. SillyTavern tolerates unknown/legacy
@@ -232,6 +372,7 @@ export function estimateTokens(text: string): number {
 /** Default extension payload carried on every new entry. */
 function defaultEntryExtensions(): Record<string, any> {
   return {
+    position: ST_POSITION.before,
     exclude_recursion: false,
     prevent_recursion: false,
     delay_until_recursion: false,
@@ -355,7 +496,7 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
       enabled: !(st.disable ?? false),
       insertion_order: st.order ?? 100,
       priority: undefined,
-      position: position === ST_POSITION.before ? 'before_char' : 'after_char',
+      position: stNumberToPosition(position),
       case_sensitive: st.caseSensitive ?? undefined,
       selective: st.selective ?? false,
       constant: st.constant ?? false,
@@ -385,11 +526,13 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
     // members can be read with property access below.
     const ext: any = entry.extensions ?? {};
     const uid = entry.id ?? index;
+    // The spec-level string is canonical; extensions.position is the ST-native
+    // numeric mirror (also the fallback for unknown/legacy values).
     const position =
-      typeof ext.position === 'number'
-        ? ext.position
-        : entry.position === 'after_char'
-          ? ST_POSITION.after
+      entry.position && entry.position in WI_POSITION_TO_ST
+        ? WI_POSITION_TO_ST[entry.position as WiPosition]
+        : typeof ext.position === 'number'
+          ? ext.position
           : ST_POSITION.before;
 
     const passthrough = Object.fromEntries(

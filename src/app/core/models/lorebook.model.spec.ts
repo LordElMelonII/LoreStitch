@@ -1,12 +1,16 @@
 import {
   CharacterBook,
+  ST_POSITION,
   createEmptyBook,
   createEmptyEntry,
   detectLoreFileFormat,
   characterBookToStNative,
   entryTitle,
   estimateTokens,
+  normalizeBookPositions,
   stNativeToCharacterBook,
+  stNumberToPosition,
+  toSpecCompliantBook,
 } from './lorebook.model';
 
 /** Representative native entry carrying every field world-info.js defines. */
@@ -136,6 +140,26 @@ describe('lorebook model', () => {
       expect(book.entries.map((e) => e.id)).toEqual([0, 1]);
       expect(book.entries[1].enabled).toBe(false);
     });
+
+    it('maps every world_info_position value to a named position', () => {
+      expect(stNumberToPosition(0)).toBe('before_char');
+      expect(stNumberToPosition(1)).toBe('after_char');
+      expect(stNumberToPosition(2)).toBe('before_an');
+      expect(stNumberToPosition(3)).toBe('after_an');
+      expect(stNumberToPosition(4)).toBe('at_depth');
+      expect(stNumberToPosition(5)).toBe('before_em');
+      expect(stNumberToPosition(6)).toBe('after_em');
+      expect(stNumberToPosition(7)).toBe('outlet');
+      expect(stNumberToPosition(99)).toBe('before_char');
+
+      const atDepth = stNativeToCharacterBook({
+        entries: { 5: nativeEntry({ uid: 5, position: ST_POSITION.atDepth, depth: 2, role: 1 }) },
+      }).entries[0];
+      expect(atDepth.position).toBe('at_depth');
+      expect(atDepth.extensions?.['position']).toBe(ST_POSITION.atDepth);
+      expect(atDepth.extensions?.['depth']).toBe(2);
+      expect(atDepth.extensions?.['role']).toBe(1);
+    });
   });
 
   describe('characterBookToStNative round trip', () => {
@@ -160,6 +184,41 @@ describe('lorebook model', () => {
       expect(restored.displayIndex).toBe(original.displayIndex);
       expect(restored.excludeRecursion).toBe(original.excludeRecursion);
       expect(restored['characterFilter']).toEqual(original['characterFilter']);
+    });
+
+    it('exports a string position even without extensions.position', () => {
+      const entry = createEmptyEntry(1);
+      entry.position = 'at_depth';
+      delete (entry.extensions ?? {})['position'];
+      const native = characterBookToStNative({ extensions: {}, entries: [entry] });
+      expect(native.entries['1'].position).toBe(ST_POSITION.atDepth);
+    });
+  });
+
+  describe('spec compliance & re-import normalization', () => {
+    it('toSpecCompliantBook clamps position to the spec but keeps the numeric value', () => {
+      const entry = createEmptyEntry(1);
+      entry.position = 'at_depth';
+      const book: CharacterBook = { extensions: {}, entries: [entry] };
+      const spec = toSpecCompliantBook(book);
+
+      expect(spec.entries[0].position).toBe('after_char');
+      expect(spec.entries[0].extensions?.['position']).toBe(ST_POSITION.atDepth);
+      // Re-importing the spec-clamped book restores the real position.
+      expect(normalizeBookPositions(spec).entries[0].position).toBe('at_depth');
+    });
+
+    it('normalizeBookPositions restores the real position from extensions', () => {
+      const book: CharacterBook = {
+        extensions: {},
+        entries: [
+          { ...createEmptyEntry(0), position: 'before_char', extensions: { position: 7 } },
+          { ...createEmptyEntry(1), position: 'after_char', extensions: {} },
+        ],
+      };
+      const normalized = normalizeBookPositions(book);
+      expect(normalized.entries[0].position).toBe('outlet');
+      expect(normalized.entries[1].position).toBe('after_char');
     });
   });
 

@@ -205,6 +205,23 @@ export class WorkspaceService {
     });
   }
 
+  /**
+   * Patches many entries in one project update. `patch` is called per entry so
+   * batch transforms (e.g. delimiter re-wrapping) can derive per-entry values.
+   */
+  updateManyEntries(
+    entryIds: number[],
+    patch: (entry: CharacterBookEntry) => Partial<CharacterBookEntry>,
+  ): void {
+    const ids = new Set(entryIds);
+    this.mutateProject((p) => {
+      const entries = p.activeBook.entries.map((entry) =>
+        ids.has(entry.id ?? -1) ? { ...entry, ...patch(entry) } : entry,
+      );
+      return this.withBook(p, { ...p.activeBook, entries });
+    });
+  }
+
   addEntry(): number {
     const project = this.activeProject();
     if (!project) {
@@ -302,16 +319,6 @@ export class WorkspaceService {
       const remaining = this.openTabEntryIds();
       this.activeTabId.set(remaining.length ? remaining[remaining.length - 1] : null);
     }
-  }
-
-  /** CDK drag & drop callback for the tab strip. */
-  reorderTabs(previousIndex: number, currentIndex: number): void {
-    this.openTabEntryIds.update((tabs) => {
-      const next = [...tabs];
-      const [moved] = next.splice(previousIndex, 1);
-      next.splice(currentIndex, 0, moved);
-      return next;
-    });
   }
 
   // -------------------------------------------------------------------------

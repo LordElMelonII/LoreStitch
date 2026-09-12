@@ -8,7 +8,9 @@ import {
   detectLoreFileFormat,
   entryTitle,
   estimateTokens,
+  normalizeBookPositions,
   stNativeToCharacterBook,
+  toSpecCompliantBook,
 } from '../models/lorebook.model';
 
 /** Result of parsing an imported JSON document. */
@@ -53,7 +55,7 @@ export class ImportExportService {
           format,
           card,
           book: card.data.character_book
-            ? structuredClone(card.data.character_book)
+            ? normalizeBookPositions(structuredClone(card.data.character_book))
             : { extensions: {}, entries: [] },
           suggestedTitle: card.data.name || fallbackTitle,
         };
@@ -76,7 +78,7 @@ export class ImportExportService {
         };
       }
       default: {
-        const book = structuredClone(json as CharacterBook);
+        const book = normalizeBookPositions(structuredClone(json as CharacterBook));
         return {
           format: 'character_book',
           book,
@@ -92,7 +94,7 @@ export class ImportExportService {
 
   /** Clean SillyTavern CharacterBook JSON (V2 schema, no LoreStitch extras). */
   exportCharacterBook(book: CharacterBook, title: string): void {
-    this.downloadJson(book, `${this.fileName(title)}-lorebook.json`);
+    this.downloadJson(toSpecCompliantBook(book), `${this.fileName(title)}-lorebook.json`);
   }
 
   /** Native SillyTavern world-info JSON, directly importable into ST. */
@@ -117,7 +119,7 @@ export class ImportExportService {
         system_prompt: base?.system_prompt ?? '',
         post_history_instructions: base?.post_history_instructions ?? '',
         alternate_greetings: base?.alternate_greetings ?? [],
-        character_book: structuredClone(project.activeBook),
+        character_book: toSpecCompliantBook(project.activeBook),
         tags: base?.tags ?? [],
         creator: base?.creator ?? '',
         character_version: base?.character_version ?? '',

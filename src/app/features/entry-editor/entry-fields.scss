@@ -1,0 +1,90 @@
+:host {
+  display: block;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 16px 24px;
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+
+  .grow {
+    flex: 1;
+    min-width: 220px;
+  }
+
+  .num {
+    width: 110px;
+  }
+}
+
+.toggles {
+  row-gap: 8px;
+}
+
+// Key chip fields are real outlined form fields (label in the notch, hint
+// below). Only the in-place edit input needs custom styling.
+.keys-field {
+  cursor: text;
+
+  .chip-edit {
+    flex: 1;
+    min-width: 140px;
+    max-width: 100%;
+    height: 28px;
+    margin: 0 2px;
+    padding: 0 10px;
+    border: 1px solid var(--mat-sys-primary);
+    border-radius: 999px;
+    background: var(--mat-sys-surface-container-lowest, var(--mat-sys-surface));
+    color: inherit;
+    font: var(--mat-sys-body-medium);
+    outline: none;
+  }
+}
+
+.content-field {
+  flex: 1;
+  min-height: 200px;
+  width: 100%;
+
+  .content-textarea {
+    min-height: 180px;
+    resize: vertical;
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .delimiter-btn {
+    width: 28px;
+    height: 28px;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+  }
+
+  .stats-hint {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.advanced {
+  .advanced-grid {
+    row-gap: 12px;
+
+    mat-form-field {
+      width: 160px;
+    }
+  }
+}

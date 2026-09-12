@@ -65,15 +65,7 @@
         <mat-icon>find_replace</mat-icon>
       </button>
 
-      <button
-        matIconButton
-        type="button"
-        (click)="importMergeInput.click()"
-        matTooltip="Merge lorebook into project"
-        aria-label="Merge lorebook"
-      >
-        <mat-icon>merge_type</mat-icon>
-      </button>
+      <mat-divider class="toolbar-divider" [vertical]="true"></mat-divider>
 
       <button
         matIconButton
@@ -84,30 +76,99 @@
       >
         <mat-icon>file_download</mat-icon>
       </button>
-      <mat-menu #exportMenu="matMenu">
-        <button mat-menu-item (click)="exportBook()">
-          <mat-icon>book</mat-icon>
-          <span>CharacterBook JSON</span>
-        </button>
+
+      <button
+        matIconButton
+        type="button"
+        [matMenuTriggerFor]="moreMenu"
+        matTooltip="More actions"
+        aria-label="More actions menu"
+      >
+        <mat-icon>more_vert</mat-icon>
+      </button>
+
+      <mat-divider class="toolbar-divider" [vertical]="true"></mat-divider>
+    }
+      <mat-menu #exportMenu="matMenu" classList="export-menu">
+        <div class="menu-section">Use in SillyTavern</div>
         <button mat-menu-item (click)="exportStNative()">
           <mat-icon>data_object</mat-icon>
-          <span>SillyTavern World Info JSON</span>
+          <span class="menu-text">
+            <span class="menu-title">World Info JSON</span>
+            <span class="menu-desc">Import via SillyTavern’s World Info panel</span>
+          </span>
         </button>
         <button mat-menu-item (click)="exportCard()">
           <mat-icon>face</mat-icon>
-          <span>Tavern Card V2 JSON</span>
+          <span class="menu-text">
+            <span class="menu-title">Character Card V2 JSON</span>
+            <span class="menu-desc">Character card with this lorebook embedded</span>
+          </span>
         </button>
+
+        <div class="menu-section">Backup</div>
         <button mat-menu-item (click)="exportProjectArchive()">
           <mat-icon>archive</mat-icon>
-          <span>Project archive (.stproj)</span>
+          <span class="menu-text">
+            <span class="menu-title">Project archive (.stproj)</span>
+            <span class="menu-desc">Full backup with version history — reopen in LoreStitch</span>
+          </span>
         </button>
+
         <mat-divider></mat-divider>
+        <div class="menu-section">Reference &amp; proofreading</div>
+        <button mat-menu-item (click)="exportBook()">
+          <mat-icon>book</mat-icon>
+          <span class="menu-text">
+            <span class="menu-title">Character Book JSON</span>
+            <span class="menu-desc">Bare V2-spec character_book (no card)</span>
+          </span>
+        </button>
         <button mat-menu-item (click)="exportDigest()">
           <mat-icon>description</mat-icon>
-          <span>Proofread digest (Markdown)</span>
+          <span class="menu-text">
+            <span class="menu-title">Proofread digest (Markdown)</span>
+            <span class="menu-desc">All entries as readable text</span>
+          </span>
         </button>
       </mat-menu>
-    }
+
+    <mat-menu #moreMenu="matMenu">
+      <button mat-menu-item (click)="importMergeInput.click()">
+        <mat-icon>merge_type</mat-icon>
+        <span>Merge lorebook…</span>
+      </button>
+      <button mat-menu-item [matMenuTriggerFor]="themeMenu">
+        <mat-icon>brightness_auto</mat-icon>
+        <span>Theme</span>
+      </button>
+    </mat-menu>
+    <mat-menu #themeMenu="matMenu" classList="theme-menu">
+      <button
+        mat-menu-item
+        (click)="theme.setMode('system')"
+        [class.active-option]="theme.mode() === 'system'"
+      >
+        <mat-icon>brightness_auto</mat-icon>
+        <span>System theme</span>
+      </button>
+      <button
+        mat-menu-item
+        (click)="theme.setMode('light')"
+        [class.active-option]="theme.mode() === 'light'"
+      >
+        <mat-icon>light_mode</mat-icon>
+        <span>Light — azure blue</span>
+      </button>
+      <button
+        mat-menu-item
+        (click)="theme.setMode('dark')"
+        [class.active-option]="theme.mode() === 'dark'"
+      >
+        <mat-icon>dark_mode</mat-icon>
+        <span>Dark — cyan orange</span>
+      </button>
+    </mat-menu>
 
     <button
       matIconButton
@@ -205,29 +266,35 @@
           @if (workspace.savedProjects().length) {
             <div class="recent">
               <h3>Recent projects</h3>
-              @for (saved of workspace.savedProjects(); track saved.id) {
-                <div
-                  class="recent-item"
-                  role="button"
-                  tabindex="0"
-                  (click)="openProject(saved.id)"
-                  (keydown.enter)="openProject(saved.id)"
-                >
-                  <mat-icon>book</mat-icon>
-                  <span class="recent-title">{{ saved.title }}</span>
-                  <span class="recent-meta">{{ saved.activeBook.entries.length }} entries</span>
-                  <button
-                    matIconButton
-                    type="button"
-                    class="recent-delete"
-                    (click)="deleteProject(saved, $event)"
-                    matTooltip="Delete project"
-                    [attr.aria-label]="'Delete project ' + saved.title"
+              <mat-list class="recent-list">
+                @for (saved of workspace.savedProjects(); track saved.id) {
+                  <mat-list-item
+                    class="recent-item"
+                    tabindex="0"
+                    (click)="openProject(saved.id)"
+                    (keydown.enter)="openProject(saved.id)"
+                    [attr.aria-label]="'Open project ' + saved.title"
                   >
-                    <mat-icon>delete</mat-icon>
-                  </button>
-                </div>
-              }
+                    <mat-icon matListItemIcon>book</mat-icon>
+                    <div matListItemTitle class="recent-title">{{ saved.title }}</div>
+                    <div matListItemMeta class="recent-meta">
+                      <span class="recent-count">
+                        {{ saved.activeBook.entries.length }} entries
+                      </span>
+                      <button
+                        matIconButton
+                        type="button"
+                        class="recent-delete"
+                        (click)="deleteProject(saved, $event)"
+                        matTooltip="Delete project"
+                        [attr.aria-label]="'Delete project ' + saved.title"
+                      >
+                        <mat-icon>delete</mat-icon>
+                      </button>
+                    </div>
+                  </mat-list-item>
+                }
+              </mat-list>
             </div>
           }
         </div>

@@ -1,0 +1,80 @@
+:host {
+  display: block;
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dialog-intro {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+
+  &.name-row mat-checkbox {
+    margin-left: 4px;
+  }
+
+  .grow {
+    flex: 1;
+    min-width: 220px;
+  }
+}
+
+.pattern-error {
+  color: var(--mat-sys-error);
+}
+
+.example-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-lowest, var(--mat-sys-surface));
+
+  .example-label {
+    font: var(--mat-sys-label-small);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .example-text {
+    margin: 0;
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    color: var(--mat-sys-on-surface);
+  }
+}
+
+.preview-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font: var(--mat-sys-label-medium);
+
+  .meta {
+    font: var(--mat-sys-label-small);
+    color: var(--mat-sys-on-surface-variant);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.preview-diff {
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+}

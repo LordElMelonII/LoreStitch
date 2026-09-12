@@ -1,17 +1,35 @@
 // Include theming for Angular Material with `mat.theme()`.
-// This Sass mixin will define CSS variables that are used for styling Angular Material
-// components according to the Material 3 design spec.
-// Learn more about theming and how to use it for your application's
-// custom components at https://material.angular.dev/guide/theming
+// Two M3 schemes are defined, matching @angular/material's prebuilt themes:
+//   light — azure-blue.css  (azure primary, blue tertiary)
+//   dark  — cyan-orange.css (cyan primary, orange tertiary), on html.theme-dark
+// The prebuilt CSS files themselves cannot be combined: each hard-codes its
+// full token set on `html`, so loading both would let the last one win.
 @use '@angular/material' as mat;
 
 html {
   height: 100%;
+  color-scheme: light;
   @include mat.theme(
     (
       color: (
         primary: mat.$azure-palette,
         tertiary: mat.$blue-palette,
+        theme-type: light,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+}
+
+html.theme-dark {
+  color-scheme: dark;
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$cyan-palette,
+        tertiary: mat.$orange-palette,
+        theme-type: dark,
       ),
       typography: Roboto,
       density: 0,
@@ -20,14 +38,8 @@ html {
 }
 
 body {
-  // Default the application to a light color theme. This can be changed to
-  // `dark` to enable the dark color theme, or to `light dark` to defer to the
-  // user's system settings.
-  color-scheme: light;
-
-  // Set a default background, font and text colors for the application using
-  // Angular Material's system-level CSS variables. Learn more about these
-  // variables at https://material.angular.dev/guide/system-variables
+  // Default the application's background and text to the active scheme's
+  // surface tokens. Both schemes define them via the themes above.
   background-color: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
   font: var(--mat-sys-body-medium);
@@ -68,4 +80,96 @@ body {
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+// ---------------------------------------------------------------------------
+// Menus (render in a CDK overlay, so these must be global styles)
+// ---------------------------------------------------------------------------
+
+.mat-mdc-menu-panel.export-menu {
+  .mat-mdc-menu-item {
+    height: auto;
+    min-height: 48px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    align-items: center;
+  }
+
+  .menu-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 2px 0;
+
+    .menu-title {
+      font: var(--mat-sys-body-medium);
+      line-height: 1.25;
+    }
+
+    .menu-desc {
+      font: var(--mat-sys-body-small);
+      line-height: 1.25;
+      color: var(--mat-sys-on-surface-variant);
+      white-space: normal;
+    }
+  }
+
+  .menu-section {
+    padding: 10px 16px 4px;
+    font: var(--mat-sys-label-small);
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--mat-sys-on-surface-variant);
+    user-select: none;
+  }
+}
+
+// Meta text inside regular menu items (project switcher).
+.mat-mdc-menu-panel .menu-meta {
+  font: var(--mat-sys-label-small);
+  color: var(--mat-sys-on-surface-variant);
+  margin-left: auto;
+  padding-left: 16px;
+}
+
+// Theme switcher: highlight the currently active mode.
+.mat-mdc-menu-panel.theme-menu .mat-mdc-menu-item.active-option {
+  .mat-mdc-menu-item-text span {
+    font-weight: 600;
+    color: var(--mat-sys-primary);
+  }
+
+  mat-icon {
+    color: var(--mat-sys-primary);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Key chip fields: long keys (e.g. regexes without spaces) must wrap inside
+// the chip instead of overflowing. These rules target Material's internal
+// chip DOM, which component-scoped styles cannot reach.
+// ---------------------------------------------------------------------------
+
+mat-form-field.keys-field {
+  mat-chip-row {
+    height: auto;
+    min-height: 28px;
+    max-width: 100%;
+
+    .mdc-evolution-chip__action--primary,
+    .mat-mdc-chip-action-label {
+      height: auto;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-all;
+      text-overflow: unset;
+    }
+  }
+}
+
+// M3 switch: drop the dash icon in the unselected thumb — a horizontal bar
+// reads as "indeterminate", not "off". The on-thumb check is per spec. (No
+// override token hides the icon, so target the switch's internal svg.)
+.mdc-switch__icon--off {
+  display: none;
+}
+
 /* You can add global styles to this file, and also import other style files */

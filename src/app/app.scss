@@ -19,7 +19,6 @@
   gap: 6px;
   background: var(--mat-sys-surface-container);
   color: var(--mat-sys-on-surface);
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
   flex: none;
   z-index: 10;
 
@@ -72,6 +71,13 @@
     flex: 1;
   }
 
+  // Vertical separators between action groups (M3 app-bar grouping).
+  .toolbar-divider {
+    height: 24px;
+    align-self: center;
+    margin: 0 4px;
+  }
+
   .hidden-input {
     display: none;
   }
@@ -99,14 +105,13 @@
 
 .entries-sidenav {
   width: 320px;
-  background: var(--mat-sys-surface);
-  border-right: 1px solid var(--mat-sys-outline-variant);
+  // M3 surface roles: tonal containers define structure instead of dividers.
+  background: var(--mat-sys-surface-container-low);
 }
 
 .history-sidenav {
   width: 340px;
-  background: var(--mat-sys-surface);
-  border-left: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface-container-low);
 }
 
 .editor-content {
@@ -170,7 +175,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    min-width: min(420px, 90%);
+    min-width: min(440px, 90%);
 
     h3 {
       margin: 0 0 4px;
@@ -178,15 +183,11 @@
       color: var(--mat-sys-on-surface-variant);
     }
 
-    .recent-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      text-align: left;
-      justify-content: flex-start;
-      padding: 6px 10px;
-      border-radius: var(--mat-sys-corner-small, 8px);
+    // Plain mat-list items are non-interactive by default; this list opens
+    // projects, so give rows the interactive affordance here.
+    .recent-list mat-list-item.recent-item {
       cursor: pointer;
+      border-radius: var(--mat-sys-corner-small, 8px);
 
       &:hover {
         background: var(--mat-sys-surface-container-high);
@@ -196,12 +197,19 @@
         }
       }
 
-      .recent-title {
-        flex: none;
+      &:focus-visible {
+        outline: 2px solid var(--mat-sys-primary);
+        outline-offset: -2px;
       }
 
       .recent-meta {
+        display: flex;
+        align-items: center;
+        gap: 4px;
         margin-left: auto;
+      }
+
+      .recent-count {
         font: var(--mat-sys-label-small);
         color: var(--mat-sys-on-surface-variant);
       }

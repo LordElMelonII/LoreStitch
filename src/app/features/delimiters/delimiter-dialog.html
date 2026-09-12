@@ -1,0 +1,104 @@
+<h2 mat-dialog-title>
+  <mat-icon>code</mat-icon>
+  Content delimiters
+</h2>
+
+<mat-dialog-content class="dialog-body">
+  <p class="dialog-intro">
+    Wrap entry content so the model can tell where each block begins and ends. Existing
+    delimiters are recognized and replaced when you pick a new style.
+  </p>
+
+  <div class="controls">
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>Apply to</mat-label>
+      <mat-select [value]="scope()" (selectionChange)="scope.set($event.value)">
+        <mat-option value="entry">This entry only</mat-option>
+        <mat-option value="all">All entries ({{ targets().length }})</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field class="grow" subscriptSizing="dynamic">
+      <mat-label>Delimiter style</mat-label>
+      <mat-select [value]="style()" (selectionChange)="style.set($event.value)">
+        @for (option of styleOptions; track option.value) {
+          <mat-option [value]="option.value" [matTooltip]="option.hint">
+            {{ option.label }}
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </div>
+
+  @if (needsName()) {
+    <div class="controls name-row">
+      <mat-form-field
+        class="grow"
+        subscriptSizing="dynamic"
+        [matTooltip]="nameResolvedFromEntries() ? 'Each entry uses the name from its comment or first key' : 'Name used in the wrapper'"
+      >
+        <mat-label>Wrapper name</mat-label>
+        <input
+          matInput
+          [value]="name()"
+          (input)="setName($event)"
+          [disabled]="nameResolvedFromEntries()"
+          placeholder="e.g. London"
+          aria-label="Wrapper name"
+        />
+        @if (nameMissing()) {
+          <mat-hint class="pattern-error">A name is required for this style.</mat-hint>
+        }
+      </mat-form-field>
+
+      @if (scope() === 'all') {
+        <mat-checkbox
+          [checked]="useEachName()"
+          (change)="useEachName.set($event.checked)"
+          matTooltip="Names each wrapper after its own entry (comment, then first key)"
+        >
+          Use each entry’s own name
+        </mat-checkbox>
+      }
+    </div>
+  }
+
+  <div class="example-card" aria-label="Format example">
+    <span class="example-label">Format</span>
+    <pre class="example-text">{{ example().join('\n') }}</pre>
+  </div>
+
+  <div class="preview-header">
+    <span>
+      @if (previewEntry(); as p) {
+        Preview — {{ p.title }}
+      }
+    </span>
+    <span class="meta">
+      {{ changedCount() }} of {{ targets().length }} entr{{
+        targets().length === 1 ? 'y' : 'ies'
+      }}
+      will change
+    </span>
+  </div>
+
+  @if (previewEntry(); as p) {
+    <app-diff-viewer class="preview-diff" [oldText]="p.current" [newText]="p.next" />
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button matButton type="button" (click)="close()">Cancel</button>
+  <button
+    matButton="filled"
+    type="button"
+    (click)="apply()"
+    [disabled]="!changedCount() || nameMissing()"
+  >
+    @if (scope() === 'all') {
+      Apply to {{ changedCount() }} entr{{ changedCount() === 1 ? 'y' : 'ies' }}
+    } @else {
+      Apply
+    }
+  </button>
+</mat-dialog-actions>

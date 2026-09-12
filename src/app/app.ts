@@ -16,6 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatListModule } from '@angular/material/list';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -23,6 +24,7 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ParsedImport, ImportExportService } from './core/services/import-export.service';
 import { ProjectWorkspace } from './core/models/lorebook.model';
+import { ThemeService } from './core/services/theme.service';
 import { WorkspaceService } from './core/services/workspace.service';
 import { EntryList } from './features/entry-list/entry-list';
 import { EntryEditor } from './features/entry-editor/entry-editor';
@@ -44,6 +46,7 @@ import { ConfirmDialog } from './shared/components/confirm-dialog/confirm-dialog
     MatInputModule,
     MatMenuModule,
     MatDividerModule,
+    MatListModule,
     MatSidenavModule,
     MatToolbarModule,
     MatTooltipModule,
@@ -57,6 +60,7 @@ import { ConfirmDialog } from './shared/components/confirm-dialog/confirm-dialog
 })
 export class App {
   protected readonly workspace = inject(WorkspaceService);
+  protected readonly theme = inject(ThemeService);
   private readonly dialog = inject(MatDialog);
   private readonly importer = inject(ImportExportService);
   private readonly snackBar = inject(MatSnackBar);
