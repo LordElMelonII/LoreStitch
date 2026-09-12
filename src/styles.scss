@@ -172,11 +172,4 @@ mat-form-field.keys-field {
   display: none;
 }
 
-// Compact icon button that keeps its icon centered in the state layer
-// (shrinking the host alone breaks MDC's centering math).
-.small-icon-btn {
-  --mat-icon-button-state-layer-size: 28px;
-  --mat-icon-button-icon-size: 18px;
-}
-
 /* You can add global styles to this file, and also import other style files */

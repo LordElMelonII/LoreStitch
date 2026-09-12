@@ -50,7 +50,6 @@
             <button
               matIconButton
               type="button"
-              class="small-icon-btn"
               (click)="toggleDiff(row.commit.id)"
               [matTooltip]="expanded() === row.commit.id ? 'Hide diff' : 'View diff vs parent'"
               [attr.aria-label]="'Toggle diff for ' + row.commit.message"
@@ -60,7 +59,6 @@
             <button
               matIconButton
               type="button"
-              class="small-icon-btn"
               (click)="restore(row)"
               matTooltip="Restore this state"
               [attr.aria-label]="'Restore ' + row.commit.message"
