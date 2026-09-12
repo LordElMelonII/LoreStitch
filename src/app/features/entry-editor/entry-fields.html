@@ -11,34 +11,44 @@
         />
       </mat-form-field>
 
-        <mat-form-field subscriptSizing="dynamic" matTooltip="Where in the prompt this entry is inserted">
-          <mat-label>Position</mat-label>
-          <mat-select
-            [value]="e.position ?? 'before_char'"
-            (selectionChange)="setPosition($event.value)"
-          >
-            @for (option of positionOptions; track option.value) {
-              <mat-option [value]="option.value">{{ option.label }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
+      <mat-form-field
+        subscriptSizing="dynamic"
+        matTooltip="Where in the prompt this entry is inserted"
+      >
+        <mat-label>Position</mat-label>
+        <mat-select
+          [value]="e.position ?? 'before_char'"
+          (selectionChange)="setPosition($event.value)"
+        >
+          @for (option of positionOptions; track option.value) {
+            <mat-option [value]="option.value">{{ option.label }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
 
       @if (isAtDepth()) {
-        <mat-form-field class="num" subscriptSizing="dynamic" matTooltip="0 is the bottom of the prompt; messages deeper in the chat have larger depth">
+        <mat-form-field
+          class="num"
+          subscriptSizing="dynamic"
+          matTooltip="0 is the bottom of the prompt; messages deeper in the chat have larger depth"
+        >
           <mat-label>Depth</mat-label>
           <input
             matInput
             type="number"
             min="0"
-            [value]="e.extensions?.['depth'] ?? 4"
+            [value]="e.extensions['depth'] ?? 4"
             (input)="setExtensionNumber('depth', $event, 4)"
           />
         </mat-form-field>
 
-        <mat-form-field subscriptSizing="dynamic" matTooltip="Message role used when the entry is injected at depth">
+        <mat-form-field
+          subscriptSizing="dynamic"
+          matTooltip="Message role used when the entry is injected at depth"
+        >
           <mat-label>Role</mat-label>
           <mat-select
-            [value]="e.extensions?.['role'] ?? 0"
+            [value]="e.extensions['role'] ?? 0"
             (selectionChange)="setExtension('role', $event.value)"
           >
             @for (role of roleOptions; track role.value) {
@@ -57,7 +67,7 @@
           <mat-label>Outlet Name</mat-label>
           <input
             matInput
-            [value]="e.extensions?.['outlet_name'] ?? ''"
+            [value]="e.extensions['outlet_name'] ?? ''"
             (input)="setExtensionText('outlet_name', $event)"
             placeholder="e.g. scene-notes"
           />
@@ -69,7 +79,7 @@
         <input
           matInput
           type="number"
-          [value]="e.insertion_order ?? 100"
+          [value]="e.insertion_order"
           (input)="setNumber('insertion_order', $event)"
         />
       </mat-form-field>
@@ -88,7 +98,7 @@
 
     <div class="field-row toggles">
       <mat-slide-toggle
-        [checked]="e.enabled ?? true"
+        [checked]="e.enabled"
         (change)="setFlag('enabled', $event)"
         matTooltip="Include this entry in scans"
       >
@@ -118,58 +128,15 @@
     </div>
 
     <div class="field-row keys-row">
-    <mat-form-field class="keys-field grow" subscriptSizing="dynamic" (click)="focusPrimaryKeys()">
-      <mat-label>Primary Keys</mat-label>
-      <mat-chip-grid #keysGrid aria-label="Primary keys">
-        @for (key of e.keys; track $index) {
-          @if (isEditing('keys', $index)) {
-            <input
-              #keyEditInput
-              class="chip-edit"
-              [value]="editValue()"
-              (input)="setEditValue($event)"
-              (keydown.enter)="$event.preventDefault(); commitEdit()"
-              (keydown.escape)="cancelEdit()"
-              (blur)="commitEdit()"
-              (click)="$event.stopPropagation()"
-              [attr.aria-label]="'Edit primary key ' + key"
-            />
-          } @else {
-            <mat-chip-row
-              (removed)="removeKey('keys', $index)"
-              (dblclick)="startEdit('keys', $index, key)"
-
-            >
-              {{ key }}
-              <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + key">
-                <mat-icon>cancel</mat-icon>
-              </button>
-            </mat-chip-row>
-          }
-        }
-        <input
-          #primaryKeyInput
-          matChipInput
-          [matChipInputFor]="keysGrid"
-          [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
-          (matChipInputTokenEnd)="addKey('keys', $event)"
-          placeholder="Add key…"
-          aria-label="Add primary key"
-        />
-      </mat-chip-grid>
-      <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
-    </mat-form-field>
-
-    @if (e.selective) {
       <mat-form-field
         class="keys-field grow"
         subscriptSizing="dynamic"
-        (click)="focusSecondaryKeys()"
+        (click)="focusPrimaryKeys()"
       >
-        <mat-label>Secondary Keys</mat-label>
-        <mat-chip-grid #secondaryGrid aria-label="Secondary keys">
-          @for (key of e.secondary_keys ?? []; track $index) {
-            @if (isEditing('secondary_keys', $index)) {
+        <mat-label>Primary Keys</mat-label>
+        <mat-chip-grid #keysGrid aria-label="Primary keys">
+          @for (key of e.keys; track $index) {
+            @if (isEditing('keys', $index)) {
               <input
                 #keyEditInput
                 class="chip-edit"
@@ -179,70 +146,115 @@
                 (keydown.escape)="cancelEdit()"
                 (blur)="commitEdit()"
                 (click)="$event.stopPropagation()"
-                [attr.aria-label]="'Edit secondary key ' + key"
+                [attr.aria-label]="'Edit primary key ' + key"
               />
             } @else {
               <mat-chip-row
-                (removed)="removeKey('secondary_keys', $index)"
-                (dblclick)="startEdit('secondary_keys', $index, key)"
-
+                (removed)="removeKey('keys', $index)"
+                (dblclick)="startEdit('keys', $index, key)"
               >
                 {{ key }}
-                <button
-                  matChipRemove
-                  type="button"
-                  [attr.aria-label]="'Remove secondary key ' + key"
-                >
+                <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + key">
                   <mat-icon>cancel</mat-icon>
                 </button>
               </mat-chip-row>
             }
           }
           <input
-            #secondaryKeyInput
+            #primaryKeyInput
             matChipInput
-            [matChipInputFor]="secondaryGrid"
+            [matChipInputFor]="keysGrid"
             [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
-            (matChipInputTokenEnd)="addKey('secondary_keys', $event)"
-            placeholder="Add secondary key…"
-            aria-label="Add secondary key"
+            (matChipInputTokenEnd)="addKey('keys', $event)"
+            placeholder="Add key…"
+            aria-label="Add primary key"
           />
         </mat-chip-grid>
         <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
       </mat-form-field>
-    }
-  </div>
 
-  <mat-form-field class="content-field" subscriptSizing="dynamic">
-    <mat-label>Content</mat-label>
-    <textarea
-      matInput
-      class="content-textarea"
-      [value]="e.content"
-      (input)="setText('content', $event)"
-      spellcheck="false"
-      aria-label="Entry content"
-      placeholder="Lore content inserted when this entry activates…"
-    ></textarea>
-    <button
-      matIconButton
-      matTextSuffix
-      type="button"
-      class="delimiter-btn small-icon-btn"
-      (click)="openDelimiterDialog()"
-      [matTooltip]="delimiterTooltip()"
-      aria-label="Content delimiters"
-    >
-      <mat-icon>code</mat-icon>
-    </button>
-    @if (delimiterBadge(); as badge) {
-      <mat-hint>{{ badge }} · click the code button to change</mat-hint>
-    }
-    <mat-hint align="end" class="stats-hint">
-      {{ contentStats().chars }} chars · ~{{ contentStats().tokens }} tokens ·
-      {{ contentStats().lines }} lines
-    </mat-hint>
-  </mat-form-field>
+      @if (e.selective) {
+        <mat-form-field
+          class="keys-field grow"
+          subscriptSizing="dynamic"
+          (click)="focusSecondaryKeys()"
+        >
+          <mat-label>Secondary Keys</mat-label>
+          <mat-chip-grid #secondaryGrid aria-label="Secondary keys">
+            @for (key of e.secondary_keys ?? []; track $index) {
+              @if (isEditing('secondary_keys', $index)) {
+                <input
+                  #keyEditInput
+                  class="chip-edit"
+                  [value]="editValue()"
+                  (input)="setEditValue($event)"
+                  (keydown.enter)="$event.preventDefault(); commitEdit()"
+                  (keydown.escape)="cancelEdit()"
+                  (blur)="commitEdit()"
+                  (click)="$event.stopPropagation()"
+                  [attr.aria-label]="'Edit secondary key ' + key"
+                />
+              } @else {
+                <mat-chip-row
+                  (removed)="removeKey('secondary_keys', $index)"
+                  (dblclick)="startEdit('secondary_keys', $index, key)"
+                >
+                  {{ key }}
+                  <button
+                    matChipRemove
+                    type="button"
+                    [attr.aria-label]="'Remove secondary key ' + key"
+                  >
+                    <mat-icon>cancel</mat-icon>
+                  </button>
+                </mat-chip-row>
+              }
+            }
+            <input
+              #secondaryKeyInput
+              matChipInput
+              [matChipInputFor]="secondaryGrid"
+              [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
+              (matChipInputTokenEnd)="addKey('secondary_keys', $event)"
+              placeholder="Add secondary key…"
+              aria-label="Add secondary key"
+            />
+          </mat-chip-grid>
+          <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
+        </mat-form-field>
+      }
+    </div>
+
+    <mat-form-field class="content-field" subscriptSizing="dynamic">
+      <mat-label>Content</mat-label>
+      <textarea
+        matInput
+        class="content-textarea"
+        [value]="e.content"
+        (input)="setText('content', $event)"
+        spellcheck="false"
+        aria-label="Entry content"
+        placeholder="Lore content inserted when this entry activates…"
+      ></textarea>
+      <button
+        matIconButton
+        matTextSuffix
+        type="button"
+        class="delimiter-btn small-icon-btn"
+        (click)="openDelimiterDialog()"
+        [matTooltip]="delimiterTooltip()"
+        aria-label="Content delimiters"
+      >
+        <mat-icon>code</mat-icon>
+      </button>
+      @if (delimiterBadge(); as badge) {
+        <mat-hint>{{ badge }} · click the code button to change</mat-hint>
+      }
+      <mat-hint align="end" class="stats-hint">
+        {{ contentStats().chars }} chars · ~{{ contentStats().tokens }} tokens ·
+        {{ contentStats().lines }} lines
+      </mat-hint>
+    </mat-form-field>
 
     <mat-expansion-panel class="advanced">
       <mat-expansion-panel-header>
@@ -257,14 +269,14 @@
             type="number"
             min="0"
             max="100"
-            [value]="e.extensions?.['probability'] ?? 100"
+            [value]="e.extensions['probability']"
             (input)="setExtensionNumber('probability', $event, 100)"
           />
         </mat-form-field>
         <mat-form-field subscriptSizing="dynamic">
           <mat-label>Secondary Logic</mat-label>
           <mat-select
-            [value]="e.extensions?.['selectiveLogic'] ?? 0"
+            [value]="e.extensions['selectiveLogic']"
             (selectionChange)="setExtension('selectiveLogic', $event.value)"
           >
             @for (option of logicOptions; track option.value) {
@@ -273,14 +285,14 @@
           </mat-select>
         </mat-form-field>
         <mat-slide-toggle
-          [checked]="e.extensions?.['exclude_recursion'] ?? false"
+          [checked]="e.extensions['exclude_recursion']"
           (change)="setExtensionFlag('exclude_recursion', $event)"
           matTooltip="Entry cannot be triggered by other entries"
         >
           Exclude Recursion
         </mat-slide-toggle>
         <mat-slide-toggle
-          [checked]="e.extensions?.['prevent_recursion'] ?? false"
+          [checked]="e.extensions['prevent_recursion']"
           (change)="setExtensionFlag('prevent_recursion', $event)"
           matTooltip="Entry content cannot trigger other entries"
         >
