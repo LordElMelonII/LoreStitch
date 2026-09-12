@@ -1,0 +1,228 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.editor-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+// ---------------------------------------------------------------------------
+// Tab strip
+// ---------------------------------------------------------------------------
+
+.tab-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px 12px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  min-height: 42px;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    max-width: 240px;
+    padding: 6px 4px 6px 12px;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    background: var(--mat-sys-surface-container-low);
+    cursor: pointer;
+    user-select: none;
+    flex: none;
+
+    &.active {
+      background: var(--mat-sys-surface-container-higher, var(--mat-sys-surface-container-high));
+      border-color: var(--mat-sys-primary);
+
+      .tab-title {
+        color: var(--mat-sys-on-surface);
+      }
+    }
+
+    &.cdk-drag-preview {
+      box-shadow: var(--mat-sys-level2);
+      border-radius: 8px;
+    }
+
+    .drag-hint {
+      width: 8px;
+      align-self: stretch;
+      cursor: grab;
+    }
+
+    .tab-title {
+      font: var(--mat-sys-body-medium);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--mat-sys-on-surface-variant);
+
+      .dirty {
+        color: var(--mat-sys-tertiary);
+        font-weight: bold;
+      }
+    }
+
+    .close-btn {
+      width: 24px;
+      height: 24px;
+
+      mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fields
+// ---------------------------------------------------------------------------
+
+.fields {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 16px 24px;
+  overflow-y: auto;
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+
+  .grow {
+    flex: 1;
+    min-width: 220px;
+  }
+
+  .num {
+    width: 110px;
+  }
+}
+
+.toggles {
+  row-gap: 8px;
+}
+
+.chip-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  .chip-label {
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-on-surface-variant);
+
+    .hint {
+      font-weight: 400;
+      opacity: 0.7;
+    }
+  }
+
+  > input[matChipInput] {
+    border: none;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+    background: transparent;
+    padding: 6px 2px;
+    font: var(--mat-sys-body-medium);
+    outline: none;
+
+    &:focus {
+      border-bottom-color: var(--mat-sys-primary);
+    }
+  }
+}
+
+.content-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-height: 180px;
+
+  .content-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+
+    .stats {
+      font: var(--mat-sys-label-small);
+      color: var(--mat-sys-on-surface-variant);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  .content-textarea {
+    flex: 1;
+    min-height: 160px;
+    resize: vertical;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 8px;
+    background: var(--mat-sys-surface-container-lowest, var(--mat-sys-surface));
+    color: inherit;
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    padding: 10px 12px;
+    outline: none;
+
+    &:focus {
+      border-color: var(--mat-sys-primary);
+    }
+  }
+}
+
+.advanced {
+  .advanced-grid {
+    row-gap: 12px;
+
+    mat-form-field {
+      width: 160px;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+.empty-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    opacity: 0.4;
+  }
+
+  p {
+    margin: 0;
+    font: var(--mat-sys-body-large);
+  }
+}

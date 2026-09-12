@@ -1,0 +1,80 @@
+<div class="history-root">
+  <div class="commit-box">
+    <h3 class="mat-body-strong">History</h3>
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>Commit message</mat-label>
+      <input
+        matInput
+        placeholder="Describe your changes…"
+        [value]="message()"
+        (input)="onMessageInput($event)"
+        (keydown.enter)="commit()"
+        aria-label="Commit message"
+      />
+    </mat-form-field>
+    <div class="commit-actions">
+      @if (workspace.hasUnsavedChanges()) {
+        <span class="dirty-note">Uncommitted changes present</span>
+      } @else {
+        <span class="clean-note">Working tree clean</span>
+      }
+      <span class="spacer"></span>
+      <button matButton (click)="commit()" [disabled]="!canCommit()">
+        @if (committing()) {
+          Committing…
+        } @else {
+          Commit
+        }
+      </button>
+    </div>
+  </div>
+
+  <div class="timeline">
+    @for (row of rows(); track row.commit.id) {
+      <div class="commit">
+        <div class="dot"></div>
+        <div class="body">
+          <div class="first-line">
+            <span class="hash">{{ hash(row.commit.id) }}</span>
+            <span
+              class="msg"
+              [class.head]="row.commit.id === workspace.activeProject()?.headCommitId"
+            >
+              {{ row.commit.message }}
+            </span>
+          </div>
+          <div class="meta">
+            {{ ago(row.commit.timestamp) }} · {{ row.commit.snapshot.entries.length }} entries
+          </div>
+          <div class="actions">
+            <button
+              matIconButton
+              type="button"
+              (click)="toggleDiff(row.commit.id)"
+              [matTooltip]="expanded() === row.commit.id ? 'Hide diff' : 'View diff vs parent'"
+              [attr.aria-label]="'Toggle diff for ' + row.commit.message"
+            >
+              <mat-icon>difference</mat-icon>
+            </button>
+            <button
+              matIconButton
+              type="button"
+              (click)="restore(row)"
+              matTooltip="Restore this state"
+              [attr.aria-label]="'Restore ' + row.commit.message"
+            >
+              <mat-icon>restore</mat-icon>
+            </button>
+          </div>
+        </div>
+      </div>
+      @if (expanded() === row.commit.id) {
+        <div class="commit-diff">
+          <app-diff-viewer [oldText]="parentText(row)" [newText]="snapshotText(row)" />
+        </div>
+      }
+    } @empty {
+      <div class="empty">No commits yet — the initial commit is created with a new project.</div>
+    }
+  </div>
+</div>

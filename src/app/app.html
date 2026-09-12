@@ -1,124 +1,252 @@
-<mat-toolbar color="primary" class="app-toolbar">
-  <mat-icon class="toolbar-icon">auto_stories</mat-icon>
-  <span class="app-title">{{ title() }}</span>
-  <span class="spacer"></span>
-  <button
-    mat-icon-button
-    aria-label="Notifications"
-    [matBadge]="counter()"
-    [matBadgeHidden]="counter() === 0"
-    matBadgeColor="accent"
-  >
-    <mat-icon>notifications</mat-icon>
-  </button>
-  <button mat-icon-button aria-label="Settings">
-    <mat-icon>settings</mat-icon>
-  </button>
-</mat-toolbar>
+<div class="app-shell" [class.mobile]="isMobile()">
+  <mat-toolbar class="topbar">
+    <button
+      matIconButton
+      type="button"
+      (click)="toggleLeft()"
+      matTooltip="Toggle entries panel"
+      aria-label="Toggle entries panel"
+    >
+      <mat-icon>menu</mat-icon>
+    </button>
 
-<main class="main-container">
-  <section class="hero-section">
-    <h1 class="hero-heading">Welcome to {{ title() }}</h1>
-    <p class="hero-subtitle">
-      Powered by Angular v22 &amp; Angular Material 3 with fine-grained Signals reactivity.
-    </p>
-  </section>
+    <div class="brand">
+      <mat-icon class="brand-icon">auto_stories</mat-icon>
+      <span class="brand-name">LoreStitch</span>
+    </div>
 
-  <div class="content-grid">
-    <!-- Interactive Signals Demo Card -->
-    <mat-card class="dashboard-card" appearance="outlined">
-      <mat-card-header>
-        <mat-icon mat-card-avatar class="card-avatar">touch_app</mat-icon>
-        <mat-card-title>Reactive State with Signals</mat-card-title>
-        <mat-card-subtitle>Live counter and computed derivation</mat-card-subtitle>
-      </mat-card-header>
-      <mat-card-content>
-        <div class="counter-display">
-          <div class="metric-box">
-            <span class="metric-label">Current Count</span>
-            <span class="metric-value">{{ counter() }}</span>
-          </div>
-          <div class="metric-box">
-            <span class="metric-label">Double Count (computed)</span>
-            <span class="metric-value">{{ doubleCount() }}</span>
-          </div>
-        </div>
-
-        @if (counter() > 10) {
-          <div class="status-banner milestone">
-            <mat-icon>star</mat-icon>
-            <span>Awesome milestone: counter exceeds 10!</span>
-          </div>
-        } @else if (counter() === 0) {
-          <div class="status-banner info">
-            <mat-icon>info</mat-icon>
-            <span>Counter is at zero. Click increment to begin.</span>
-          </div>
+    @if (workspace.activeProject(); as project) {
+      <div class="project-info" [matTooltip]="project.title">
+        <span class="project-title">{{ projectName() }}</span>
+        @if (workspace.hasUnsavedChanges()) {
+          <span class="unsaved-dot" title="Uncommitted changes"></span>
         }
+      </div>
+    } @else {
+      <span class="project-info no-project">No project open</span>
+    }
 
-        <div class="toggle-container">
-          <mat-slide-toggle [checked]="isFeatureEnabled()" (change)="toggleFeature()">
-            Interactive features {{ isFeatureEnabled() ? 'enabled' : 'disabled' }}
-          </mat-slide-toggle>
-        </div>
-      </mat-card-content>
-      <mat-card-actions align="end">
-        <button mat-button (click)="reset()" [disabled]="counter() === 0">
-          <mat-icon>restart_alt</mat-icon>
-          Reset
-        </button>
-        <button
-          mat-stroked-button
-          (click)="decrement()"
-          [disabled]="counter() === 0 || !isFeatureEnabled()"
-        >
-          <mat-icon>remove</mat-icon>
-          Decrement
-        </button>
-        <button
-          mat-flat-button
-          color="primary"
-          (click)="increment()"
-          [disabled]="!isFeatureEnabled()"
-        >
-          <mat-icon>add</mat-icon>
-          Increment
-        </button>
-      </mat-card-actions>
-    </mat-card>
+    <span class="spacer"></span>
 
-    <!-- Architecture & Tech Stack Card -->
-    <mat-card class="dashboard-card" appearance="outlined">
-      <mat-card-header>
-        <mat-icon mat-card-avatar class="card-avatar">layers</mat-icon>
-        <mat-card-title>Architecture &amp; Features</mat-card-title>
-        <mat-card-subtitle>Modern Angular 22 best practices</mat-card-subtitle>
-      </mat-card-header>
-      <mat-card-content>
-        <div class="features-list">
-          @for (item of techStack(); track item.title) {
-            <div class="feature-item">
-              <div class="feature-icon-wrapper">
-                <mat-icon class="feature-icon">{{ item.icon }}</mat-icon>
-              </div>
-              <div class="feature-details">
-                <div class="feature-header">
-                  <span class="feature-title">{{ item.title }}</span>
-                  <mat-chip-set>
-                    <mat-chip class="mini-chip">{{ item.tag }}</mat-chip>
-                  </mat-chip-set>
+    <!-- File import: replace (new project) or merge into current -->
+    <input
+      #importReplaceInput
+      type="file"
+      accept=".json,.stproj,application/json"
+      class="hidden-input"
+      (change)="onImportFile($event, 'replace')"
+    />
+    <input
+      #importMergeInput
+      type="file"
+      accept=".json,application/json"
+      class="hidden-input"
+      (change)="onImportFile($event, 'merge')"
+    />
+
+    @if (workspace.activeProject(); as project) {
+      <button
+        matIconButton
+        type="button"
+        (click)="workspace.addEntry()"
+        matTooltip="New entry"
+        aria-label="New entry"
+      >
+        <mat-icon>post_add</mat-icon>
+      </button>
+
+      <button
+        matIconButton
+        type="button"
+        (click)="openSearch()"
+        matTooltip="Search & replace"
+        aria-label="Search and replace"
+      >
+        <mat-icon>find_replace</mat-icon>
+      </button>
+
+      <button
+        matIconButton
+        type="button"
+        (click)="importMergeInput.click()"
+        matTooltip="Merge lorebook into project"
+        aria-label="Merge lorebook"
+      >
+        <mat-icon>merge_type</mat-icon>
+      </button>
+
+      <button
+        matIconButton
+        type="button"
+        [matMenuTriggerFor]="exportMenu"
+        matTooltip="Export"
+        aria-label="Export menu"
+      >
+        <mat-icon>file_download</mat-icon>
+      </button>
+      <mat-menu #exportMenu="matMenu">
+        <button mat-menu-item (click)="exportBook()">
+          <mat-icon>book</mat-icon>
+          <span>CharacterBook JSON</span>
+        </button>
+        <button mat-menu-item (click)="exportStNative()">
+          <mat-icon>data_object</mat-icon>
+          <span>SillyTavern World Info JSON</span>
+        </button>
+        <button mat-menu-item (click)="exportCard()">
+          <mat-icon>face</mat-icon>
+          <span>Tavern Card V2 JSON</span>
+        </button>
+        <button mat-menu-item (click)="exportProjectArchive()">
+          <mat-icon>archive</mat-icon>
+          <span>Project archive (.stproj)</span>
+        </button>
+        <mat-divider></mat-divider>
+        <button mat-menu-item (click)="exportDigest()">
+          <mat-icon>description</mat-icon>
+          <span>Proofread digest (Markdown)</span>
+        </button>
+      </mat-menu>
+    }
+
+    <button
+      matIconButton
+      type="button"
+      [matMenuTriggerFor]="projectMenu"
+      matTooltip="Projects"
+      aria-label="Projects menu"
+    >
+      <mat-icon>folder_open</mat-icon>
+    </button>
+    <mat-menu #projectMenu="matMenu">
+      @for (saved of workspace.savedProjects(); track saved.id) {
+        <button mat-menu-item (click)="openProject(saved.id)">
+          <mat-icon>book</mat-icon>
+          <span>{{ saved.title }}</span>
+          <span class="menu-meta">{{ saved.activeBook.entries.length }} entries</span>
+        </button>
+      } @empty {
+        <button mat-menu-item disabled>No saved projects yet</button>
+      }
+      <mat-divider></mat-divider>
+      <button mat-menu-item (click)="newProject()">
+        <mat-icon>add_circle</mat-icon>
+        <span>New project…</span>
+      </button>
+      <button mat-menu-item (click)="importReplaceInput.click()">
+        <mat-icon>upload_file</mat-icon>
+        <span>Open .json / .stproj…</span>
+      </button>
+      @if (workspace.activeProject(); as project) {
+        <mat-divider></mat-divider>
+        <button mat-menu-item (click)="closeProject()">
+          <mat-icon>logout</mat-icon>
+          <span>Close project</span>
+        </button>
+        <button mat-menu-item (click)="deleteCurrentProject()">
+          <mat-icon class="menu-danger-icon">delete</mat-icon>
+          <span>Delete “{{ project.title }}”…</span>
+        </button>
+      }
+    </mat-menu>
+
+    @if (workspace.activeProject()) {
+      <button
+        matIconButton
+        type="button"
+        (click)="toggleRight()"
+        matTooltip="Toggle history"
+        aria-label="Toggle history drawer"
+      >
+        <mat-icon
+          [matBadge]="workspace.hasUnsavedChanges() ? '!' : null"
+          matBadgeColor="warn"
+          [matBadgeHidden]="!workspace.hasUnsavedChanges()"
+        >
+          history
+        </mat-icon>
+      </button>
+    }
+  </mat-toolbar>
+
+  <mat-sidenav-container class="workspace">
+    <mat-sidenav
+      class="entries-sidenav"
+      [mode]="isMobile() ? 'over' : 'side'"
+      [opened]="leftOpened()"
+      (closed)="closeLeft()"
+      [fixedInViewport]="isMobile()"
+    >
+      @if (workspace.activeProject()) {
+        <app-entry-list />
+      } @else {
+        <div class="side-placeholder"></div>
+      }
+    </mat-sidenav>
+
+    <mat-sidenav-content class="editor-content">
+      @if (workspace.activeProject()) {
+        <app-entry-editor />
+      } @else {
+        <div class="welcome">
+          <mat-icon class="welcome-icon">auto_stories</mat-icon>
+          <h1>LoreStitch</h1>
+          <p class="tagline">
+            Offline studio for SillyTavern lorebooks &amp; character cards — with versioning.
+          </p>
+          <div class="welcome-actions">
+            <button matButton="filled" type="button" (click)="newProject()">
+              <mat-icon>add_circle</mat-icon> New project
+            </button>
+            <button matButton type="button" (click)="importReplaceInput.click()">
+              <mat-icon>upload_file</mat-icon> Import .json / .stproj
+            </button>
+          </div>
+          @if (workspace.savedProjects().length) {
+            <div class="recent">
+              <h3>Recent projects</h3>
+              @for (saved of workspace.savedProjects(); track saved.id) {
+                <div
+                  class="recent-item"
+                  role="button"
+                  tabindex="0"
+                  (click)="openProject(saved.id)"
+                  (keydown.enter)="openProject(saved.id)"
+                >
+                  <mat-icon>book</mat-icon>
+                  <span class="recent-title">{{ saved.title }}</span>
+                  <span class="recent-meta">{{ saved.activeBook.entries.length }} entries</span>
+                  <button
+                    matIconButton
+                    type="button"
+                    class="recent-delete"
+                    (click)="deleteProject(saved, $event)"
+                    matTooltip="Delete project"
+                    [attr.aria-label]="'Delete project ' + saved.title"
+                  >
+                    <mat-icon>delete</mat-icon>
+                  </button>
                 </div>
-                <p class="feature-description">{{ item.description }}</p>
-              </div>
+              }
             </div>
-            @if (!$last) {
-              <mat-divider></mat-divider>
-            }
           }
         </div>
-      </mat-card-content>
-    </mat-card>
-  </div>
+      }
+    </mat-sidenav-content>
 
-  <router-outlet></router-outlet>
-</main>
+    <mat-sidenav
+      class="history-sidenav"
+      position="end"
+      [mode]="isMobile() ? 'over' : 'side'"
+      [opened]="rightOpened()"
+      (closed)="closeRight()"
+      [fixedInViewport]="isMobile()"
+    >
+      @if (workspace.activeProject()) {
+        <app-commit-history />
+      } @else {
+        <div class="side-placeholder"></div>
+      }
+    </mat-sidenav>
+  </mat-sidenav-container>
+</div>

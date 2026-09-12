@@ -1,0 +1,251 @@
+@if (entry(); as e) {
+  <div class="editor-root">
+    <div
+      class="tab-strip"
+      cdkDropList
+      cdkDropListOrientation="horizontal"
+      (cdkDropListDropped)="workspace.reorderTabs($event.previousIndex, $event.currentIndex)"
+    >
+      @for (tab of tabs(); track tab.id) {
+        <div
+          cdkDrag
+          class="tab"
+          role="tab"
+          tabindex="0"
+          [class.active]="tab.id === workspace.activeTabId()"
+          [attr.aria-selected]="tab.id === workspace.activeTabId()"
+          (click)="workspace.activeTabId.set(tab.id)"
+          (keydown.enter)="workspace.activeTabId.set(tab.id)"
+        >
+          <span class="drag-hint" cdkDragHandle></span>
+          <span class="tab-title">
+            @if (tab.dirty) {
+              <span class="dirty">*</span>
+            }
+            {{ tab.title }}
+          </span>
+          <button
+            matIconButton
+            type="button"
+            class="close-btn"
+            (click)="workspace.closeTab(tab.id); $event.stopPropagation()"
+            [attr.aria-label]="'Close tab ' + tab.title"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+    </div>
+
+    <div class="fields" [class.compact]="!(e.enabled ?? true)">
+      <div class="field-row">
+        <mat-form-field class="grow" subscriptSizing="dynamic">
+          <mat-label>Name / Comment</mat-label>
+          <input
+            matInput
+            [value]="e.comment ?? ''"
+            (input)="setText('comment', $event)"
+            placeholder="Entry name…"
+          />
+        </mat-form-field>
+
+        <mat-form-field subscriptSizing="dynamic">
+          <mat-label>Position</mat-label>
+          <mat-select
+            [value]="e.position ?? 'before_char'"
+            (selectionChange)="setPosition($event.value)"
+          >
+            <mat-option value="before_char">Before Char</mat-option>
+            <mat-option value="after_char">After Char</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field class="num" subscriptSizing="dynamic">
+          <mat-label>Order</mat-label>
+          <input
+            matInput
+            type="number"
+            [value]="e.insertion_order ?? 100"
+            (input)="setNumber('insertion_order', $event)"
+          />
+        </mat-form-field>
+
+        <mat-form-field class="num" subscriptSizing="dynamic">
+          <mat-label>Priority</mat-label>
+          <input
+            matInput
+            type="number"
+            [value]="e.priority ?? ''"
+            (input)="setNumber('priority', $event)"
+            placeholder="—"
+          />
+        </mat-form-field>
+      </div>
+
+      <div class="field-row toggles">
+        <mat-slide-toggle
+          [checked]="e.enabled ?? true"
+          (change)="setFlag('enabled', $event)"
+          matTooltip="Include this entry in scans"
+        >
+          Enabled
+        </mat-slide-toggle>
+        <mat-slide-toggle
+          [checked]="e.constant ?? false"
+          (change)="setFlag('constant', $event)"
+          matTooltip="Always inserted, ignores keys"
+        >
+          Constant
+        </mat-slide-toggle>
+        <mat-slide-toggle
+          [checked]="e.selective ?? false"
+          (change)="setFlag('selective', $event)"
+          matTooltip="Use secondary keys to filter matches"
+        >
+          Selective
+        </mat-slide-toggle>
+        <mat-slide-toggle
+          [checked]="e.case_sensitive ?? false"
+          (change)="setFlag('case_sensitive', $event)"
+          matTooltip="Match keys case-sensitively"
+        >
+          Case Sensitive
+        </mat-slide-toggle>
+      </div>
+
+      <div class="field-row keys-row">
+        <div class="chip-field grow">
+          <label class="chip-label"
+            >Primary Keys <span class="hint">Enter / comma to add</span></label
+          >
+          <mat-chip-grid #keysGrid aria-label="Primary keys">
+            @for (key of e.keys; track $index) {
+              <mat-chip-row (removed)="removeKey('keys', $index)">
+                {{ key }}
+                <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + key">
+                  <mat-icon>cancel</mat-icon>
+                </button>
+              </mat-chip-row>
+            }
+          </mat-chip-grid>
+          <input
+            matChipInput
+            [matChipInputFor]="keysGrid"
+            [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
+            (matChipInputTokenEnd)="addKey('keys', $event)"
+            placeholder="Add key…"
+            aria-label="Add primary key"
+          />
+        </div>
+
+        @if (e.selective) {
+          <div class="chip-field grow">
+            <label class="chip-label"
+              >Secondary Keys <span class="hint">Enter / comma to add</span></label
+            >
+            <mat-chip-grid #secondaryGrid aria-label="Secondary keys">
+              @for (key of e.secondary_keys ?? []; track $index) {
+                <mat-chip-row (removed)="removeKey('secondary_keys', $index)">
+                  {{ key }}
+                  <button
+                    matChipRemove
+                    type="button"
+                    [attr.aria-label]="'Remove secondary key ' + key"
+                  >
+                    <mat-icon>cancel</mat-icon>
+                  </button>
+                </mat-chip-row>
+              }
+            </mat-chip-grid>
+            <input
+              matChipInput
+              [matChipInputFor]="secondaryGrid"
+              [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
+              (matChipInputTokenEnd)="addKey('secondary_keys', $event)"
+              placeholder="Add secondary key…"
+              aria-label="Add secondary key"
+            />
+          </div>
+        }
+      </div>
+
+      <div class="content-block">
+        <div class="content-header">
+          <label class="chip-label">Content</label>
+          <span class="stats">
+            {{ contentStats().chars }} chars · ~{{ contentStats().tokens }} tokens ·
+            {{ contentStats().lines }} lines
+          </span>
+        </div>
+        <textarea
+          class="content-textarea"
+          [value]="e.content"
+          (input)="setText('content', $event)"
+          spellcheck="false"
+          aria-label="Entry content"
+          placeholder="Lore content inserted when this entry activates…"
+        ></textarea>
+      </div>
+
+      <mat-expansion-panel class="advanced">
+        <mat-expansion-panel-header>
+          <mat-panel-title>SillyTavern Advanced</mat-panel-title>
+          <mat-panel-description>Extensions carried in exports</mat-panel-description>
+        </mat-expansion-panel-header>
+        <div class="field-row advanced-grid">
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>Probability %</mat-label>
+            <input
+              matInput
+              type="number"
+              min="0"
+              max="100"
+              [value]="e.extensions?.['probability'] ?? 100"
+              (input)="setExtensionNumber('probability', $event, 100)"
+            />
+          </mat-form-field>
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>Depth (@ at Depth)</mat-label>
+            <input
+              matInput
+              type="number"
+              [value]="e.extensions?.['depth'] ?? 4"
+              (input)="setExtensionNumber('depth', $event, 4)"
+            />
+          </mat-form-field>
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>Secondary Logic</mat-label>
+            <mat-select
+              [value]="e.extensions?.['selectiveLogic'] ?? 0"
+              (selectionChange)="setExtension('selectiveLogic', $event.value)"
+            >
+              @for (option of logicOptions; track option.value) {
+                <mat-option [value]="option.value">{{ option.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-slide-toggle
+            [checked]="e.extensions?.['exclude_recursion'] ?? false"
+            (change)="setExtensionFlag('exclude_recursion', $event)"
+            matTooltip="Entry cannot be triggered by other entries"
+          >
+            Exclude Recursion
+          </mat-slide-toggle>
+          <mat-slide-toggle
+            [checked]="e.extensions?.['prevent_recursion'] ?? false"
+            (change)="setExtensionFlag('prevent_recursion', $event)"
+            matTooltip="Entry content cannot trigger other entries"
+          >
+            Prevent Recursion
+          </mat-slide-toggle>
+        </div>
+      </mat-expansion-panel>
+    </div>
+  </div>
+} @else {
+  <div class="empty-editor">
+    <mat-icon>tab</mat-icon>
+    <p>Open an entry from the list, or create a new one to start editing.</p>
+    <button matButton (click)="workspace.addEntry()">New entry</button>
+  </div>
+}

@@ -1,0 +1,148 @@
+<h2 mat-dialog-title>
+  <mat-icon>find_replace</mat-icon>
+  Search &amp; Replace
+</h2>
+
+<mat-dialog-content class="dialog-body">
+  <div class="controls">
+    <div class="query-row">
+      <mat-form-field class="grow" subscriptSizing="dynamic">
+        <mat-label>Search</mat-label>
+        <input
+          matInput
+          [value]="query()"
+          (input)="query.set($any($event.target).value)"
+          placeholder="Find…"
+          aria-label="Search query"
+        />
+        @if (patternError(); as err) {
+          <mat-hint class="pattern-error">{{ err }}</mat-hint>
+        }
+      </mat-form-field>
+      <mat-form-field class="grow" subscriptSizing="dynamic">
+        <mat-label>Replace with</mat-label>
+        <input
+          matInput
+          [value]="replacement()"
+          (input)="replacement.set($any($event.target).value)"
+          placeholder="Replacement (regex groups allowed)"
+          aria-label="Replacement text"
+        />
+      </mat-form-field>
+    </div>
+
+    <div class="options-row">
+      <mat-slide-toggle [checked]="matchCase()" (change)="matchCase.set($event.checked)"
+        >Match case</mat-slide-toggle
+      >
+      <mat-slide-toggle [checked]="wholeWord()" (change)="wholeWord.set($event.checked)"
+        >Whole word</mat-slide-toggle
+      >
+      <mat-slide-toggle [checked]="regexMode()" (change)="regexMode.set($event.checked)"
+        >Regex</mat-slide-toggle
+      >
+    </div>
+
+    <div class="options-row">
+      <mat-slide-toggle [checked]="!scopeActive()" (change)="scopeActive.set(!$event.checked)"
+        >All entries</mat-slide-toggle
+      >
+      <mat-slide-toggle [checked]="scopeActive()" (change)="scopeActive.set($event.checked)"
+        >Active entry only</mat-slide-toggle
+      >
+    </div>
+
+    <div class="options-row fields-row">
+      <span class="fields-label">Fields:</span>
+      <mat-checkbox [checked]="inContent()" (change)="inContent.set($event.checked)"
+        >Content</mat-checkbox
+      >
+      <mat-checkbox [checked]="inKeys()" (change)="inKeys.set($event.checked)">Keys</mat-checkbox>
+      <mat-checkbox [checked]="inNames()" (change)="inNames.set($event.checked)"
+        >Names</mat-checkbox
+      >
+    </div>
+  </div>
+
+  <div class="preview-header">
+    <span>
+      @if (query()) {
+        {{ totalHits() }} match{{ totalHits() === 1 ? '' : 'es' }} in {{ rows().length }} entr{{
+          rows().length === 1 ? 'y' : 'ies'
+        }}
+      } @else {
+        Type a query to preview matches
+      }
+    </span>
+  </div>
+
+  <div class="results">
+    @for (row of rows(); track row.entryId) {
+      <div class="result-row">
+        <div class="result-head">
+          <mat-checkbox
+            [checked]="!isExcluded(row.entryId)"
+            (change)="toggleExcluded(row.entryId, $event.checked)"
+            [attr.aria-label]="'Include entry ' + row.title"
+          >
+            <span class="result-title">{{ row.title }}</span>
+          </mat-checkbox>
+          <span class="hit-badges">
+            @if (row.hits.content) {
+              <span class="badge">content ×{{ row.hits.content }}</span>
+            }
+            @if (row.hits.keys) {
+              <span class="badge">keys ×{{ row.hits.keys }}</span>
+            }
+            @if (row.hits.names) {
+              <span class="badge">names ×{{ row.hits.names }}</span>
+            }
+          </span>
+        </div>
+
+        @if (row.nextKeys !== null) {
+          <div class="key-preview">
+            <span class="old">{{ row.title }}</span>
+            <mat-icon>arrow_forward</mat-icon>
+            <span class="new">
+              @for (key of row.nextKeys; track $index) {
+                <span class="key-chip">{{ key }}</span>
+              }
+            </span>
+          </div>
+        }
+
+        @if (row.nextName !== null) {
+          <div class="key-preview">
+            <span class="old">{{ row.title }}</span>
+            <mat-icon>arrow_forward</mat-icon>
+            <span class="new">{{ row.nextName }}</span>
+          </div>
+        }
+
+        @if (row.nextContent !== null) {
+          <app-diff-viewer
+            class="content-diff"
+            [oldText]="workspace.entries().find((e) => e.id === row.entryId)?.content ?? ''"
+            [newText]="row.nextContent"
+          />
+        }
+      </div>
+    } @empty {
+      <div class="no-results">
+        @if (patternError()) {
+          Fix the pattern to see matches.
+        } @else if (query()) {
+          No matches found for the current scope.
+        }
+      </div>
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button matButton type="button" (click)="close()">Cancel</button>
+  <button matButton="filled" type="button" (click)="apply()" [disabled]="!selectedRows()">
+    Replace in {{ selectedRows() }} entr{{ selectedRows() === 1 ? 'y' : 'ies' }}
+  </button>
+</mat-dialog-actions>

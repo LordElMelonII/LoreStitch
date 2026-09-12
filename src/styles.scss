@@ -36,4 +36,36 @@ body {
   margin: 0;
   height: 100%;
 }
+
+// ---------------------------------------------------------------------------
+// LoreStitch shared tokens (diff colors, scrollbars)
+// ---------------------------------------------------------------------------
+
+:root {
+  // Diff highlighting, derived from Material system hues so it tracks the theme.
+  --ls-diff-add-bg: color-mix(in srgb, #2e7d32 14%, var(--mat-sys-surface));
+  --ls-diff-add-text: color-mix(in srgb, #2e7d32 70%, var(--mat-sys-on-surface));
+  --ls-diff-remove-bg: color-mix(in srgb, #c62828 12%, var(--mat-sys-surface));
+  --ls-diff-remove-text: color-mix(in srgb, #c62828 70%, var(--mat-sys-on-surface));
+}
+
+// Slimmer scrollbars for the dense studio UI.
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mat-sys-outline-variant) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--mat-sys-outline-variant);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
 /* You can add global styles to this file, and also import other style files */

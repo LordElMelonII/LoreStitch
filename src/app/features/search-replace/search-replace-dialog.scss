@@ -1,0 +1,134 @@
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 640px;
+  max-width: 90vw;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  .query-row {
+    display: flex;
+    gap: 12px;
+
+    .grow {
+      flex: 1;
+    }
+  }
+
+  .options-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+
+    .fields-label {
+      font: var(--mat-sys-label-medium);
+      color: var(--mat-sys-on-surface-variant);
+    }
+  }
+
+  .pattern-error {
+    color: var(--mat-sys-error);
+  }
+}
+
+.preview-header {
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  padding-top: 10px;
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.result-row {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .result-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .result-title {
+    font: var(--mat-sys-title-small);
+  }
+
+  .hit-badges {
+    display: flex;
+    gap: 6px;
+
+    .badge {
+      font: var(--mat-sys-label-small);
+      background: var(--mat-sys-secondary-container);
+      color: var(--mat-sys-on-secondary-container);
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+  }
+
+  .key-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font: var(--mat-sys-body-small);
+
+    .old {
+      color: var(--ls-diff-remove-text);
+      background: var(--ls-diff-remove-bg);
+      padding: 1px 6px;
+      border-radius: 4px;
+      text-decoration: line-through;
+    }
+
+    .new {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      color: var(--ls-diff-add-text);
+      background: var(--ls-diff-add-bg);
+      padding: 1px 6px;
+      border-radius: 4px;
+
+      .key-chip {
+        background: transparent;
+        border: 1px solid currentcolor;
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+    }
+  }
+
+  .content-diff {
+    max-height: 200px;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.no-results {
+  padding: 24px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-body-medium);
+}

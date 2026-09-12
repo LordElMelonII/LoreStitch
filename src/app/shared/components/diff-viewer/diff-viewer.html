@@ -1,0 +1,49 @@
+<div class="diff-header">
+  @if (interactive()) {
+    <mat-button-toggle-group
+      class="mode-toggle"
+      [value]="effectiveMode()"
+      (change)="viewMode.set($event.value)"
+      hideSingleSelectionIndicator
+    >
+      <mat-button-toggle value="unified">Unified</mat-button-toggle>
+      <mat-button-toggle value="split">Split</mat-button-toggle>
+    </mat-button-toggle-group>
+  }
+  <span class="stats">
+    <span class="stat added">+{{ stats().added }}</span>
+    <span class="stat removed">−{{ stats().removed }}</span>
+  </span>
+</div>
+
+@if (effectiveMode() === 'unified') {
+  <div class="diff-body unified" role="table" aria-label="Differences">
+    @for (line of unifiedLines(); track $index) {
+      <div class="diff-line" [class]="line.type">
+        <span class="sign">{{
+          line.type === 'added' ? '+' : line.type === 'removed' ? '−' : ' '
+        }}</span>
+        <span class="text">{{ line.text }}</span>
+      </div>
+    }
+  </div>
+} @else {
+  <div class="diff-body split" role="table" aria-label="Differences side by side">
+    @for (row of splitRows(); track $index) {
+      <div class="split-row">
+        <div class="diff-line" [class]="row.left?.type ?? 'empty'">
+          <span class="sign">{{
+            row.left === null ? '' : row.left.type === 'removed' ? '−' : ' '
+          }}</span>
+          <span class="text">{{ row.left?.text ?? '' }}</span>
+        </div>
+        <div class="diff-line" [class]="row.right?.type ?? 'empty'">
+          <span class="sign">{{
+            row.right === null ? '' : row.right.type === 'added' ? '+' : ' '
+          }}</span>
+          <span class="text">{{ row.right?.text ?? '' }}</span>
+        </div>
+      </div>
+    }
+  </div>
+}

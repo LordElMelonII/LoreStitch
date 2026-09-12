@@ -1,0 +1,123 @@
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 680px;
+  max-width: 92vw;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-surface-variant);
+
+  .dot {
+    opacity: 0.5;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .pending {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.bulk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.merge-row {
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  padding: 6px 10px;
+
+  &.identical {
+    opacity: 0.65;
+  }
+
+  .row-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .action-select {
+    width: 180px;
+    flex: none;
+  }
+
+  .row-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .row-title {
+    font: var(--mat-sys-title-small);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    .flag {
+      font: var(--mat-sys-label-small);
+      border-radius: 999px;
+      padding: 1px 8px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    .identical-flag {
+      background: var(--mat-sys-surface-container-high);
+      color: var(--mat-sys-on-surface-variant);
+    }
+
+    .clash-flag {
+      background: var(--mat-sys-tertiary-container);
+      color: var(--mat-sys-on-tertiary-container);
+    }
+  }
+
+  .row-keys {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+    overflow: hidden;
+
+    .key-chip {
+      font: var(--mat-sys-label-small);
+      background: var(--mat-sys-surface-container-high);
+      color: var(--mat-sys-on-surface-variant);
+      border-radius: 4px;
+      padding: 0 4px;
+    }
+  }
+
+  .row-diff {
+    margin-top: 8px;
+    max-height: 240px;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.no-rows {
+  padding: 24px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+}

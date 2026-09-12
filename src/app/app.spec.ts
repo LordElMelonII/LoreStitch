@@ -4,6 +4,22 @@ import { App } from './app';
 
 describe('App', () => {
   beforeEach(async () => {
+    // CDK BreakpointObserver needs matchMedia, which jsdom does not provide.
+    if (!window.matchMedia) {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: (query: string) => ({
+          matches: false,
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => false,
+        }),
+      });
+    }
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [provideAnimationsAsync()],
@@ -16,21 +32,10 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render title', async () => {
+  it('should render the LoreStitch welcome screen when no project is open', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Welcome to LoreStitch');
-  });
-
-  it('should increment and compute double counter correctly', async () => {
-    const fixture = TestBed.createComponent(App);
-    const app = fixture.componentInstance as any;
-    expect(app.counter()).toBe(0);
-    expect(app.doubleCount()).toBe(0);
-
-    app.increment();
-    expect(app.counter()).toBe(1);
-    expect(app.doubleCount()).toBe(2);
+    expect(compiled.querySelector('h1')?.textContent).toContain('LoreStitch');
   });
 });

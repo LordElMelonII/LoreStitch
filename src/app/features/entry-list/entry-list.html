@@ -1,0 +1,121 @@
+<div class="list-header">
+  <div class="title-row">
+    <h3 class="mat-body-strong">Entries</h3>
+    <span class="count">{{ filtered().length }}</span>
+    <span class="spacer"></span>
+    <button
+      matIconButton
+      type="button"
+      (click)="add()"
+      matTooltip="New entry"
+      aria-label="New entry"
+    >
+      <mat-icon>add</mat-icon>
+    </button>
+  </div>
+  <mat-form-field subscriptSizing="dynamic" class="filter-field">
+    <mat-icon matPrefix>search</mat-icon>
+    <input
+      matInput
+      type="text"
+      placeholder="Filter keys, names, content…"
+      [value]="filter()"
+      (input)="onFilterInput($event)"
+      aria-label="Filter entries"
+    />
+    @if (filter()) {
+      <button
+        matIconButton
+        matSuffix
+        type="button"
+        (click)="filter.set('')"
+        aria-label="Clear filter"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    }
+  </mat-form-field>
+</div>
+
+<cdk-virtual-scroll-viewport
+  class="list-viewport"
+  itemSize="56"
+  cdkDropList
+  cdkDropListOrientation="vertical"
+  (cdkDropListDropped)="drop($event.previousIndex, $event.currentIndex)"
+>
+  <div
+    *cdkVirtualFor="let item of filtered(); let i = index; templateCacheSize: 0"
+    cdkDrag
+    class="entry-item"
+    [class.active]="item.id === activeId()"
+    [class.disabled-entry]="!item.enabled"
+    (click)="open(item)"
+    (keydown.enter)="open(item)"
+    tabindex="0"
+    role="button"
+    [attr.aria-label]="'Open entry ' + item.title"
+  >
+    <mat-icon class="drag-handle" cdkDragHandle>drag_indicator</mat-icon>
+    <div class="item-main">
+      <div class="item-title">
+        @if (item.dirty) {
+          <span class="dirty" title="Uncommitted changes">*</span>
+        }
+        {{ item.title }}
+      </div>
+      <div class="item-keys">
+        @if (item.constant) {
+          <span class="key-chip constant">constant</span>
+        }
+        @for (key of item.keys.slice(0, 3); track key) {
+          <span class="key-chip">{{ key }}</span>
+        }
+        @if (item.keys.length > 3) {
+          <span class="key-chip more">+{{ item.keys.length - 3 }}</span>
+        }
+        @if (!item.keys.length && !item.constant) {
+          <span class="no-keys">no keys</span>
+        }
+      </div>
+    </div>
+    <div class="item-actions">
+      @if (!item.enabled) {
+        <mat-icon class="state-icon" matTooltip="Disabled">visibility_off</mat-icon>
+      }
+      <button
+        matIconButton
+        type="button"
+        class="ghost"
+        (click)="duplicate(item); $event.stopPropagation()"
+        matTooltip="Duplicate"
+        aria-label="Duplicate entry"
+      >
+        <mat-icon>content_copy</mat-icon>
+      </button>
+      <button
+        matIconButton
+        type="button"
+        class="ghost danger"
+        (click)="delete(item); $event.stopPropagation()"
+        matTooltip="Delete"
+        aria-label="Delete entry"
+      >
+        <mat-icon>delete</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  @if (!filtered().length) {
+    <div class="empty-state">
+      <mat-icon>menu_book</mat-icon>
+      <p>
+        {{
+          filter()
+            ? 'No entries match your filter.'
+            : 'This lorebook is empty. Add your first entry.'
+        }}
+      </p>
+    </div>
+  }
+</cdk-virtual-scroll-viewport>
