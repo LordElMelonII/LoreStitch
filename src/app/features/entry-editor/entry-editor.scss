@@ -19,7 +19,6 @@
 :host ::ng-deep .entry-tabs .mat-mdc-tab {
   flex: 0 0 auto;
   min-width: 120px;
-  max-width: 240px;
   padding: 0 16px;
   box-sizing: border-box;
 }
@@ -102,9 +101,6 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    // Bounded width with ellipsis keeps the strip tidy; the label inherits the
-    // tab's color so the active tab gets the on-surface emphasis.
-    max-width: 168px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
