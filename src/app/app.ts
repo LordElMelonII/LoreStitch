@@ -13,14 +13,7 @@ import { WelcomeScreen } from './features/shell/welcome-screen/welcome-screen';
 /** Studio shell: top bar, entry sidenav, tabbed editor, commit history drawer. */
 @Component({
   selector: 'app-root',
-  imports: [
-    MatSidenavModule,
-    Topbar,
-    WelcomeScreen,
-    EntryList,
-    EntryEditor,
-    CommitHistory,
-  ],
+  imports: [MatSidenavModule, Topbar, WelcomeScreen, EntryList, EntryEditor, CommitHistory],
   templateUrl: './app.html',
   styleUrl: './app.scss',
   host: { '[class.mobile]': 'isMobile()' },

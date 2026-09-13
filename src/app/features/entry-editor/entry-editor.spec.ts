@@ -1,4 +1,8 @@
-import { TAB_STRIP_DRAG_SLOP_PX, TabStripDragScroller, scrollTabStripOnWheel } from './entry-editor';
+import {
+  TAB_STRIP_DRAG_SLOP_PX,
+  TabStripDragScroller,
+  scrollTabStripOnWheel,
+} from './entry-editor';
 
 interface ClampableHeader {
   scrollDistance: number;
@@ -164,10 +168,7 @@ describe('TabStripDragScroller', () => {
     const drag = new TabStripDragScroller();
 
     drag.onPointerDown(header, pointerEvent({ clientX: 100, target: headerTarget(true) }));
-    drag.onPointerMove(
-      header,
-      pointerEvent({ clientX: 100 + TAB_STRIP_DRAG_SLOP_PX - 1 }),
-    );
+    drag.onPointerMove(header, pointerEvent({ clientX: 100 + TAB_STRIP_DRAG_SLOP_PX - 1 }));
     drag.onPointerUp(pointerEvent());
 
     expect(header.scrollDistance).toBe(5);
@@ -224,7 +225,10 @@ describe('TabStripDragScroller', () => {
     const header = { scrollDistance: 5 };
     const drag = new TabStripDragScroller();
 
-    drag.onPointerDown(header, pointerEvent({ pointerId: 1, clientX: 200, target: headerTarget(true) }));
+    drag.onPointerDown(
+      header,
+      pointerEvent({ pointerId: 1, clientX: 200, target: headerTarget(true) }),
+    );
     expect(drag.onPointerMove(header, pointerEvent({ pointerId: 2, clientX: 100 }))).toBe(false);
     expect(header.scrollDistance).toBe(5);
   });

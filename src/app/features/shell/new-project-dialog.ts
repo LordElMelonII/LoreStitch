@@ -54,7 +54,6 @@ export interface NewProjectResult {
     </mat-dialog-actions>
   `,
   styles: `
-
     .body {
       display: flex;
       flex-direction: column;
