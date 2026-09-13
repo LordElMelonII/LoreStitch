@@ -1,0 +1,31 @@
+// The section host takes over the flex-item role the content field had inside
+// the old single-component layout, so the text area keeps growing to fill the
+// leftover vertical space of the editor pane.
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 220px;
+  width: 100%;
+}
+
+// Recessed content well: the MD3 filled-field fill is the deepest container
+// tone on the canvas, so the main text area reads as a sunken input surface.
+.content-field {
+  --mat-form-field-filled-container-shape: var(--mat-sys-corner-medium);
+
+  flex: 1;
+  width: 100%;
+
+  .content-textarea {
+    min-height: 200px;
+    resize: vertical;
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .stats-hint {
+    font-variant-numeric: tabular-nums;
+  }
+}

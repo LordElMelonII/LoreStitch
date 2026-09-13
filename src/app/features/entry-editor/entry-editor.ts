@@ -14,7 +14,7 @@ import { MatTabChangeEvent, MatTabGroup, MatTabsModule } from '@angular/material
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
-import { EntryFields } from './entry-fields';
+import { EntryFields } from './entry-fields/entry-fields';
 
 interface TabItem {
   id: number;

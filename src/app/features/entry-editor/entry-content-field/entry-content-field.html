@@ -1,0 +1,30 @@
+<mat-form-field class="content-field" subscriptSizing="dynamic" appearance="fill">
+  <mat-label>Content</mat-label>
+  <textarea
+    matInput
+    class="content-textarea"
+    [value]="entry().content"
+    (input)="updates.setText(entry(), 'content', $event)"
+    spellcheck="false"
+    aria-label="Entry content"
+    placeholder="Lore content inserted when this entry activates…"
+  ></textarea>
+  <button
+    matIconButton
+    matTextSuffix
+    type="button"
+    class="delimiter-btn"
+    (click)="openDelimiterDialog()"
+    [matTooltip]="delimiterTooltip()"
+    aria-label="Content delimiters"
+  >
+    <mat-icon>code</mat-icon>
+  </button>
+  @if (delimiterBadge(); as badge) {
+    <mat-hint>{{ badge }} · click the code button to change</mat-hint>
+  }
+  <mat-hint align="end" class="stats-hint">
+    {{ contentStats().chars }} chars · ~{{ contentStats().tokens }} tokens ·
+    {{ contentStats().lines }} lines
+  </mat-hint>
+</mat-form-field>

@@ -1,0 +1,26 @@
+@use '../shared';
+
+:host {
+  display: block;
+}
+
+.strip-card {
+  padding: 8px 16px;
+}
+
+// ---------------------------------------------------------------------------
+// Control strip: master switch · trigger strategy · execution modifiers
+// ---------------------------------------------------------------------------
+
+.control-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 48px;
+}
+
+// MD3 segmented buttons use the full corner shape.
+.strategy-toggle {
+  --mat-button-toggle-shape: var(--mat-sys-corner-full);
+}
