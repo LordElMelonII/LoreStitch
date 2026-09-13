@@ -1,0 +1,31 @@
+<p class="section-title">Matching Sources</p>
+<p class="section-desc">Additional text the keys are matched against</p>
+<mat-chip-listbox multiple aria-label="Additional matching sources">
+  @for (source of matchSourceOptions; track source.key) {
+    <mat-chip-option
+      [selected]="!!ext(source.key)"
+      (selectionChange)="updates.setExtensionChipFlag(entry(), source.key, $event)"
+      [matTooltip]="source.hint"
+    >
+      {{ source.label }}
+    </mat-chip-option>
+  }
+</mat-chip-listbox>
+<div class="field-row">
+  <mat-form-field
+    class="logic-field"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="Per-entry override: single-word keys match only as whole words (off is friendlier to languages without spaces)"
+  >
+    <mat-label>Match Whole Words</mat-label>
+    <mat-select
+      [value]="ext('match_whole_words') ?? null"
+      (selectionChange)="updates.setExtension(entry(), 'match_whole_words', $event.value)"
+    >
+      <mat-option [value]="null">Default (book setting)</mat-option>
+      <mat-option [value]="true">Enabled</mat-option>
+      <mat-option [value]="false">Disabled</mat-option>
+    </mat-select>
+  </mat-form-field>
+</div>

@@ -1,0 +1,7 @@
+@use '../shared';
+
+// Chips use the default Material row; the class exists as a styling hook for
+// the trigger filter row.
+.option-chips {
+  flex-wrap: wrap;
+}

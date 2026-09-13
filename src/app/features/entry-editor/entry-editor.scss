@@ -9,13 +9,46 @@
   height: 100%;
 }
 
-// Editor pane of an open entry: one column of section cards, padding owned by
+// Editor pane of an open entry: the writing surface scrolls (or fills) above
+// the option accordion pinned to the bottom edge, so the basic controls stay
+// reachable while the content gets the leftover height. Padding is owned by
 // the pane so the sections themselves need no outer spacing.
+:host ::ng-deep .entry-tabs .mat-mdc-tab-body-wrapper {
+  // Material leaves the wrapper content-sized; claim the pane height so the
+  // fields column below can actually pin the accordion to the bottom.
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .fields {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
+  box-sizing: border-box;
   padding: 16px 16px 24px;
+}
+
+.fields-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+// Mobile keeps the plain scrolling column: name, content and the accordion
+// flow downward as one page (the accordion expands in that flow too).
+:host-context(.mobile) {
+  .fields {
+    height: auto;
+  }
+
+  .fields-scroll {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
 }
 
 // ---------------------------------------------------------------------------

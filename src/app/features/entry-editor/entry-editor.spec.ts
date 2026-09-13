@@ -241,10 +241,10 @@ describe('TabStripDragScroller', () => {
 });
 
 /**
- * Smoke tests for the editor composition: the five field section components
- * mount inside the active tab (which also exercises the `EntryUpdatesService`
- * wiring) and edits reach the WorkspaceService. The service is stubbed so no
- * project is needed.
+ * Smoke tests for the editor composition: the writing-surface sections and
+ * the options accordion mount inside the active tab (which also exercises the
+ * `EntryUpdatesService` wiring) and edits reach the WorkspaceService. The
+ * service is stubbed so no project is needed.
  */
 describe('EntryEditor fields composition', () => {
   const updateEntry = vi.fn();
@@ -285,17 +285,47 @@ describe('EntryEditor fields composition', () => {
     }).compileComponents();
   });
 
-  it('renders the five editor sections bound to the entry', async () => {
+  it('renders the writing surface and options accordion bound to the entry', async () => {
     const fixture = TestBed.createComponent(EntryEditor);
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
 
-    expect(el.querySelector('app-entry-metadata')).toBeTruthy();
-    expect(el.querySelector('app-entry-control-strip')).toBeTruthy();
-    expect(el.querySelector('app-entry-keys')).toBeTruthy();
+    expect(el.querySelector('app-entry-name')).toBeTruthy();
     expect(el.querySelector('app-entry-content-field')).toBeTruthy();
-    expect(el.querySelector('app-entry-advanced-panel')).toBeTruthy();
+    expect(el.querySelector('app-entry-options-accordion')).toBeTruthy();
+    // Every panel section is its own component mounted inside the accordion.
+    for (const section of [
+      'app-entry-placement',
+      'app-entry-activation',
+      'app-entry-keys',
+      'app-entry-recursion-timing',
+      'app-entry-matching-sources',
+    ]) {
+      expect(el.querySelector(`app-entry-options-accordion ${section}`)).toBeTruthy();
+    }
+    // Keys stay mounted inside the collapsed panel so in-place key edits
+    // survive collapse/expand.
     expect(el.textContent).toContain('rin');
+  });
+
+  it('expands and collapses the option panel from the strip toggle', async () => {
+    const fixture = TestBed.createComponent(EntryEditor);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    const accordion = el.querySelector('app-entry-options-accordion')!;
+    const toggle = accordion.querySelector<HTMLButtonElement>('.expand-toggle')!;
+
+    expect(accordion.classList.contains('expanded')).toBe(false);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    toggle.click();
+    await fixture.whenStable();
+    expect(accordion.classList.contains('expanded')).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+
+    toggle.click();
+    await fixture.whenStable();
+    expect(accordion.classList.contains('expanded')).toBe(false);
   });
 
   it('patches the entry through the WorkspaceService on edit', async () => {
@@ -303,7 +333,7 @@ describe('EntryEditor fields composition', () => {
     await fixture.whenStable();
 
     const nameInput = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-      'app-entry-metadata input',
+      'app-entry-name input',
     )!;
     nameInput.value = 'Rin Tohsaka';
     nameInput.dispatchEvent(new Event('input'));

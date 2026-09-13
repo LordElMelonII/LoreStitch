@@ -6,8 +6,10 @@ import {
   createEmptyEntry,
   detectLoreFileFormat,
   characterBookToStNative,
+  entryCharacterFilter,
   entryTitle,
   entryTriggerState,
+  entryTriggers,
   estimateTokens,
   normalizeBookPositions,
   stNativeToCharacterBook,
@@ -125,9 +127,58 @@ describe('lorebook model', () => {
       expect(entry.extensions?.['group']).toBe('grail');
       expect(entry.extensions?.['display_index']).toBe(7);
       expect(entry.extensions?.['ignore_budget']).toBe(true);
-      expect(entry.extensions?.['characterFilter']).toEqual({
-        isExclude: true,
+    });
+
+    it('normalizes per-entry extensions the editor edits', () => {
+      const entry = stNativeToCharacterBook({
+        entries: {
+          3: nativeEntry({
+            matchCharacterDescription: true,
+            matchPersonaDescription: false,
+            triggers: ['normal', 'quiet'],
+            scanDepth: 2,
+            matchWholeWords: false,
+            sticky: 3,
+            automationId: 'qr-run',
+            characterFilter: { isExclude: true, names: ['Rin'], tags: ['t1'] },
+          }),
+        },
+      }).entries[0];
+
+      expect(entry.extensions?.['match_character_description']).toBe(true);
+      expect(entry.extensions?.['match_persona_description']).toBe(false);
+      expect(entry.extensions?.['triggers']).toEqual(['normal', 'quiet']);
+      expect(entry.extensions?.['scan_depth']).toBe(2);
+      expect(entry.extensions?.['match_whole_words']).toBe(false);
+      expect(entry.extensions?.['sticky']).toBe(3);
+      expect(entry.extensions?.['automation_id']).toBe('qr-run');
+      expect(entry.extensions?.['character_filter']).toEqual({
+        is_exclude: true,
         names: ['Rin'],
+        tags: ['t1'],
+      });
+      expect(entryTriggers(entry)).toEqual(['normal', 'quiet']);
+      expect(entryCharacterFilter(entry)).toEqual({
+        is_exclude: true,
+        names: ['Rin'],
+        tags: ['t1'],
+      });
+    });
+
+    it('entryCharacterFilter falls back to the legacy verbatim shape', () => {
+      const entry = createEmptyEntry(1);
+      entry.extensions = {
+        characterFilter: { isExclude: true, names: ['Saber'], tags: [] },
+      };
+      expect(entryCharacterFilter(entry)).toEqual({
+        is_exclude: true,
+        names: ['Saber'],
+        tags: [],
+      });
+      // Books created before normalization have neither shape.
+      expect(entryCharacterFilter(createEmptyEntry(2))).toEqual({
+        is_exclude: false,
+        names: [],
         tags: [],
       });
     });
@@ -186,7 +237,21 @@ describe('lorebook model', () => {
       expect(restored.group).toBe(original.group);
       expect(restored.displayIndex).toBe(original.displayIndex);
       expect(restored.excludeRecursion).toBe(original.excludeRecursion);
-      expect(restored['characterFilter']).toEqual(original['characterFilter']);
+      expect(restored.scanDepth).toBe(original.scanDepth);
+      expect(restored.matchWholeWords).toBe(original.matchWholeWords);
+      expect(restored.automationId).toBe(original.automationId);
+      expect(restored.sticky).toBe(original.sticky);
+      expect(restored.delayUntilRecursion).toBe(original.delayUntilRecursion);
+      expect(restored.triggers).toEqual(original.triggers);
+      expect(restored.characterFilter).toEqual(original.characterFilter);
+      // Match flags round-trip through the normalized extensions.
+      const flagged = characterBookToStNative(
+        stNativeToCharacterBook({
+          entries: { 4: nativeEntry({ uid: 4, matchCharacterDepthPrompt: true }) },
+        }),
+      ).entries['4'];
+      expect(flagged.matchCharacterDepthPrompt).toBe(true);
+      expect(flagged.matchCharacterDescription).toBe(false);
     });
 
     it('exports a string position even without extensions.position', () => {

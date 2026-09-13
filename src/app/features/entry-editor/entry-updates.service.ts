@@ -3,9 +3,14 @@ import { MatChipInputEvent, MatChipSelectionChange } from '@angular/material/chi
 import { MatSlideToggleChange } from '@angular/material/slide-toggle';
 import {
   CharacterBookEntry,
+  NormalizedCharacterFilter,
+  ST_TRIGGERS,
+  StTrigger,
   WI_POSITION_TO_ST,
   WiPosition,
   WiTriggerState,
+  entryCharacterFilter,
+  entryTriggers,
   triggerStatePatch,
 } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
@@ -15,11 +20,11 @@ type KeyListField = 'keys' | 'secondary_keys';
 
 /**
  * Field-level mutations shared by the entry field editor sections
- * (`EntryMetadata`, `EntryControlStrip`, `EntryKeys`, `EntryContentField`,
- * `EntryAdvancedPanel`). Every helper patches the entry through the
- * WorkspaceService, so the section components carry only UI state and all
- * workspace writes funnel through here. Entries without an id (transient)
- * are never patched.
+ * (`EntryName`, `EntryContentField`, `EntryKeys` and the panel sections of
+ * `EntryOptionsAccordion`).
+ * Every helper patches the entry through the WorkspaceService, so the section
+ * components carry only UI state and all workspace writes funnel through
+ * here. Entries without an id (transient) are never patched.
  */
 @Service()
 export class EntryUpdatesService {
@@ -104,6 +109,99 @@ export class EntryUpdatesService {
       return;
     }
     this.patch(entry, { [field]: change.selected });
+  }
+
+  /** Filter-chip counterpart of `setExtension` for boolean extension flags. */
+  setExtensionChipFlag(
+    entry: CharacterBookEntry,
+    key: string,
+    change: MatChipSelectionChange,
+  ): void {
+    if (!change.isUserInput) {
+      return;
+    }
+    this.setExtension(entry, key, change.selected);
+  }
+
+  /** Toggles a generation type inside the entry's trigger filter. */
+  toggleTrigger(
+    entry: CharacterBookEntry,
+    trigger: StTrigger,
+    change: MatChipSelectionChange,
+  ): void {
+    if (!change.isUserInput) {
+      return;
+    }
+    const selected = new Set(entryTriggers(entry));
+    if (change.selected) {
+      selected.add(trigger);
+    } else {
+      selected.delete(trigger);
+    }
+    this.setExtension(
+      entry,
+      'triggers',
+      ST_TRIGGERS.filter((value) => selected.has(value)),
+    );
+  }
+
+  /**
+   * Toggles "delay until recursion": on, it stays `true` (first recursion
+   * level) unless a deeper level was already set — mirroring world-info.js.
+   */
+  setDelayUntilRecursion(entry: CharacterBookEntry, change: MatChipSelectionChange): void {
+    if (!change.isUserInput) {
+      return;
+    }
+    const current = entry.extensions['delay_until_recursion'];
+    const value =
+      change.selected && typeof current === 'number' && current > 1 ? current : change.selected;
+    this.setExtension(entry, 'delay_until_recursion', value);
+  }
+
+  /** Recursion level input: empty = level 1 (stored as `true`), like ST. */
+  setDelayUntilRecursionLevel(entry: CharacterBookEntry, event: Event): void {
+    const raw = ((event.target as HTMLInputElement).value ?? '').trim();
+    if (raw === '') {
+      this.setExtension(entry, 'delay_until_recursion', true);
+      return;
+    }
+    const value = Number(raw);
+    if (Number.isNaN(value)) {
+      this.setExtension(entry, 'delay_until_recursion', false);
+      return;
+    }
+    this.setExtension(entry, 'delay_until_recursion', value === 1 ? true : value);
+  }
+
+  /** The entry's character activation filter (lazily defaulted for editing). */
+  characterFilter(entry: CharacterBookEntry): NormalizedCharacterFilter {
+    return entryCharacterFilter(entry);
+  }
+
+  /** Exclude mode inverts the character filter (activate for everyone else). */
+  toggleCharacterFilterExclude(entry: CharacterBookEntry, change: MatChipSelectionChange): void {
+    if (!change.isUserInput) {
+      return;
+    }
+    this.setExtension(entry, 'character_filter', {
+      ...entryCharacterFilter(entry),
+      is_exclude: change.selected,
+    });
+  }
+
+  /** Splits the comma-separated character name list into the filter. */
+  setCharacterFilterNames(entry: CharacterBookEntry, event: Event): void {
+    const raw = (event.target as HTMLInputElement).value;
+    const names = [
+      ...new Set(
+        raw
+          .split(',')
+          .map((name) => name.trim())
+          .filter(Boolean),
+      ),
+    ];
+    this.setExtension(entry, 'character_filter', { ...entryCharacterFilter(entry), names });
   }
 
   /** Switches the trigger strategy (normal 🟢 / constant 🔵 / vectorized 🔗). */

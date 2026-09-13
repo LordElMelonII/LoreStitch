@@ -3,35 +3,55 @@ import {
   Component,
   ElementRef,
   afterRenderEffect,
+  computed,
   inject,
   input,
   signal,
   viewChild,
 } from '@angular/core';
-import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
-import { CharacterBookEntry } from '../../../core/models/lorebook.model';
+import { MatSelectModule } from '@angular/material/select';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import {
+  CharacterBookEntry,
+  ST_LOGIC,
+  entryTriggerState,
+} from '../../../core/models/lorebook.model';
 import { EntryUpdatesService } from '../entry-updates.service';
 
 /**
- * Key editing cluster of the entry editor: primary and (when selective)
- * secondary keyword chip grids with add / remove / double-click in-place
- * editing. A section of `EntryFields`; list writes go through
- * `EntryUpdatesService`.
+ * Keys section of the entry options panel: the Selective (Optional Filter)
+ * toggle, the primary / secondary keyword chip grids with add / remove /
+ * double-click in-place editing and the secondary keys logic. A section of
+ * `EntryOptionsAccordion`; list writes go through `EntryUpdatesService`.
  */
 @Component({
   selector: 'app-entry-keys',
-  imports: [MatCardModule, MatChipsModule, MatFormFieldModule, MatIconModule],
+  imports: [MatChipsModule, MatFormFieldModule, MatIconModule, MatSelectModule, MatTooltipModule],
   templateUrl: './entry-keys.html',
   styleUrl: './entry-keys.scss',
+  host: { class: 'entry-panel-section' },
 })
 export class EntryKeys {
   protected readonly updates = inject(EntryUpdatesService);
 
-  /** The entry being edited (owned by the enclosing `EntryFields`). */
+  /** The entry being edited (owned by the enclosing `EntryOptionsAccordion`). */
   readonly entry = input.required<CharacterBookEntry>();
+
+  /** True while the entry always triggers — key-based modifiers don't apply. */
+  protected readonly isConstant = computed(() => entryTriggerState(this.entry()) === 'constant');
+
+  protected readonly logicOptions = [
+    { value: ST_LOGIC.AND_ANY, label: 'AND Any' },
+    { value: ST_LOGIC.NOT_ALL, label: 'NOT All' },
+    { value: ST_LOGIC.NOT_ANY, label: 'NOT Any' },
+    { value: ST_LOGIC.AND_ALL, label: 'AND All' },
+  ];
+
+  /** Template constant: fallback secondary logic when the entry has none. */
+  protected readonly defaultLogic = ST_LOGIC.AND_ANY;
 
   protected readonly separatorKeyCodes = [ENTER, COMMA];
 

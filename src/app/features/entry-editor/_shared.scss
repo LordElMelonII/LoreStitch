@@ -29,3 +29,36 @@
     width: 112px;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Sections of the entry options panel
+// Each `EntryOptionsAccordion` section is its own component whose host carries
+// this class; the accordion itself draws the separating hairlines.
+// ---------------------------------------------------------------------------
+
+.entry-panel-section {
+  display: block;
+  padding: 14px 16px;
+
+  > * + * {
+    margin-top: 12px;
+  }
+}
+
+.section-title {
+  margin: 0;
+  font: var(--mat-sys-title-small);
+}
+
+.section-desc {
+  margin-top: -6px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// Captions that hug the chip row above them (triggers, filter explanations).
+.chip-hint {
+  margin-top: -8px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}

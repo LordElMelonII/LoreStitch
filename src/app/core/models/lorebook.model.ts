@@ -177,6 +177,46 @@ export const ST_LOGIC = {
   AND_ALL: 3,
 } as const;
 
+/**
+ * `GENERATION_TYPE_TRIGGERS` from SillyTavern's script.js — the generation
+ * types a per-entry `triggers` filter may restrict activation to. An empty
+ * filter means the entry may activate for every type.
+ */
+export const ST_TRIGGERS = [
+  'normal',
+  'continue',
+  'impersonate',
+  'swipe',
+  'regenerate',
+  'quiet',
+] as const;
+
+export type StTrigger = (typeof ST_TRIGGERS)[number];
+
+/** UI options for the per-entry trigger filter, ordered like the ST docs. */
+export const ST_TRIGGER_OPTIONS: readonly { value: StTrigger; label: string; hint: string }[] = [
+  { value: 'normal', label: '💬 Normal', hint: 'Regular message generation' },
+  { value: 'continue', label: '⏩ Continue', hint: 'When the Continue button is pressed' },
+  { value: 'impersonate', label: '🎭 Impersonate', hint: 'When Impersonate is pressed' },
+  { value: 'swipe', label: '👉 Swipe', hint: 'When generation is triggered by swiping' },
+  { value: 'regenerate', label: '🔁 Regenerate', hint: 'Regenerate in solo chats' },
+  { value: 'quiet', label: '🌙 Quiet', hint: 'Background requests from extensions / scripts' },
+];
+
+/** Native per-entry character activation filter (SillyTavern's `characterFilter`). */
+export interface StCharacterFilter {
+  isExclude: boolean;
+  names: string[];
+  tags: string[];
+}
+
+/** LoreStitch-normalized `characterFilter`, stored in `extensions.character_filter`. */
+export interface NormalizedCharacterFilter {
+  is_exclude: boolean;
+  names: string[];
+  tags: string[];
+}
+
 /** `extension_prompt_roles` values from SillyTavern's script.js. */
 export const ST_ROLE = {
   system: 0,
@@ -280,6 +320,46 @@ export function triggerStatePatch(
 }
 
 /**
+ * The entry's generation-type trigger filter (`extensions.triggers`), with
+ * unknown values dropped — an empty result means "activate for all types".
+ */
+export function entryTriggers(entry: CharacterBookEntry): StTrigger[] {
+  const raw = (entry.extensions ?? {})['triggers'];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((value): value is StTrigger =>
+    (ST_TRIGGERS as readonly string[]).includes(value),
+  );
+}
+
+/**
+ * The entry's character activation filter (`extensions.character_filter`),
+ * falling back to the legacy verbatim native object for books imported before
+ * the field was normalized.
+ */
+export function entryCharacterFilter(entry: CharacterBookEntry): NormalizedCharacterFilter {
+  const ext = (entry.extensions ?? {}) as Record<string, unknown>;
+  const normalized = ext['character_filter'] as Partial<NormalizedCharacterFilter> | null;
+  if (normalized && typeof normalized === 'object') {
+    return {
+      is_exclude: normalized.is_exclude ?? false,
+      names: [...(normalized.names ?? [])],
+      tags: [...(normalized.tags ?? [])],
+    };
+  }
+  const legacy = ext['characterFilter'] as StCharacterFilter | null;
+  if (legacy && typeof legacy === 'object') {
+    return {
+      is_exclude: legacy.isExclude ?? false,
+      names: [...(legacy.names ?? [])],
+      tags: [...(legacy.tags ?? [])],
+    };
+  }
+  return { is_exclude: false, names: [], tags: [] };
+}
+
+/**
  * Produces a spec-clean book for V2 exports: `position` collapses to the two
  * spec-legal values (SillyTavern's own convention) while the true numeric
  * position is preserved in `extensions.position`.
@@ -297,8 +377,9 @@ export function toSpecCompliantBook(book: CharacterBook): CharacterBook {
 
 /**
  * A native SillyTavern world-info entry. SillyTavern tolerates unknown/legacy
- * fields on entries, so extra properties are preserved via the index
- * signature and stored back into `CharacterBookEntry.extensions`.
+ * fields on entries; the fields LoreStitch edits are normalized into
+ * `CharacterBookEntry.extensions` (see `stNativeToCharacterBook`), the rest
+ * are ignored.
  */
 export interface SillyTavernEntry {
   uid: number;
@@ -327,7 +408,7 @@ export interface SillyTavernEntry {
   scanDepth?: number | null;
   caseSensitive?: boolean | null;
   matchWholeWords?: boolean | null;
-  useGroupScoring?: number | null;
+  useGroupScoring?: boolean | number | null;
   automationId?: string;
   role?: number | null;
   sticky?: number | null;
@@ -342,6 +423,7 @@ export interface SillyTavernEntry {
   matchCharacterDepthPrompt?: boolean;
   matchScenario?: boolean;
   matchCreatorNotes?: boolean;
+  characterFilter?: StCharacterFilter | null;
   [key: string]: unknown;
 }
 
@@ -448,6 +530,14 @@ function defaultEntryExtensions(): Record<string, unknown> {
     cooldown: null,
     delay: null,
     ignore_budget: false,
+    triggers: [],
+    match_persona_description: false,
+    match_character_description: false,
+    match_character_personality: false,
+    match_character_depth_prompt: false,
+    match_scenario: false,
+    match_creator_notes: false,
+    character_filter: null,
   };
 }
 
@@ -488,6 +578,41 @@ export function createEmptyEntry(id: number, displayIndex = 0): CharacterBookEnt
 // Native SillyTavern <-> CharacterBook conversion
 // ============================================================================
 
+/** Normalizes a native `characterFilter` into `extensions.character_filter`. */
+function stNativeToCharacterFilter(
+  filter: StCharacterFilter | null | undefined,
+): NormalizedCharacterFilter | null {
+  if (!filter || typeof filter !== 'object') {
+    return null;
+  }
+  return {
+    is_exclude: filter.isExclude ?? false,
+    names: Array.isArray(filter.names) ? [...filter.names] : [],
+    tags: Array.isArray(filter.tags) ? [...filter.tags] : [],
+  };
+}
+
+/**
+ * Inverse of `stNativeToCharacterFilter`, tolerant of both the normalized
+ * `extensions.character_filter` shape and the legacy verbatim native object.
+ */
+function toNativeCharacterFilter(value: unknown): StCharacterFilter | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const raw = value as {
+    isExclude?: unknown;
+    is_exclude?: unknown;
+    names?: unknown;
+    tags?: unknown;
+  };
+  const names = Array.isArray(raw.names) ? raw.names.filter((n) => typeof n === 'string') : [];
+  const tags = Array.isArray(raw.tags) ? raw.tags.filter((t) => typeof t === 'string') : [];
+  const isExclude =
+    typeof raw.is_exclude === 'boolean' ? raw.is_exclude : ((raw.isExclude as boolean) ?? false);
+  return { isExclude, names, tags };
+}
+
 /**
  * Converts a native SillyTavern world-info export into a `CharacterBook`.
  * Field names mirror the inverse of SillyTavern's `convertCharacterBook()`:
@@ -505,8 +630,6 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
   const entries = sorted.map((st, index): CharacterBookEntry => {
     const position = st.position ?? ST_POSITION.before;
     const extensions: Record<string, unknown> = {
-      // Unknown/extra native fields survive a round trip via extensions.
-      ...Object.fromEntries(Object.entries(st).filter(([k]) => ST_PASSTHROUGH_FIELDS.has(k))),
       position,
       exclude_recursion: st.excludeRecursion ?? false,
       prevent_recursion: st.preventRecursion ?? false,
@@ -538,6 +661,7 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
       match_character_depth_prompt: st.matchCharacterDepthPrompt ?? false,
       match_scenario: st.matchScenario ?? false,
       match_creator_notes: st.matchCreatorNotes ?? false,
+      character_filter: stNativeToCharacterFilter(st.characterFilter),
     };
 
     return {
@@ -586,7 +710,7 @@ interface StNativeExtensions {
   scan_depth?: number | null;
   case_sensitive?: boolean | null;
   match_whole_words?: boolean | null;
-  use_group_scoring?: number | null;
+  use_group_scoring?: boolean | number | null;
   automation_id?: string;
   role?: number | null;
   sticky?: number | null;
@@ -594,7 +718,23 @@ interface StNativeExtensions {
   delay?: number | null;
   triggers?: string[];
   display_index?: number;
+  match_persona_description?: boolean;
+  match_character_description?: boolean;
+  match_character_personality?: boolean;
+  match_character_depth_prompt?: boolean;
+  match_scenario?: boolean;
+  match_creator_notes?: boolean;
+  character_filter?: NormalizedCharacterFilter | null;
   [key: string]: unknown;
+}
+
+/**
+ * Reads a match flag that was normalized in a later version: books imported
+ * before normalization carry only the verbatim camelCase native key.
+ */
+function legacyFlag(ext: StNativeExtensions, normalized: string, legacy: string): boolean {
+  const value = ext[normalized] ?? ext[legacy];
+  return typeof value === 'boolean' ? value : false;
 }
 
 /**
@@ -615,9 +755,8 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
           ? ext.position
           : ST_POSITION.before;
 
-    const passthrough = Object.fromEntries(
-      Object.entries(ext).filter(([k]) => ST_PASSTHROUGH_FIELDS.has(k)),
-    );
+    // Written only when the filter was configured, like SillyTavern itself.
+    const characterFilter = toNativeCharacterFilter(ext.character_filter ?? ext['characterFilter']);
 
     entries[String(uid)] = {
       uid,
@@ -654,7 +793,29 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
       delay: ext.delay ?? null,
       triggers: ext.triggers ?? [],
       displayIndex: ext.display_index ?? index,
-      ...passthrough,
+      matchPersonaDescription: legacyFlag(
+        ext,
+        'match_persona_description',
+        'matchPersonaDescription',
+      ),
+      matchCharacterDescription: legacyFlag(
+        ext,
+        'match_character_description',
+        'matchCharacterDescription',
+      ),
+      matchCharacterPersonality: legacyFlag(
+        ext,
+        'match_character_personality',
+        'matchCharacterPersonality',
+      ),
+      matchCharacterDepthPrompt: legacyFlag(
+        ext,
+        'match_character_depth_prompt',
+        'matchCharacterDepthPrompt',
+      ),
+      matchScenario: legacyFlag(ext, 'match_scenario', 'matchScenario'),
+      matchCreatorNotes: legacyFlag(ext, 'match_creator_notes', 'matchCreatorNotes'),
+      ...(characterFilter ? { characterFilter } : {}),
     };
   });
 
@@ -669,21 +830,6 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
       : {}),
   };
 }
-
-/**
- * Native world-info fields that are copied verbatim into `extensions` when
- * converting to a `CharacterBook` (they have no V2 schema counterpart), and
- * copied back out when exporting to the native format.
- */
-const ST_PASSTHROUGH_FIELDS = new Set([
-  'characterFilter',
-  'matchPersonaDescription',
-  'matchCharacterDescription',
-  'matchCharacterPersonality',
-  'matchCharacterDepthPrompt',
-  'matchScenario',
-  'matchCreatorNotes',
-]);
 
 /** Extracts the raw card metadata (everything except `character_book`). */
 export function extractRawCardData(card: TavernCardV2): ProjectWorkspace['rawCardData'] {

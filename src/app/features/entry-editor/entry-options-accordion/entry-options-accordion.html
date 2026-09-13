@@ -1,0 +1,92 @@
+<div
+  class="panel-anchor"
+  role="region"
+  aria-label="Placement, activation, keys and advanced options"
+  [attr.id]="panelId()"
+  [class.open]="expanded()"
+  [inert]="!expanded()"
+>
+  <div class="panel-clip">
+    <div class="panel">
+      <app-entry-placement [entry]="entry()" />
+      <app-entry-activation [entry]="entry()" />
+      <app-entry-keys [entry]="entry()" />
+      <app-entry-recursion-timing [entry]="entry()" />
+      <app-entry-matching-sources [entry]="entry()" />
+    </div>
+  </div>
+</div>
+
+<mat-card appearance="filled" class="cluster-card trigger-card">
+  <div class="control-strip">
+    <mat-slide-toggle
+      [checked]="entry().enabled"
+      (change)="updates.setFlag(entry(), 'enabled', $event)"
+      matTooltip="Include this entry in scans"
+    >
+      Enabled
+    </mat-slide-toggle>
+
+    <mat-button-toggle-group
+      class="strategy-toggle"
+      [value]="triggerState()"
+      (change)="updates.setTriggerState(entry(), $event.value)"
+      hideSingleSelectionIndicator
+      aria-label="Trigger strategy"
+    >
+      <mat-button-toggle
+        value="normal"
+        matTooltip="🟢 Triggered only in the presence of a key"
+        aria-label="Normal: keyword-triggered"
+      >
+        🟢 Normal
+      </mat-button-toggle>
+      <mat-button-toggle
+        value="constant"
+        matTooltip="🔵 Does not need any keywords, and will trigger regardless of content"
+        aria-label="Constant: always inserted"
+      >
+        🔵 Constant
+      </mat-button-toggle>
+      <mat-button-toggle
+        value="vectorized"
+        matTooltip="🔗 Allowed to be inserted by embedding similarity (Vector Storage)"
+        aria-label="Vectorized: inserted by embedding similarity"
+      >
+        🔗 Vector
+      </mat-button-toggle>
+    </mat-button-toggle-group>
+
+    <mat-chip-listbox class="modifier-chips" multiple aria-label="Execution modifiers">
+      <mat-chip-option
+        [selected]="entry().case_sensitive ?? false"
+        [disabled]="isConstant()"
+        (selectionChange)="updates.setChipFlag(entry(), 'case_sensitive', $event)"
+        [matTooltip]="
+          isConstant()
+            ? 'Not available while Constant — keys are not scanned'
+            : 'Match keys case-sensitively'
+        "
+      >
+        Case Sensitive
+      </mat-chip-option>
+    </mat-chip-listbox>
+
+    <button
+      matIconButton
+      type="button"
+      class="expand-toggle"
+      (click)="toggle()"
+      [attr.aria-expanded]="expanded()"
+      [attr.aria-controls]="panelId()"
+      [matTooltip]="
+        expanded()
+          ? 'Hide placement, keys and advanced options'
+          : 'Show placement, keys and advanced options'
+      "
+      aria-label="Toggle entry options"
+    >
+      <mat-icon aria-hidden="true">{{ toggleIcon() }}</mat-icon>
+    </button>
+  </div>
+</mat-card>

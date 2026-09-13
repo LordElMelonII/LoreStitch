@@ -1,0 +1,88 @@
+<p class="section-title">Activation</p>
+<div class="field-row">
+  <mat-form-field
+    class="num"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="How many recent messages are scanned for this entry's keys — empty uses the book default"
+  >
+    <mat-label>Scan Depth</mat-label>
+    <input
+      matInput
+      type="number"
+      min="0"
+      [value]="ext('scan_depth') ?? ''"
+      (input)="updates.setExtensionNumber(entry(), 'scan_depth', $event, null)"
+      placeholder="Default"
+    />
+  </mat-form-field>
+  <mat-form-field
+    class="num"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="Chance for the entry to be inserted on each activation: 100 = always, 50 = half the time, 0 = never"
+  >
+    <mat-label>Probability %</mat-label>
+    <input
+      matInput
+      type="number"
+      min="0"
+      max="100"
+      [value]="ext('probability')"
+      (input)="updates.setExtensionNumber(entry(), 'probability', $event, 100)"
+    />
+  </mat-form-field>
+</div>
+
+<mat-chip-listbox class="option-chips" multiple aria-label="Generation type triggers">
+  @for (option of triggerOptions; track option.value) {
+    <mat-chip-option
+      [selected]="triggers().includes(option.value)"
+      (selectionChange)="updates.toggleTrigger(entry(), option.value, $event)"
+      [matTooltip]="option.hint"
+    >
+      {{ option.label }}
+    </mat-chip-option>
+  }
+</mat-chip-listbox>
+<p class="chip-hint">Allowed generation types — none selected means all of them.</p>
+
+<div class="field-row">
+  <mat-chip-listbox multiple aria-label="Character filter mode">
+    <mat-chip-option
+      [selected]="characterFilter().is_exclude"
+      (selectionChange)="updates.toggleCharacterFilterExclude(entry(), $event)"
+      matTooltip="Invert the filter: activate for every character except the listed ones"
+    >
+      Exclude
+    </mat-chip-option>
+  </mat-chip-listbox>
+  <mat-form-field class="grow" subscriptSizing="dynamic" appearance="fill">
+    <mat-label>Character Filter</mat-label>
+    <input
+      matInput
+      [value]="characterFilter().names.join(', ')"
+      (input)="updates.setCharacterFilterNames(entry(), $event)"
+      placeholder="e.g. Saber, Rin"
+      [matTooltip]="characterFilterHint()"
+    />
+    <mat-hint>{{ characterFilterHint() }}</mat-hint>
+  </mat-form-field>
+</div>
+
+<div class="field-row">
+  <mat-form-field
+    class="grow"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="Runs the Quick Replies script command with the same ID when this entry activates"
+  >
+    <mat-label>Automation ID</mat-label>
+    <input
+      matInput
+      [value]="ext('automation_id') ?? ''"
+      (input)="updates.setExtensionText(entry(), 'automation_id', $event)"
+      placeholder="None"
+    />
+  </mat-form-field>
+</div>

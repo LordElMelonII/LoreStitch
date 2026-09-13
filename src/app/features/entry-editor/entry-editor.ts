@@ -14,11 +14,9 @@ import { MatTabChangeEvent, MatTabGroup, MatTabsModule } from '@angular/material
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
-import { EntryAdvancedPanel } from './entry-advanced-panel/entry-advanced-panel';
 import { EntryContentField } from './entry-content-field/entry-content-field';
-import { EntryControlStrip } from './entry-control-strip/entry-control-strip';
-import { EntryKeys } from './entry-keys/entry-keys';
 import { EntryName } from './entry-name/entry-name';
+import { EntryOptionsAccordion } from './entry-options-accordion/entry-options-accordion';
 
 interface TabItem {
   id: number;
@@ -137,9 +135,10 @@ export class TabStripDragScroller {
 
 /**
  * Central tabbed editor built on `mat-tab-group`. Every open entry is a tab
- * hosting the field section components (`EntryMetadata`, `EntryControlStrip`,
- * `EntryKeys`, `EntryContentField`, `EntryAdvancedPanel`); the label template
- * carries the dirty indicator and a close button.
+ * hosting the writing surface (`EntryName`, `EntryContentField`) above the
+ * `EntryOptionsAccordion`, which collapses placement, keys and advanced
+ * options behind the bottom control strip; the label template carries the
+ * dirty indicator and a close button.
  */
 @Component({
   selector: 'app-entry-editor',
@@ -149,11 +148,9 @@ export class TabStripDragScroller {
     MatIconModule,
     MatTabsModule,
     MatTooltipModule,
-    EntryAdvancedPanel,
     EntryContentField,
-    EntryControlStrip,
-    EntryKeys,
-    EntryName
+    EntryName,
+    EntryOptionsAccordion,
   ],
   templateUrl: './entry-editor.html',
   styleUrl: './entry-editor.scss',

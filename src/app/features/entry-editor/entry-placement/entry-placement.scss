@@ -1,0 +1,7 @@
+@use '../shared';
+
+// The Position field is wider than its label: ST's longest option is
+// "Before Example Messages".
+.position {
+  min-width: 16em;
+}

@@ -1,11 +1,15 @@
 @use '../shared';
 
-:host {
-  display: block;
-}
-
+// The keys section renders flat inside the options accordion panel: the
+// section divider above it provides the grouping, not a card of its own.
+// Chip grids stretch so both fields' boxes and hints match heights.
 .keys-row {
   align-items: stretch;
+}
+
+// Secondary keys logic select next to the key fields.
+.logic-field {
+  width: 200px;
 }
 
 // Key chip fields are real filled form fields (label in the field, hint

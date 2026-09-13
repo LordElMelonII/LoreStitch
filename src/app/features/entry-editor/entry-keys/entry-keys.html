@@ -1,15 +1,77 @@
-<mat-card appearance="filled" class="cluster-card keys-card">
-  <div class="field-row keys-row">
+<p class="section-title">Keys</p>
+<mat-chip-listbox multiple aria-label="Key options">
+  <mat-chip-option
+    [selected]="entry().selective ?? false"
+    [disabled]="isConstant()"
+    (selectionChange)="updates.setChipFlag(entry(), 'selective', $event)"
+    [matTooltip]="
+      isConstant()
+        ? 'Not available while Constant — the entry always triggers regardless of keys'
+        : 'Optional Filter: activate only if secondary keys also match'
+    "
+  >
+    Selective
+  </mat-chip-option>
+</mat-chip-listbox>
+
+<div class="field-row keys-row">
+  <mat-form-field
+    class="keys-field grow"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    (click)="focusPrimaryKeys()"
+  >
+    <mat-label>Primary Keys</mat-label>
+    <mat-chip-grid #keysGrid aria-label="Primary keys">
+      @for (key of entry().keys; track $index) {
+        @if (isEditing('keys', $index)) {
+          <input
+            #keyEditInput
+            class="chip-edit"
+            [value]="editValue()"
+            (input)="setEditValue($event)"
+            (keydown.enter)="$event.preventDefault(); commitEdit()"
+            (keydown.escape)="cancelEdit()"
+            (blur)="commitEdit()"
+            (click)="$event.stopPropagation()"
+            [attr.aria-label]="'Edit primary key ' + key"
+          />
+        } @else {
+          <mat-chip-row
+            (removed)="updates.removeKey(entry(), 'keys', $index)"
+            (dblclick)="startEdit('keys', $index, key)"
+          >
+            {{ key }}
+            <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + key">
+              <mat-icon>cancel</mat-icon>
+            </button>
+          </mat-chip-row>
+        }
+      }
+      <input
+        #primaryKeyInput
+        matChipInput
+        [matChipInputFor]="keysGrid"
+        [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
+        (matChipInputTokenEnd)="updates.addKey(entry(), 'keys', $event)"
+        placeholder="Add key…"
+        aria-label="Add primary key"
+      />
+    </mat-chip-grid>
+    <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
+  </mat-form-field>
+
+  @if (entry().selective) {
     <mat-form-field
       class="keys-field grow"
       subscriptSizing="dynamic"
       appearance="fill"
-      (click)="focusPrimaryKeys()"
+      (click)="focusSecondaryKeys()"
     >
-      <mat-label>Primary Keys</mat-label>
-      <mat-chip-grid #keysGrid aria-label="Primary keys">
-        @for (key of entry().keys; track $index) {
-          @if (isEditing('keys', $index)) {
+      <mat-label>Secondary Keys</mat-label>
+      <mat-chip-grid #secondaryGrid aria-label="Secondary keys">
+        @for (key of entry().secondary_keys ?? []; track $index) {
+          @if (isEditing('secondary_keys', $index)) {
             <input
               #keyEditInput
               class="chip-edit"
@@ -19,83 +81,52 @@
               (keydown.escape)="cancelEdit()"
               (blur)="commitEdit()"
               (click)="$event.stopPropagation()"
-              [attr.aria-label]="'Edit primary key ' + key"
+              [attr.aria-label]="'Edit secondary key ' + key"
             />
           } @else {
             <mat-chip-row
-              (removed)="updates.removeKey(entry(), 'keys', $index)"
-              (dblclick)="startEdit('keys', $index, key)"
+              (removed)="updates.removeKey(entry(), 'secondary_keys', $index)"
+              (dblclick)="startEdit('secondary_keys', $index, key)"
             >
               {{ key }}
-              <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + key">
+              <button matChipRemove type="button" [attr.aria-label]="'Remove secondary key ' + key">
                 <mat-icon>cancel</mat-icon>
               </button>
             </mat-chip-row>
           }
         }
         <input
-          #primaryKeyInput
+          #secondaryKeyInput
           matChipInput
-          [matChipInputFor]="keysGrid"
+          [matChipInputFor]="secondaryGrid"
           [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
-          (matChipInputTokenEnd)="updates.addKey(entry(), 'keys', $event)"
-          placeholder="Add key…"
-          aria-label="Add primary key"
+          (matChipInputTokenEnd)="updates.addKey(entry(), 'secondary_keys', $event)"
+          placeholder="Add secondary key…"
+          aria-label="Add secondary key"
         />
       </mat-chip-grid>
       <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
     </mat-form-field>
+  }
+</div>
 
-    @if (entry().selective) {
-      <mat-form-field
-        class="keys-field grow"
-        subscriptSizing="dynamic"
-        appearance="fill"
-        (click)="focusSecondaryKeys()"
+@if (entry().selective) {
+  <div class="field-row">
+    <mat-form-field
+      class="logic-field"
+      subscriptSizing="dynamic"
+      appearance="fill"
+      matTooltip="How the Optional Filter (secondary keys) combines with the primary keys"
+    >
+      <mat-label>Secondary Logic</mat-label>
+      <mat-select
+        [value]="entry().extensions['selectiveLogic'] ?? defaultLogic"
+        (selectionChange)="updates.setExtension(entry(), 'selectiveLogic', $event.value)"
       >
-        <mat-label>Secondary Keys</mat-label>
-        <mat-chip-grid #secondaryGrid aria-label="Secondary keys">
-          @for (key of entry().secondary_keys ?? []; track $index) {
-            @if (isEditing('secondary_keys', $index)) {
-              <input
-                #keyEditInput
-                class="chip-edit"
-                [value]="editValue()"
-                (input)="setEditValue($event)"
-                (keydown.enter)="$event.preventDefault(); commitEdit()"
-                (keydown.escape)="cancelEdit()"
-                (blur)="commitEdit()"
-                (click)="$event.stopPropagation()"
-                [attr.aria-label]="'Edit secondary key ' + key"
-              />
-            } @else {
-              <mat-chip-row
-                (removed)="updates.removeKey(entry(), 'secondary_keys', $index)"
-                (dblclick)="startEdit('secondary_keys', $index, key)"
-              >
-                {{ key }}
-                <button
-                  matChipRemove
-                  type="button"
-                  [attr.aria-label]="'Remove secondary key ' + key"
-                >
-                  <mat-icon>cancel</mat-icon>
-                </button>
-              </mat-chip-row>
-            }
-          }
-          <input
-            #secondaryKeyInput
-            matChipInput
-            [matChipInputFor]="secondaryGrid"
-            [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
-            (matChipInputTokenEnd)="updates.addKey(entry(), 'secondary_keys', $event)"
-            placeholder="Add secondary key…"
-            aria-label="Add secondary key"
-          />
-        </mat-chip-grid>
-        <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
-      </mat-form-field>
-    }
+        @for (option of logicOptions; track option.value) {
+          <mat-option [value]="option.value">{{ option.label }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
   </div>
-</mat-card>
+}

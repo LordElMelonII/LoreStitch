@@ -1,9 +1,7 @@
 import { Component, inject, input } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import {
-  CharacterBookEntry
-} from '../../../core/models/lorebook.model';
+import { CharacterBookEntry } from '../../../core/models/lorebook.model';
 import { EntryUpdatesService } from '../entry-updates.service';
 
 /**

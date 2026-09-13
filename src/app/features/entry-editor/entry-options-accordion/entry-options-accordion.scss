@@ -1,0 +1,119 @@
+@use '../shared';
+
+:host {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+// ---------------------------------------------------------------------------
+// Trigger row: the always-visible basic options (Enabled · strategy ·
+// modifiers) that double as the accordion header.
+// ---------------------------------------------------------------------------
+
+.trigger-card {
+  padding: 8px 16px;
+}
+
+.control-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 48px;
+}
+
+.expand-toggle {
+  margin-left: auto;
+}
+
+// MD3 segmented buttons use the full corner shape.
+.strategy-toggle {
+  --mat-button-toggle-shape: var(--mat-sys-corner-full);
+}
+
+// ---------------------------------------------------------------------------
+// Option panel: expands from the trigger row — anchored above it on desktop
+// (grows upward over the content) and in flow below it on mobile (grows
+// downward with the scroll). The grid `0fr -> 1fr` row animation gives an
+// auto-height collapse that stays clipped while it moves.
+// ---------------------------------------------------------------------------
+
+.panel-anchor {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows 300ms cubic-bezier(0.3, 0, 0.8, 0.15),
+    visibility 0s 300ms;
+}
+
+:host(.expanded) .panel-anchor {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition:
+    grid-template-rows 350ms cubic-bezier(0.05, 0.7, 0.1, 1),
+    visibility 0s 0s;
+}
+
+.panel-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+// Floating sheet: one tonal step above the cluster cards plus a soft shadow,
+// since it overlaps the content beneath it.
+.panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(62vh, 640px);
+  overflow-y: auto;
+  background: var(--mat-sys-surface-container-high);
+  border-radius: var(--mat-sys-corner-medium);
+  box-shadow: var(--mat-sys-level2);
+  opacity: 0;
+  translate: 0 8px;
+  transition:
+    opacity 200ms cubic-bezier(0.3, 0, 0.8, 0.15),
+    translate 300ms cubic-bezier(0.3, 0, 0.8, 0.15);
+}
+
+:host(.expanded) .panel {
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    opacity 250ms cubic-bezier(0.05, 0.7, 0.1, 1) 60ms,
+    translate 350ms cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+
+// Panel sections are child components (`entry-panel-section` host class in
+// _shared.scss); the accordion only draws the hairlines between them.
+.panel > * + * {
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}
+
+// Mobile: the panel leaves the anchored-overlay mode and becomes a plain
+// in-flow card under the trigger, expanding downward in the scroll flow.
+:host(.mobile) {
+  .panel-anchor {
+    position: static;
+    order: 2;
+    margin-top: 12px;
+  }
+
+  .panel {
+    max-height: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-anchor,
+  .panel {
+    transition: none;
+  }
+}

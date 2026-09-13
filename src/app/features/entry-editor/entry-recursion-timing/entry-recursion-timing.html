@@ -1,0 +1,95 @@
+<p class="section-title">Recursion &amp; Timing</p>
+<mat-chip-listbox multiple aria-label="Recursion guards">
+  <mat-chip-option
+    [selected]="!!ext('exclude_recursion')"
+    (selectionChange)="updates.setExtensionChipFlag(entry(), 'exclude_recursion', $event)"
+    matTooltip="Non-recursable: cannot be activated by other entries"
+  >
+    Exclude Recursion
+  </mat-chip-option>
+  <mat-chip-option
+    [selected]="!!ext('prevent_recursion')"
+    (selectionChange)="updates.setExtensionChipFlag(entry(), 'prevent_recursion', $event)"
+    matTooltip="Prevent further recursion: this entry's content cannot trigger other entries"
+  >
+    Prevent Recursion
+  </mat-chip-option>
+  <mat-chip-option
+    [selected]="!!delayUntilRecursion()"
+    (selectionChange)="updates.setDelayUntilRecursion(entry(), $event)"
+    matTooltip="Delay until recursion: activates only during recursive checks, at its recursion level"
+  >
+    Delay Until Recursion
+  </mat-chip-option>
+</mat-chip-listbox>
+@if (delayUntilRecursion()) {
+  <div class="field-row">
+    <mat-form-field
+      class="num"
+      subscriptSizing="dynamic"
+      appearance="fill"
+      matTooltip="Recursion pass this entry wakes up at: level 1 matches first, deeper levels only after no more level-1 matches"
+    >
+      <mat-label>Recursion Level</mat-label>
+      <input
+        matInput
+        type="number"
+        min="1"
+        [value]="delayRecursionLevel() ?? ''"
+        (input)="updates.setDelayUntilRecursionLevel(entry(), $event)"
+        placeholder="1"
+      />
+    </mat-form-field>
+  </div>
+}
+
+<div class="field-row">
+  <mat-form-field
+    class="num"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="Stays active for N messages after being activated (0 = off)"
+  >
+    <mat-label>Sticky</mat-label>
+    <input
+      matInput
+      type="number"
+      min="0"
+      [value]="ext('sticky') ?? ''"
+      (input)="updates.setExtensionNumber(entry(), 'sticky', $event, null)"
+      placeholder="Off"
+    />
+  </mat-form-field>
+  <mat-form-field
+    class="num"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="Cannot be activated for N messages after being activated (0 = off)"
+  >
+    <mat-label>Cooldown</mat-label>
+    <input
+      matInput
+      type="number"
+      min="0"
+      [value]="ext('cooldown') ?? ''"
+      (input)="updates.setExtensionNumber(entry(), 'cooldown', $event, null)"
+      placeholder="Off"
+    />
+  </mat-form-field>
+  <mat-form-field
+    class="num"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="Cannot be activated until at least N messages exist in the chat (0 = off)"
+  >
+    <mat-label>Delay</mat-label>
+    <input
+      matInput
+      type="number"
+      min="0"
+      [value]="ext('delay') ?? ''"
+      (input)="updates.setExtensionNumber(entry(), 'delay', $event, null)"
+      placeholder="Off"
+    />
+  </mat-form-field>
+</div>
