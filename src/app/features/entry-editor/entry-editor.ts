@@ -1,7 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  viewChild,
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatTabChangeEvent, MatTabsModule } from '@angular/material/tabs';
+import { MatTabChangeEvent, MatTabGroup, MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
@@ -11,6 +18,38 @@ interface TabItem {
   id: number;
   title: string;
   dirty: boolean;
+}
+
+/**
+ * Turns a mouse wheel event into a horizontal scroll of the tab strip, per the
+ * M3 scrollable-tabs guidance: when tabs overflow, the strip must also be
+ * scrollable on desktop, not only via the pagination chevrons. Returns true
+ * when the strip actually moved (so the caller can claim the event).
+ */
+export function scrollTabStripOnWheel(
+  header: { scrollDistance: number } | undefined,
+  event: WheelEvent,
+): boolean {
+  const target = event.target as HTMLElement | null;
+  // Only hijack the wheel while it is over the strip itself, never when the
+  // pointer is over the tab body (which has its own scrolling).
+  if (!header || !target?.closest('.mat-mdc-tab-header')) {
+    return false;
+  }
+  let delta = event.deltaY + event.deltaX;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    delta *= 40; // Firefox reports the delta in lines rather than pixels.
+  }
+  if (delta === 0) {
+    return false;
+  }
+  const before = header.scrollDistance;
+  header.scrollDistance = before + delta; // Material clamps to the valid range.
+  if (header.scrollDistance === before) {
+    return false; // Already at an edge, nothing to scroll.
+  }
+  event.preventDefault();
+  return true;
 }
 
 /**
@@ -27,6 +66,7 @@ interface TabItem {
 })
 export class EntryEditor {
   protected readonly workspace = inject(WorkspaceService);
+  private readonly tabGroup = viewChild(MatTabGroup);
 
   protected readonly tabs = computed<TabItem[]>(() => {
     const dirty = this.workspace.dirtyEntryIds();
@@ -70,6 +110,13 @@ export class EntryEditor {
     if (id !== this.workspace.activeTabId()) {
       this.workspace.activeTabId.set(id);
     }
+  }
+
+  /** Wheel support for the tab strip (see `scrollTabStripOnWheel`). */
+  protected onTabStripWheel(event: WheelEvent): void {
+    // `_tabHeader` is the group's internal header; it is the only handle for
+    // scrolling the strip programmatically before Angular ships wheel support.
+    scrollTabStripOnWheel(this.tabGroup()?._tabHeader, event);
   }
 
   /** Removes a tab without selecting it (the label click selects otherwise). */

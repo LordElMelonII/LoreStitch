@@ -3,6 +3,7 @@
     class="entry-tabs"
     [selectedIndex]="activeIndex()"
     (selectedTabChange)="onTabChange($event)"
+    (wheel)="onTabStripWheel($event)"
     [fitInkBarToContent]="true"
     animationDuration="160ms"
   >

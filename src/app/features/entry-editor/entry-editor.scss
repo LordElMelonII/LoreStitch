@@ -7,17 +7,18 @@
 
 .entry-tabs {
   height: 100%;
+}
 
-  // Document-style tabs: hug their labels instead of stretching to fill the
-  // strip, so the ink bar matches the active label.
-  ::ng-deep .entry-tabs .mat-mdc-tab {
-    flex: 0 0 auto;
-  }
+// Document-style tabs: hug their labels instead of stretching to fill the
+// strip, so the ink bar matches the active label. When the strip overflows it
+// paginates with chevrons and wheel scrolling (see `scrollTabStripOnWheel`).
+:host ::ng-deep .entry-tabs .mat-mdc-tab {
+  flex: 0 0 auto;
+}
 
-  // Fields provide their own padding and the pane scrolls as a whole.
-  ::ng-deep .mat-mdc-tab-body-content {
-    padding: 0;
-  }
+// Fields provide their own padding and the pane scrolls as a whole.
+:host ::ng-deep .mat-mdc-tab-body-content {
+  padding: 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,7 +35,8 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    max-width: 190px;
+    // Scrollable tabs may use longer labels (M3); ellipsis keeps the strip tidy.
+    max-width: 240px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
