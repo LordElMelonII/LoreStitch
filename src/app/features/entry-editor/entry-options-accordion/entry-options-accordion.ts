@@ -1,14 +1,15 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
-import { MatChipsModule } from '@angular/material/chips';
+import { MatFormFieldModule, MatLabel } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { map } from 'rxjs';
 import {
   CharacterBookEntry,
   WiTriggerState,
@@ -38,8 +39,10 @@ import { EntryUpdatesService } from '../entry-updates.service';
     MatButtonModule,
     MatButtonToggleModule,
     MatCardModule,
-    MatChipsModule,
+    MatFormFieldModule,
     MatIconModule,
+    MatInputModule,
+    MatLabel,
     MatSlideToggleModule,
     MatTooltipModule,
     EntryActivation,
@@ -71,9 +74,6 @@ export class EntryOptionsAccordion {
 
   /** The entry's trigger strategy: normal 🟢 / constant 🔵 / vectorized 🔗. */
   protected readonly triggerState = computed<WiTriggerState>(() => entryTriggerState(this.entry()));
-
-  /** True while the entry always triggers — key-based modifiers don't apply. */
-  protected readonly isConstant = computed(() => this.triggerState() === 'constant');
 
   /** Chevron pointing where the panel will move: down to open on mobile (in
    * flow), up to open on desktop (anchored above the strip); inverted closed. */
