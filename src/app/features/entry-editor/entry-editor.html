@@ -4,13 +4,17 @@
     [selectedIndex]="activeIndex()"
     (selectedTabChange)="onTabChange($event)"
     (wheel)="onTabStripWheel($event)"
+    (pointerdown)="onStripPointerDown($event)"
+    (pointermove)="onStripPointerMove($event)"
+    (pointerup)="onStripPointerEnd($event)"
+    (pointercancel)="onStripPointerEnd($event)"
     [fitInkBarToContent]="true"
     animationDuration="160ms"
   >
     @for (tab of tabs(); track tab.id) {
       <mat-tab>
         <ng-template mat-tab-label>
-          <div class="entry-tab-label" [class.dirty]="tab.dirty">
+          <div class="entry-tab-label" [class.dirty]="tab.dirty" [matTooltip]="tab.title">
             <span class="tab-title">
               @if (tab.dirty) {
                 <span class="dirty-dot"></span>

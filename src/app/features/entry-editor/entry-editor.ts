@@ -1,6 +1,8 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -52,6 +54,83 @@ export function scrollTabStripOnWheel(
   return true;
 }
 
+/** Minimum pointer travel before a gesture counts as a drag instead of a tap. */
+export const TAB_STRIP_DRAG_SLOP_PX = 8;
+
+/**
+ * Touch/pen counterpart of `scrollTabStripOnWheel`: tracks a horizontal swipe
+ * that starts on the tab strip and drags the strip with the finger. A gesture
+ * that travels past the slop threshold marks the following click for
+ * suppression, so swiping never selects the tab the swipe started on.
+ */
+export class TabStripDragScroller {
+  private pointerId: number | null = null;
+  private startX = 0;
+  private startDistance = 0;
+  private moved = false;
+
+  /**
+   * Begins tracking a potential drag. Only primary touch/pen pointers that
+   * start on the strip qualify; mouse users scroll with the wheel and chevrons.
+   */
+  onPointerDown(header: { scrollDistance: number } | undefined, event: PointerEvent): void {
+    this.pointerId = null;
+    this.moved = false;
+    if (!header || !event.isPrimary || event.pointerType === 'mouse') {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (!target?.closest('.mat-mdc-tab-header')) {
+      return;
+    }
+    this.pointerId = event.pointerId;
+    this.startX = event.clientX;
+    this.startDistance = header.scrollDistance;
+    // Keep receiving moves even when the finger drifts off the strip. Real
+    // pointers always support capture; synthetic events (tests) may not.
+    try {
+      target.setPointerCapture(event.pointerId);
+    } catch {
+      // Dragging still works through ordinary event bubbling.
+    }
+  }
+
+  /** Drags the strip opposite to the pointer travel; true when it scrolled. */
+  onPointerMove(header: { scrollDistance: number } | undefined, event: PointerEvent): boolean {
+    if (this.pointerId === null || event.pointerId !== this.pointerId || !header) {
+      return false;
+    }
+    const deltaX = event.clientX - this.startX;
+    if (!this.moved && Math.abs(deltaX) < TAB_STRIP_DRAG_SLOP_PX) {
+      return false;
+    }
+    this.moved = true;
+    const before = header.scrollDistance;
+    header.scrollDistance = this.startDistance - deltaX;
+    return header.scrollDistance !== before;
+  }
+
+  /** Ends tracking (pointerup or pointercancel). */
+  onPointerUp(event: PointerEvent): void {
+    if (event.pointerId !== this.pointerId) {
+      return;
+    }
+    this.pointerId = null;
+    // The browser dispatches the click right after pointerup; clear the flag
+    // afterwards so a later keyboard-activated tab is never suppressed.
+    if (this.moved) {
+      setTimeout(() => (this.moved = false));
+    }
+  }
+
+  /** Returns (and clears) whether the current click follows a drag gesture. */
+  consumeClickSuppression(): boolean {
+    const suppress = this.moved;
+    this.moved = false;
+    return suppress;
+  }
+}
+
 /**
  * Central tabbed editor built on `mat-tab-group`. Every open entry is a tab
  * with its own `EntryFields` instance; the label template carries the dirty
@@ -67,6 +146,8 @@ export function scrollTabStripOnWheel(
 export class EntryEditor {
   protected readonly workspace = inject(WorkspaceService);
   private readonly tabGroup = viewChild(MatTabGroup);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly drag = new TabStripDragScroller();
 
   protected readonly tabs = computed<TabItem[]>(() => {
     const dirty = this.workspace.dirtyEntryIds();
@@ -98,6 +179,21 @@ export class EntryEditor {
         this.workspace.activeTabId.set(tabs[0].id);
       }
     });
+
+    // Swallow the synthetic click that trails a drag-scroll of the strip so a
+    // swipe never selects the tab the finger started on. Capture phase is
+    // required: the tab's own click handler fires before any bubble listener.
+    const hostElement = this.host.nativeElement;
+    const suppressDragClick = (event: Event): void => {
+      if (this.drag.consumeClickSuppression()) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+    };
+    hostElement.addEventListener('click', suppressDragClick, true);
+    inject(DestroyRef).onDestroy(() =>
+      hostElement.removeEventListener('click', suppressDragClick, true),
+    );
   }
 
   protected tabTitle(entry: CharacterBookEntry): string {
@@ -117,6 +213,23 @@ export class EntryEditor {
     // `_tabHeader` is the group's internal header; it is the only handle for
     // scrolling the strip programmatically before Angular ships wheel support.
     scrollTabStripOnWheel(this.tabGroup()?._tabHeader, event);
+  }
+
+  /** Touch/pen swipe support for the strip (see `TabStripDragScroller`). */
+  protected onStripPointerDown(event: PointerEvent): void {
+    this.drag.onPointerDown(this.tabGroup()?._tabHeader, event);
+  }
+
+  protected onStripPointerMove(event: PointerEvent): void {
+    if (this.drag.onPointerMove(this.tabGroup()?._tabHeader, event)) {
+      // Drop the programmatic scroll easing so the tabs track the finger 1:1.
+      this.host.nativeElement.classList.add('strip-dragging');
+    }
+  }
+
+  protected onStripPointerEnd(event: PointerEvent): void {
+    this.drag.onPointerUp(event);
+    this.host.nativeElement.classList.remove('strip-dragging');
   }
 
   /** Removes a tab without selecting it (the label click selects otherwise). */

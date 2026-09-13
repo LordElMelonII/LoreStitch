@@ -1,4 +1,4 @@
-import { scrollTabStripOnWheel } from './entry-editor';
+import { TAB_STRIP_DRAG_SLOP_PX, TabStripDragScroller, scrollTabStripOnWheel } from './entry-editor';
 
 interface ClampableHeader {
   scrollDistance: number;
@@ -116,5 +116,116 @@ describe('scrollTabStripOnWheel', () => {
     expect(scrollTabStripOnWheel(header, event)).toBe(true);
     expect(header.scrollDistance).toBe(max);
     expect(preventDefault).toHaveBeenCalledOnce();
+  });
+});
+
+describe('TabStripDragScroller', () => {
+  /** Minimal PointerEvent stand-in: the scroller only reads the basic geometry. */
+  function pointerEvent(overrides: Partial<PointerEvent> = {}): PointerEvent {
+    return {
+      pointerId: 1,
+      pointerType: 'touch',
+      isPrimary: true,
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      target: null,
+      ...overrides,
+    } as unknown as PointerEvent;
+  }
+
+  it('drags the strip opposite to the finger once past the slop', () => {
+    const header = { scrollDistance: 10 };
+    const drag = new TabStripDragScroller();
+
+    drag.onPointerDown(header, pointerEvent({ clientX: 200, target: headerTarget(true) }));
+    // Within the slop nothing moves yet.
+    expect(drag.onPointerMove(header, pointerEvent({ clientX: 196 }))).toBe(false);
+    expect(header.scrollDistance).toBe(10);
+    // A real drag scrolls opposite the finger: 80px left -> 80px forward.
+    expect(drag.onPointerMove(header, pointerEvent({ clientX: 120 }))).toBe(true);
+    expect(header.scrollDistance).toBe(90);
+  });
+
+  it('suppresses exactly one click after a drag', () => {
+    const header = { scrollDistance: 0 };
+    const drag = new TabStripDragScroller();
+
+    drag.onPointerDown(header, pointerEvent({ clientX: 200, target: headerTarget(true) }));
+    drag.onPointerMove(header, pointerEvent({ clientX: 100 }));
+    drag.onPointerUp(pointerEvent());
+
+    expect(drag.consumeClickSuppression()).toBe(true);
+    expect(drag.consumeClickSuppression()).toBe(false);
+  });
+
+  it('treats small movements as taps (no scroll, no suppression)', () => {
+    const header = { scrollDistance: 5 };
+    const drag = new TabStripDragScroller();
+
+    drag.onPointerDown(header, pointerEvent({ clientX: 100, target: headerTarget(true) }));
+    drag.onPointerMove(
+      header,
+      pointerEvent({ clientX: 100 + TAB_STRIP_DRAG_SLOP_PX - 1 }),
+    );
+    drag.onPointerUp(pointerEvent());
+
+    expect(header.scrollDistance).toBe(5);
+    expect(drag.consumeClickSuppression()).toBe(false);
+  });
+
+  it('ignores mouse pointers', () => {
+    const header = { scrollDistance: 5 };
+    const drag = new TabStripDragScroller();
+
+    drag.onPointerDown(
+      header,
+      pointerEvent({ pointerType: 'mouse', clientX: 200, target: headerTarget(true) }),
+    );
+    drag.onPointerMove(header, pointerEvent({ pointerType: 'mouse', clientX: 100 }));
+
+    expect(header.scrollDistance).toBe(5);
+  });
+
+  it('ignores secondary (multi-touch) pointers', () => {
+    const header = { scrollDistance: 5 };
+    const drag = new TabStripDragScroller();
+
+    drag.onPointerDown(
+      header,
+      pointerEvent({ isPrimary: false, clientX: 200, target: headerTarget(true) }),
+    );
+    drag.onPointerMove(header, pointerEvent({ isPrimary: false, clientX: 100 }));
+
+    expect(header.scrollDistance).toBe(5);
+  });
+
+  it('ignores gestures that start outside the tab strip', () => {
+    const header = { scrollDistance: 5 };
+    const drag = new TabStripDragScroller();
+
+    drag.onPointerDown(header, pointerEvent({ clientX: 200, target: headerTarget(false) }));
+    drag.onPointerMove(header, pointerEvent({ clientX: 100 }));
+
+    expect(header.scrollDistance).toBe(5);
+  });
+
+  it('stops tracking after pointerup', () => {
+    const header = { scrollDistance: 5 };
+    const drag = new TabStripDragScroller();
+
+    drag.onPointerDown(header, pointerEvent({ clientX: 200, target: headerTarget(true) }));
+    drag.onPointerUp(pointerEvent());
+    expect(drag.onPointerMove(header, pointerEvent({ clientX: 100 }))).toBe(false);
+    expect(header.scrollDistance).toBe(5);
+  });
+
+  it('ignores moves from a different pointer id', () => {
+    const header = { scrollDistance: 5 };
+    const drag = new TabStripDragScroller();
+
+    drag.onPointerDown(header, pointerEvent({ pointerId: 1, clientX: 200, target: headerTarget(true) }));
+    expect(drag.onPointerMove(header, pointerEvent({ pointerId: 2, clientX: 100 }))).toBe(false);
+    expect(header.scrollDistance).toBe(5);
   });
 });
