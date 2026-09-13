@@ -24,7 +24,7 @@ export const appConfig: ApplicationConfig = {
     // M3: one consistent outlined text-field style across the whole app.
     {
       provide: MAT_FORM_FIELD_DEFAULT_OPTIONS,
-      useValue: { appearance: 'outline' as const },
+      useValue: { appearance: 'fill' as const },
     },
     // M3 iconography: Material Symbols Outlined replaces the legacy
     // Material Icons font as the default ligature set for <mat-icon>.

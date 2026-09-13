@@ -17,10 +17,14 @@
 
 .topbar {
   gap: 6px;
-  background: var(--mat-sys-surface-container);
-  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-primary);
   flex: none;
   z-index: 10;
+
+  button {
+    color: var(--mat-sys-primary);
+  }
 
   .brand {
     display: flex;
@@ -103,7 +107,7 @@
 
   .menu-meta {
     font: var(--mat-sys-label-small);
-    color: var(--mat-sys-on-surface-variant);
+    color: var(--mat-sys-primary);
     margin-left: auto;
     padding-left: 16px;
   }
