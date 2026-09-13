@@ -58,7 +58,6 @@
         aria-label="Add primary key"
       />
     </mat-chip-grid>
-    <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
   </mat-form-field>
 
   @if (entry().selective) {
@@ -105,10 +104,10 @@
           aria-label="Add secondary key"
         />
       </mat-chip-grid>
-      <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
     </mat-form-field>
   }
 </div>
+<p class="chip-hint">Enter / comma to add · double-click a key to edit</p>
 
 @if (entry().selective) {
   <div class="field-row">

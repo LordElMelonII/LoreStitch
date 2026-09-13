@@ -2,18 +2,19 @@
 
 // The keys section renders flat inside the options accordion panel: the
 // section divider above it provides the grouping, not a card of its own.
-// Chip grids stretch so both fields' boxes and hints match heights.
+// Chip grids stretch so both fields' boxes match heights; the usage hint is
+// one caption under the row instead of a subscript on each field.
 .keys-row {
   align-items: stretch;
 }
 
 // Secondary keys logic select next to the key fields.
 .logic-field {
-  width: 200px;
+  width: 240px;
 }
 
-// Key chip fields are real filled form fields (label in the field, hint
-// below). Stretch both fields so their boxes and hints match heights.
+// Key chip fields are real filled form fields (label in the field). Stretch
+// both fields so their boxes match heights.
 .keys-field {
   cursor: text;
   display: flex;

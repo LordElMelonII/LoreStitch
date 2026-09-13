@@ -1,6 +1,7 @@
 @use '../shared';
 
-// Tri-state override select next to the source chips.
+// Tri-state override select next to the source chips. Wide enough for the
+// longest option ("Default (book setting)") without truncating.
 .logic-field {
-  width: 200px;
+  width: 240px;
 }

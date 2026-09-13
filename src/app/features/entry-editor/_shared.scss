@@ -14,19 +14,37 @@
   padding: 12px 16px 16px;
 }
 
+// One field row inside a section: fixed-width numeric fields, one flexible
+// field that absorbs the leftover width. `min-width: 0` (not a hard floor)
+// lets the flexible field shrink so the row wraps instead of overflowing on
+// narrow panels.
 .field-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
 
   .grow {
-    flex: 1;
-    min-width: 220px;
+    flex: 1 1 220px;
+    min-width: 0;
   }
 
   .num {
+    flex: none;
     width: 112px;
+  }
+}
+
+// Compact numeric fields: the native spin buttons collide with the floating
+// label and value inside the 112px fields — type or use the arrow keys.
+.field-row input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 }
 
@@ -34,15 +52,17 @@
 // Sections of the entry options panel
 // Each `EntryOptionsAccordion` section is its own component whose host carries
 // this class; the accordion itself draws the separating hairlines.
+// `:host(...)` is required — a bare class selector never matches the host
+// under emulated encapsulation, so a plain `.entry-panel-section` rule here
+// would silently drop every block gap.
 // ---------------------------------------------------------------------------
 
-.entry-panel-section {
-  display: block;
-  padding: 14px 16px;
-
-  > * + * {
-    margin-top: 12px;
-  }
+:host(.entry-panel-section) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 16px;
 }
 
 .section-title {
@@ -50,15 +70,12 @@
   font: var(--mat-sys-title-small);
 }
 
-.section-desc {
-  margin-top: -6px;
-  font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
-}
-
-// Captions that hug the chip row above them (triggers, filter explanations).
+// Captions that hug their anchor (title above, chips or field row above):
+// -8px pulls back the section's 12px flex gap to a 4px caption gap. The
+// remaining margins are zeroed so UA paragraph margins can't leak back in.
+.section-desc,
 .chip-hint {
-  margin-top: -8px;
+  margin: -8px 0 0;
   font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-surface-variant);
 }
