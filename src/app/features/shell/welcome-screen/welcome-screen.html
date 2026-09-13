@@ -1,0 +1,49 @@
+<div class="welcome">
+  <mat-icon class="welcome-icon">auto_stories</mat-icon>
+  <h1>LoreStitch</h1>
+  <p class="tagline">
+    Offline studio for SillyTavern lorebooks &amp; character cards — with versioning.
+  </p>
+  <div class="welcome-actions">
+    <button matButton="filled" type="button" (click)="actions.newProject()">
+      <mat-icon>add_circle</mat-icon> New project
+    </button>
+    <button matButton type="button" (click)="actions.importReplaceFromPicker()">
+      <mat-icon>upload_file</mat-icon> Import .json / .stproj
+    </button>
+  </div>
+  @if (workspace.savedProjects().length) {
+    <div class="recent">
+      <h3>Recent projects</h3>
+      <mat-list class="recent-list">
+        @for (saved of workspace.savedProjects(); track saved.id) {
+          <mat-list-item
+            class="recent-item"
+            tabindex="0"
+            (click)="actions.openProject(saved.id)"
+            (keydown.enter)="actions.openProject(saved.id)"
+            [attr.aria-label]="'Open project ' + saved.title"
+          >
+            <mat-icon matListItemIcon>book</mat-icon>
+            <div matListItemTitle class="recent-title">{{ saved.title }}</div>
+            <div matListItemMeta class="recent-meta">
+              <span class="recent-count">
+                {{ saved.activeBook.entries.length }} entries
+              </span>
+              <button
+                matIconButton
+                type="button"
+                class="recent-delete"
+                (click)="delete(saved, $event)"
+                matTooltip="Delete project"
+                [attr.aria-label]="'Delete project ' + saved.title"
+              >
+                <mat-icon>delete</mat-icon>
+              </button>
+            </div>
+          </mat-list-item>
+        }
+      </mat-list>
+    </div>
+  }
+</div>

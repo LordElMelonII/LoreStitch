@@ -1,0 +1,224 @@
+<mat-toolbar class="topbar">
+  <button
+    matIconButton
+    type="button"
+    (click)="toggleEntries.emit()"
+    matTooltip="Toggle entries panel"
+    aria-label="Toggle entries panel"
+  >
+    <mat-icon>menu</mat-icon>
+  </button>
+
+  <div class="brand">
+    <mat-icon class="brand-icon">auto_stories</mat-icon>
+    <span class="brand-name">LoreStitch</span>
+  </div>
+
+  @if (workspace.activeProject(); as project) {
+    <div class="project-info" [matTooltip]="project.title">
+      <span class="project-title">{{ projectName() }}</span>
+      @if (workspace.hasUnsavedChanges()) {
+        <span class="unsaved-dot" title="Uncommitted changes"></span>
+      }
+    </div>
+  } @else {
+    <span class="project-info no-project">No project open</span>
+  }
+
+  <span class="spacer"></span>
+
+  @if (workspace.activeProject(); as project) {
+    <button
+      matIconButton
+      type="button"
+      class="desktop-only"
+      (click)="workspace.addEntry()"
+      matTooltip="New entry"
+      aria-label="New entry"
+    >
+      <mat-icon>post_add</mat-icon>
+    </button>
+
+    <button
+      matIconButton
+      type="button"
+      (click)="openSearch()"
+      matTooltip="Search & replace"
+      aria-label="Search and replace"
+    >
+      <mat-icon>find_replace</mat-icon>
+    </button>
+
+    <mat-divider class="toolbar-divider desktop-only" [vertical]="true"></mat-divider>
+
+    <button
+      matIconButton
+      type="button"
+      class="desktop-only"
+      [matMenuTriggerFor]="exportMenu"
+      matTooltip="Export"
+      aria-label="Export menu"
+    >
+      <mat-icon>file_download</mat-icon>
+    </button>
+
+    <button
+      matIconButton
+      type="button"
+      [matMenuTriggerFor]="moreMenu"
+      matTooltip="More actions"
+      aria-label="More actions menu"
+    >
+      <mat-icon>more_vert</mat-icon>
+    </button>
+
+    <mat-divider class="toolbar-divider" [vertical]="true"></mat-divider>
+  }
+  <mat-menu #exportMenu="matMenu" classList="export-menu">
+    <div class="menu-section">Use in SillyTavern</div>
+    <button mat-menu-item (click)="exportStNative()">
+      <mat-icon>data_object</mat-icon>
+      <span class="menu-text">
+        <span class="menu-title">World Info JSON</span>
+        <span class="menu-desc">Import via SillyTavern’s World Info panel</span>
+      </span>
+    </button>
+    <button mat-menu-item (click)="exportCard()">
+      <mat-icon>face</mat-icon>
+      <span class="menu-text">
+        <span class="menu-title">Character Card V2 JSON</span>
+        <span class="menu-desc">Character card with this lorebook embedded</span>
+      </span>
+    </button>
+
+    <div class="menu-section">Backup</div>
+    <button mat-menu-item (click)="exportProjectArchive()">
+      <mat-icon>archive</mat-icon>
+      <span class="menu-text">
+        <span class="menu-title">Project archive (.stproj)</span>
+        <span class="menu-desc">Full backup with version history — reopen in LoreStitch</span>
+      </span>
+    </button>
+
+    <mat-divider></mat-divider>
+    <div class="menu-section">Reference &amp; proofreading</div>
+    <button mat-menu-item (click)="exportBook()">
+      <mat-icon>book</mat-icon>
+      <span class="menu-text">
+        <span class="menu-title">Character Book JSON</span>
+        <span class="menu-desc">Bare V2-spec character_book (no card)</span>
+      </span>
+    </button>
+    <button mat-menu-item (click)="exportDigest()">
+      <mat-icon>description</mat-icon>
+      <span class="menu-text">
+        <span class="menu-title">Proofread digest (Markdown)</span>
+        <span class="menu-desc">All entries as readable text</span>
+      </span>
+    </button>
+  </mat-menu>
+
+  <mat-menu #moreMenu="matMenu">
+    <button mat-menu-item (click)="openSearch()">
+      <mat-icon>find_replace</mat-icon>
+      <span>Search &amp; replace…</span>
+    </button>
+    <button mat-menu-item (click)="actions.importMergeFromPicker()">
+      <mat-icon>merge_type</mat-icon>
+      <span>Merge lorebook…</span>
+    </button>
+    <button mat-menu-item [matMenuTriggerFor]="exportMenu">
+      <mat-icon>file_download</mat-icon>
+      <span>Export</span>
+    </button>
+    <button mat-menu-item [matMenuTriggerFor]="themeMenu">
+      <mat-icon>brightness_auto</mat-icon>
+      <span>Theme</span>
+    </button>
+  </mat-menu>
+  <mat-menu #themeMenu="matMenu" classList="theme-menu">
+    <button
+      mat-menu-item
+      (click)="theme.setMode('system')"
+      [class.active-option]="theme.mode() === 'system'"
+    >
+      <mat-icon>brightness_auto</mat-icon>
+      <span>System theme</span>
+    </button>
+    <button
+      mat-menu-item
+      (click)="theme.setMode('light')"
+      [class.active-option]="theme.mode() === 'light'"
+    >
+      <mat-icon>light_mode</mat-icon>
+      <span>Light — azure blue</span>
+    </button>
+    <button
+      mat-menu-item
+      (click)="theme.setMode('dark')"
+      [class.active-option]="theme.mode() === 'dark'"
+    >
+      <mat-icon>dark_mode</mat-icon>
+      <span>Dark — cyan orange</span>
+    </button>
+  </mat-menu>
+
+  <button
+    matIconButton
+    type="button"
+    [matMenuTriggerFor]="projectMenu"
+    matTooltip="Projects"
+    aria-label="Projects menu"
+  >
+    <mat-icon>folder_open</mat-icon>
+  </button>
+  <mat-menu #projectMenu="matMenu">
+    @for (saved of workspace.savedProjects(); track saved.id) {
+      <button mat-menu-item (click)="actions.openProject(saved.id)">
+        <mat-icon>book</mat-icon>
+        <span>{{ saved.title }}</span>
+        <span class="menu-meta">{{ saved.activeBook.entries.length }} entries</span>
+      </button>
+    } @empty {
+      <button mat-menu-item disabled>No saved projects yet</button>
+    }
+    <mat-divider></mat-divider>
+    <button mat-menu-item (click)="actions.newProject()">
+      <mat-icon>add_circle</mat-icon>
+      <span>New project…</span>
+    </button>
+    <button mat-menu-item (click)="actions.importReplaceFromPicker()">
+      <mat-icon>upload_file</mat-icon>
+      <span>Open .json / .stproj…</span>
+    </button>
+    @if (workspace.activeProject(); as project) {
+      <mat-divider></mat-divider>
+      <button mat-menu-item (click)="actions.closeProject()">
+        <mat-icon>logout</mat-icon>
+        <span>Close project</span>
+      </button>
+      <button mat-menu-item (click)="actions.deleteCurrentProject()">
+        <mat-icon class="menu-danger-icon">delete</mat-icon>
+        <span>Delete “{{ project.title }}”…</span>
+      </button>
+    }
+  </mat-menu>
+
+  @if (workspace.activeProject()) {
+    <button
+      matIconButton
+      type="button"
+      (click)="toggleHistory.emit()"
+      matTooltip="Toggle history"
+      aria-label="Toggle history drawer"
+    >
+      <mat-icon
+        [matBadge]="workspace.hasUnsavedChanges() ? '!' : null"
+        matBadgeColor="warn"
+        [matBadgeHidden]="!workspace.hasUnsavedChanges()"
+      >
+        history
+      </mat-icon>
+    </button>
+  }
+</mat-toolbar>

@@ -1,0 +1,90 @@
+:host {
+  display: block;
+}
+
+.topbar {
+  gap: 6px;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-primary);
+  flex: none;
+  z-index: 10;
+
+  button {
+    color: var(--mat-sys-primary);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+
+    .brand-icon {
+      color: var(--mat-sys-primary);
+    }
+
+    .brand-name {
+      font: var(--mat-sys-title-large);
+      letter-spacing: 0.3px;
+    }
+  }
+
+  .project-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 0 1 auto;
+    max-width: 320px;
+    overflow: hidden;
+
+    .project-title {
+      font: var(--mat-sys-body-large);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--mat-sys-on-surface-variant);
+    }
+
+    &.no-project {
+      display: block;
+      font: var(--mat-sys-body-large);
+      font-style: italic;
+      color: var(--mat-sys-outline);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .unsaved-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--mat-sys-tertiary);
+      flex: none;
+    }
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  // Vertical separators between action groups (M3 app-bar grouping).
+  .toolbar-divider {
+    height: 24px;
+    align-self: center;
+    margin: 0 4px;
+  }
+
+  // Compact phones: primary actions live in the overflow menu and the brand
+  // collapses to its icon so every action stays reachable.
+  @media (max-width: 599px) {
+    .desktop-only {
+      display: none;
+    }
+
+    .brand-name {
+      display: none;
+    }
+  }
+}
