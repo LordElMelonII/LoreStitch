@@ -240,6 +240,45 @@ export function normalizeBookPositions(book: CharacterBook): CharacterBook {
   };
 }
 
+// ============================================================================
+// Trigger strategy (SillyTavern's constant / normal / vectorized tri-state)
+// ============================================================================
+
+/**
+ * The "Strategy" selector from the World Info docs:
+ * - `normal` (🟢) — triggered only in the presence of a key.
+ * - `constant` (🔵) — needs no keywords, triggers regardless of content.
+ * - `vectorized` (🔗) — additionally allowed to be inserted by embedding
+ *   similarity (Vector Storage); still behaves like a normal entry otherwise.
+ *
+ * Stored across `constant` + `extensions.vectorized`, exactly like
+ * SillyTavern's own `handleEntryStateSelectorHelper()`.
+ */
+export type WiTriggerState = 'normal' | 'constant' | 'vectorized';
+
+/** Reads the tri-state trigger strategy of an entry (constant wins). */
+export function entryTriggerState(entry: CharacterBookEntry): WiTriggerState {
+  if (entry.constant) {
+    return 'constant';
+  }
+  const ext = (entry.extensions ?? {}) as Record<string, unknown>;
+  return ext['vectorized'] === true ? 'vectorized' : 'normal';
+}
+
+/**
+ * Produces the entry patch for switching to `state`. The states are mutually
+ * exclusive; other extension fields are preserved via `entry.extensions`.
+ */
+export function triggerStatePatch(
+  entry: CharacterBookEntry,
+  state: WiTriggerState,
+): Partial<CharacterBookEntry> {
+  return {
+    constant: state === 'constant',
+    extensions: { ...entry.extensions, vectorized: state === 'vectorized' },
+  };
+}
+
 /**
  * Produces a spec-clean book for V2 exports: `position` collapses to the two
  * spec-legal values (SillyTavern's own convention) while the true numeric

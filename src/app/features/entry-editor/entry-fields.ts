@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { ENTER, COMMA } from '@angular/cdk/keycodes';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatChipsModule, MatChipInputEvent } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -27,7 +28,10 @@ import {
   WI_POSITION_OPTIONS,
   WI_POSITION_TO_ST,
   WiPosition,
+  WiTriggerState,
+  entryTriggerState,
   estimateTokens,
+  triggerStatePatch,
 } from '../../core/models/lorebook.model';
 import { delimiterLabel, detectDelimiter } from '../../core/models/delimiters';
 import { WorkspaceService } from '../../core/services/workspace.service';
@@ -43,6 +47,7 @@ import { DelimiterDialog } from '../delimiters/delimiter-dialog';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatButtonModule,
+    MatButtonToggleModule,
     MatChipsModule,
     MatDialogModule,
     MatExpansionModule,
@@ -79,6 +84,9 @@ export class EntryFields {
 
   /** Depth & role only make sense when the entry is inserted at a chat depth. */
   protected readonly isAtDepth = computed(() => this.entry().position === 'at_depth');
+
+  /** The entry's trigger strategy: normal 🟢 / constant 🔵 / vectorized 🔗. */
+  protected readonly triggerState = computed<WiTriggerState>(() => entryTriggerState(this.entry()));
 
   /** Outlet entries are pulled into the prompt manually via the outlet macro. */
   protected readonly isOutlet = computed(() => this.entry().position === 'outlet');
@@ -151,12 +159,20 @@ export class EntryFields {
   }
 
   protected setFlag(
-    field: 'enabled' | 'constant' | 'selective' | 'case_sensitive',
+    field: 'enabled' | 'selective' | 'case_sensitive',
     change: MatSlideToggleChange,
   ): void {
     const entry = this.entry();
     if (entry.id !== undefined) {
       this.workspace.updateEntry(entry.id, { [field]: change.checked });
+    }
+  }
+
+  /** Switches the trigger strategy (normal / constant / vectorized). */
+  protected setTriggerState(state: WiTriggerState): void {
+    const entry = this.entry();
+    if (entry.id !== undefined) {
+      this.workspace.updateEntry(entry.id, triggerStatePatch(entry, state));
     }
   }
 

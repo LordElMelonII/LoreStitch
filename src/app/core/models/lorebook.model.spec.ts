@@ -1,16 +1,19 @@
 import {
   CharacterBook,
+  CharacterBookEntry,
   ST_POSITION,
   createEmptyBook,
   createEmptyEntry,
   detectLoreFileFormat,
   characterBookToStNative,
   entryTitle,
+  entryTriggerState,
   estimateTokens,
   normalizeBookPositions,
   stNativeToCharacterBook,
   stNumberToPosition,
   toSpecCompliantBook,
+  triggerStatePatch,
 } from './lorebook.model';
 
 /** Representative native entry carrying every field world-info.js defines. */
@@ -242,6 +245,57 @@ describe('lorebook model', () => {
       expect(entry.enabled).toBe(true);
       expect(entry.insertion_order).toBe(100);
       expect(entry.extensions?.['probability']).toBe(100);
+    });
+  });
+
+  describe('trigger strategy (constant / normal / vectorized)', () => {
+    it('reads the tri-state the same way as world-info.js', () => {
+      expect(entryTriggerState(createEmptyEntry(0))).toBe('normal');
+      expect(entryTriggerState({ ...createEmptyEntry(0), constant: true })).toBe('constant');
+      expect(entryTriggerState({ ...createEmptyEntry(0), extensions: { vectorized: true } })).toBe(
+        'vectorized',
+      );
+      // Constant wins, mirroring `entry.constant === true ? 'constant' : ...`.
+      expect(
+        entryTriggerState({
+          ...createEmptyEntry(0),
+          constant: true,
+          extensions: { vectorized: true },
+        }),
+      ).toBe('constant');
+    });
+
+    it('triggerStatePatch makes the states mutually exclusive and keeps extensions', () => {
+      const entry: CharacterBookEntry = {
+        ...createEmptyEntry(0),
+        constant: true,
+        extensions: { probability: 80 },
+      };
+
+      const toVectorized = { ...entry, ...triggerStatePatch(entry, 'vectorized') };
+      expect(toVectorized.constant).toBe(false);
+      expect(toVectorized.extensions['vectorized']).toBe(true);
+      expect(toVectorized.extensions['probability']).toBe(80);
+      expect(entryTriggerState(toVectorized)).toBe('vectorized');
+
+      const toNormal = { ...toVectorized, ...triggerStatePatch(toVectorized, 'normal') };
+      expect(toNormal.constant).toBe(false);
+      expect(toNormal.extensions['vectorized']).toBe(false);
+      expect(entryTriggerState(toNormal)).toBe('normal');
+
+      const toConstant = { ...toNormal, ...triggerStatePatch(toNormal, 'constant') };
+      expect(toConstant.constant).toBe(true);
+      expect(entryTriggerState(toConstant)).toBe('constant');
+    });
+
+    it('vectorized entries survive a native round trip', () => {
+      const book = stNativeToCharacterBook({
+        entries: { 3: nativeEntry({ vectorized: true }) },
+      });
+      expect(entryTriggerState(book.entries[0])).toBe('vectorized');
+      const native = characterBookToStNative(book).entries['3'];
+      expect(native.vectorized).toBe(true);
+      expect(native.constant).toBe(false);
     });
   });
 });

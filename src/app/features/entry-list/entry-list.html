@@ -65,8 +65,20 @@
         {{ item.title }}
       </div>
       <div class="item-keys">
-        @if (item.constant) {
-          <span class="key-chip constant">constant</span>
+        @switch (item.state) {
+          @case ('constant') {
+            <span class="key-chip constant" matTooltip="🔵 Always inserted, ignores keys">
+              constant
+            </span>
+          }
+          @case ('vectorized') {
+            <span
+              class="key-chip vectorized"
+              matTooltip="🔗 Allowed to be inserted by embedding similarity"
+            >
+              vector
+            </span>
+          }
         }
         @for (key of item.keys.slice(0, 3); track key) {
           <span class="key-chip">{{ key }}</span>
@@ -74,7 +86,7 @@
         @if (item.keys.length > 3) {
           <span class="key-chip more">+{{ item.keys.length - 3 }}</span>
         }
-        @if (!item.keys.length && !item.constant) {
+        @if (!item.keys.length && item.state === 'normal') {
           <span class="no-keys">no keys</span>
         }
       </div>

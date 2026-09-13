@@ -38,6 +38,26 @@
   row-gap: 8px;
 }
 
+// Trigger strategy selector (normal 🟢 / constant 🔵 / vectorized 🔗),
+// color-coded to match the SillyTavern legend.
+.strategy-toggle {
+  mat-button-toggle {
+    mat-icon.strategy-dot {
+      margin-right: 6px;
+      font-size: 13px;
+      width: 13px;
+      height: 13px;
+
+      &.green {
+        color: #4caf50;
+      }
+      &.blue {
+        color: #2196f3;
+      }
+    }
+  }
+}
+
 .keys-row {
   align-items: stretch;
 }

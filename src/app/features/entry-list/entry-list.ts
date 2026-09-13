@@ -6,7 +6,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { entryTitle } from '../../core/models/lorebook.model';
+import { entryTitle, entryTriggerState, WiTriggerState } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 
 interface EntryListItem {
@@ -14,7 +14,7 @@ interface EntryListItem {
   title: string;
   keys: string[];
   enabled: boolean;
-  constant: boolean;
+  state: WiTriggerState;
   dirty: boolean;
   content: string;
 }
@@ -47,7 +47,7 @@ export class EntryList {
       title: entryTitle(entry),
       keys: entry.keys ?? [],
       enabled: entry.enabled,
-      constant: entry.constant ?? false,
+      state: entryTriggerState(entry),
       dirty: entry.id !== undefined && dirty.has(entry.id),
       content: entry.content ?? '',
     }));

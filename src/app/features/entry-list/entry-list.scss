@@ -116,6 +116,10 @@
         background: var(--mat-sys-tertiary-container);
         color: var(--mat-sys-on-tertiary-container);
       }
+      &.vectorized {
+        background: var(--mat-sys-primary-container);
+        color: var(--mat-sys-on-primary-container);
+      }
       &.more {
         background: transparent;
       }

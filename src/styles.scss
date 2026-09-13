@@ -173,3 +173,10 @@ mat-form-field.keys-field {
 }
 
 /* You can add global styles to this file, and also import other style files */
+.topbar {
+  @include mat.divider-overrides(
+    (
+      color: var(--mat-sys-primary),
+    )
+  );
+}
