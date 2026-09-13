@@ -2,10 +2,15 @@ import { Component, computed, inject, input } from '@angular/core';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   CharacterBookEntry,
+  ST_ROLE,
+  WI_POSITION_OPTIONS,
   WiTriggerState,
   entryTriggerState,
 } from '../../../core/models/lorebook.model';
@@ -22,6 +27,9 @@ import { EntryUpdatesService } from '../entry-updates.service';
     MatButtonToggleModule,
     MatCardModule,
     MatChipsModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
     MatSlideToggleModule,
     MatTooltipModule,
   ],
@@ -29,6 +37,8 @@ import { EntryUpdatesService } from '../entry-updates.service';
   styleUrl: './entry-control-strip.scss',
 })
 export class EntryControlStrip {
+  protected readonly positionOptions = WI_POSITION_OPTIONS;
+
   protected readonly updates = inject(EntryUpdatesService);
 
   /** The entry being edited (owned by the enclosing `EntryFields`). */
@@ -39,4 +49,16 @@ export class EntryControlStrip {
 
   /** True while the entry always triggers — key-based modifiers don't apply. */
   protected readonly isConstant = computed(() => this.triggerState() === 'constant');
+
+  protected readonly roleOptions = [
+    { value: ST_ROLE.system, label: 'System', icon: '⚙️' },
+    { value: ST_ROLE.user, label: 'User', icon: '👤' },
+    { value: ST_ROLE.assistant, label: 'Assistant', icon: '🤖' },
+  ];
+
+  /** Depth & role only make sense when the entry is inserted at a chat depth. */
+  protected readonly isAtDepth = computed(() => this.entry().position === 'at_depth');
+
+  /** Outlet entries are pulled into the prompt manually via the outlet macro. */
+  protected readonly isOutlet = computed(() => this.entry().position === 'outlet');
 }

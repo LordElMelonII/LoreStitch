@@ -1,0 +1,11 @@
+<div class="field-row">
+  <mat-form-field class="grow" subscriptSizing="dynamic" appearance="fill">
+    <mat-label>Name / Comment</mat-label>
+    <input
+      matInput
+      [value]="entry().comment ?? ''"
+      (input)="updates.setText(entry(), 'comment', $event)"
+      placeholder="Entry name…"
+    />
+  </mat-form-field>
+</div>

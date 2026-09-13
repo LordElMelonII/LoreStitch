@@ -9,6 +9,15 @@
   height: 100%;
 }
 
+// Editor pane of an open entry: one column of section cards, padding owned by
+// the pane so the sections themselves need no outer spacing.
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 16px 24px;
+}
+
 // ---------------------------------------------------------------------------
 // MD3 secondary tabs
 // ---------------------------------------------------------------------------

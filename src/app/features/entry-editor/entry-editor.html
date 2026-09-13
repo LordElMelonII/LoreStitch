@@ -34,8 +34,14 @@
         </ng-template>
 
         @let entry = entryFor()(tab.id);
-        @if (entry) {
-          <app-entry-fields [entry]="entry" />
+        @if (entry; as e) {
+          <div class="fields">
+            <app-entry-name [entry]="e" />
+            <app-entry-content-field [entry]="e" />
+            <app-entry-control-strip [entry]="e" />
+            <app-entry-keys [entry]="e" />
+            <app-entry-advanced-panel [entry]="e" />
+          </div>
         }
       </mat-tab>
     }

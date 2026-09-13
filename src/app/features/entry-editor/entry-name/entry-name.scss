@@ -1,0 +1,9 @@
+@use '../shared';
+
+:host {
+  display: block;
+}
+
+mat-form-field {
+  --mat-form-field-filled-container-shape: var(--mat-sys-corner-medium);
+}

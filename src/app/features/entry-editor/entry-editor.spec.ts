@@ -1,8 +1,14 @@
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import {
   TAB_STRIP_DRAG_SLOP_PX,
+  EntryEditor,
   TabStripDragScroller,
   scrollTabStripOnWheel,
 } from './entry-editor';
+import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
+import { WorkspaceService } from '../../core/services/workspace.service';
 
 interface ClampableHeader {
   scrollDistance: number;
@@ -231,5 +237,78 @@ describe('TabStripDragScroller', () => {
     );
     expect(drag.onPointerMove(header, pointerEvent({ pointerId: 2, clientX: 100 }))).toBe(false);
     expect(header.scrollDistance).toBe(5);
+  });
+});
+
+/**
+ * Smoke tests for the editor composition: the five field section components
+ * mount inside the active tab (which also exercises the `EntryUpdatesService`
+ * wiring) and edits reach the WorkspaceService. The service is stubbed so no
+ * project is needed.
+ */
+describe('EntryEditor fields composition', () => {
+  const updateEntry = vi.fn();
+  const entry: CharacterBookEntry = { ...createEmptyEntry(1), keys: ['rin'] };
+
+  beforeEach(async () => {
+    updateEntry.mockClear();
+    // The tab strip pagination tracks size changes; jsdom lacks the API.
+    if (!('ResizeObserver' in globalThis)) {
+      /* eslint-disable @typescript-eslint/no-empty-function -- no-op stub by design */
+      Object.defineProperty(globalThis, 'ResizeObserver', {
+        writable: true,
+        value: class {
+          observe(): void {}
+          unobserve(): void {}
+          disconnect(): void {}
+        },
+      });
+      /* eslint-enable @typescript-eslint/no-empty-function */
+    }
+    await TestBed.configureTestingModule({
+      imports: [EntryEditor],
+      providers: [
+        provideAnimationsAsync(),
+        {
+          provide: WorkspaceService,
+          useValue: {
+            entries: signal([entry]),
+            openTabEntryIds: signal([1]),
+            activeTabId: signal(1),
+            dirtyEntryIds: signal(new Set<number>()),
+            updateEntry,
+            addEntry: vi.fn(),
+            closeTab: vi.fn(),
+          },
+        },
+      ],
+    }).compileComponents();
+  });
+
+  it('renders the five editor sections bound to the entry', async () => {
+    const fixture = TestBed.createComponent(EntryEditor);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelector('app-entry-metadata')).toBeTruthy();
+    expect(el.querySelector('app-entry-control-strip')).toBeTruthy();
+    expect(el.querySelector('app-entry-keys')).toBeTruthy();
+    expect(el.querySelector('app-entry-content-field')).toBeTruthy();
+    expect(el.querySelector('app-entry-advanced-panel')).toBeTruthy();
+    expect(el.textContent).toContain('rin');
+  });
+
+  it('patches the entry through the WorkspaceService on edit', async () => {
+    const fixture = TestBed.createComponent(EntryEditor);
+    await fixture.whenStable();
+
+    const nameInput = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      'app-entry-metadata input',
+    )!;
+    nameInput.value = 'Rin Tohsaka';
+    nameInput.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+
+    expect(updateEntry).toHaveBeenCalledWith(1, { comment: 'Rin Tohsaka' });
   });
 });
