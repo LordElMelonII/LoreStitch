@@ -12,7 +12,8 @@ import {
 import { ENTER, COMMA } from '@angular/cdk/keycodes';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
-import { MatChipsModule, MatChipInputEvent } from '@angular/material/chips';
+import { MatCardModule } from '@angular/material/card';
+import { MatChipsModule, MatChipInputEvent, MatChipSelectionChange } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -48,6 +49,7 @@ import { DelimiterDialog } from '../delimiters/delimiter-dialog';
   imports: [
     MatButtonModule,
     MatButtonToggleModule,
+    MatCardModule,
     MatChipsModule,
     MatDialogModule,
     MatExpansionModule,
@@ -87,6 +89,9 @@ export class EntryFields {
 
   /** The entry's trigger strategy: normal 🟢 / constant 🔵 / vectorized 🔗. */
   protected readonly triggerState = computed<WiTriggerState>(() => entryTriggerState(this.entry()));
+
+  /** True while the entry always triggers — key-based modifiers don't apply. */
+  protected readonly isConstant = computed(() => this.triggerState() === 'constant');
 
   /** Outlet entries are pulled into the prompt manually via the outlet macro. */
   protected readonly isOutlet = computed(() => this.entry().position === 'outlet');
@@ -165,6 +170,20 @@ export class EntryFields {
     const entry = this.entry();
     if (entry.id !== undefined) {
       this.workspace.updateEntry(entry.id, { [field]: change.checked });
+    }
+  }
+
+  /** Filter-chip counterpart of `setFlag` for the execution modifiers. */
+  protected setChipFlag(
+    field: 'selective' | 'case_sensitive',
+    change: MatChipSelectionChange,
+  ): void {
+    if (!change.isUserInput) {
+      return;
+    }
+    const entry = this.entry();
+    if (entry.id !== undefined) {
+      this.workspace.updateEntry(entry.id, { [field]: change.selected });
     }
   }
 

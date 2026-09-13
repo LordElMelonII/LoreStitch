@@ -13,7 +13,7 @@
       <mat-icon>add</mat-icon>
     </button>
   </div>
-  <mat-form-field subscriptSizing="dynamic" class="filter-field">
+  <mat-form-field subscriptSizing="dynamic" appearance="fill" class="filter-field">
     <mat-icon matPrefix>search</mat-icon>
     <input
       matInput
@@ -67,14 +67,14 @@
       <div class="item-keys">
         @switch (item.state) {
           @case ('constant') {
-            <span class="key-chip constant" matTooltip="🔵 Always inserted, ignores keys">
+            <span class="key-chip constant" matTooltip="Always inserted, ignores keys">
               constant
             </span>
           }
           @case ('vectorized') {
             <span
               class="key-chip vectorized"
-              matTooltip="🔗 Allowed to be inserted by embedding similarity"
+              matTooltip="Allowed to be inserted by embedding similarity (Vector Storage)"
             >
               vector
             </span>

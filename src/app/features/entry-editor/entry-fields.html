@@ -1,19 +1,21 @@
 @if (entry(); as e) {
   <div class="fields">
-    <div class="field-row header-fields">
-      <mat-form-field class="grow" subscriptSizing="dynamic">
-        <mat-label>Name / Comment</mat-label>
-        <input
-          matInput
-          [value]="e.comment ?? ''"
-          (input)="setText('comment', $event)"
-          placeholder="Entry name…"
-        />
-      </mat-form-field>
-
+    <mat-card appearance="filled" class="cluster-card metadata-card">
+      <div class="field-row">
+        <mat-form-field class="grow" subscriptSizing="dynamic" appearance="fill">
+          <mat-label>Name / Comment</mat-label>
+          <input
+            matInput
+            [value]="e.comment ?? ''"
+            (input)="setText('comment', $event)"
+            placeholder="Entry name…"
+          />
+        </mat-form-field>
+      </div>
       <div class="field-row">
         <mat-form-field
           subscriptSizing="dynamic"
+          appearance="fill"
           matTooltip="Where in the prompt this entry is inserted"
         >
           <mat-label>Position</mat-label>
@@ -30,6 +32,7 @@
           <mat-form-field
             class="num"
             subscriptSizing="dynamic"
+            appearance="fill"
             matTooltip="0 is the bottom of the prompt; messages deeper in the chat have larger depth"
           >
             <mat-label>Depth</mat-label>
@@ -43,6 +46,7 @@
           </mat-form-field>
           <mat-form-field
             subscriptSizing="dynamic"
+            appearance="fill"
             matTooltip="Message role used when the entry is injected at depth"
           >
             <mat-label>Role</mat-label>
@@ -60,6 +64,7 @@
           <mat-form-field
             class="grow"
             subscriptSizing="dynamic"
+            appearance="fill"
             matTooltip="Name used to pull this content into the prompt with the outlet macro in the Prompt Manager / Advanced Formatting"
           >
             <mat-label>Outlet Name</mat-label>
@@ -71,7 +76,7 @@
             />
           </mat-form-field>
         }
-        <mat-form-field class="num" subscriptSizing="dynamic">
+        <mat-form-field class="num" subscriptSizing="dynamic" appearance="fill">
           <mat-label>Order</mat-label>
           <input
             matInput
@@ -80,7 +85,7 @@
             (input)="setNumber('insertion_order', $event)"
           />
         </mat-form-field>
-        <mat-form-field class="num" subscriptSizing="dynamic">
+        <mat-form-field class="num" subscriptSizing="dynamic" appearance="fill">
           <mat-label>Priority</mat-label>
           <input
             matInput
@@ -91,117 +96,89 @@
           />
         </mat-form-field>
       </div>
-    </div>
+    </mat-card>
 
-    <div class="field-row toggles">
-      <mat-slide-toggle
-        [checked]="e.enabled"
-        (change)="setFlag('enabled', $event)"
-        matTooltip="Include this entry in scans"
-      >
-        Enabled
-      </mat-slide-toggle>
-      <mat-button-toggle-group
-        class="strategy-toggle"
-        [value]="triggerState()"
-        (change)="setTriggerState($event.value)"
-        hideSingleSelectionIndicator
-        aria-label="Trigger strategy"
-      >
-        <mat-button-toggle
-          value="normal"
-          matTooltip="🟢 Triggered only in the presence of a key"
-          aria-label="Normal: keyword-triggered"
+    <mat-card appearance="filled" class="cluster-card strip-card">
+      <div class="control-strip">
+        <mat-slide-toggle
+          [checked]="e.enabled"
+          (change)="setFlag('enabled', $event)"
+          matTooltip="Include this entry in scans"
         >
-          🟢 Normal
-        </mat-button-toggle>
-        <mat-button-toggle
-          value="constant"
-          matTooltip="🔵 Does not need any keywords, and will trigger regardless of content"
-          aria-label="Constant: always inserted"
-        >
-          🔵 Constant
-        </mat-button-toggle>
-        <mat-button-toggle
-          value="vectorized"
-          matTooltip="🔗 Allowed to be inserted by embedding similarity (Vector Storage)"
-          aria-label="Vectorized: inserted by embedding similarity"
-        >
-          🔗 Vector
-        </mat-button-toggle>
-      </mat-button-toggle-group>
-      <mat-slide-toggle
-        [checked]="e.selective ?? false"
-        (change)="setFlag('selective', $event)"
-        matTooltip="Use secondary keys to filter matches"
-      >
-        Selective
-      </mat-slide-toggle>
-      <mat-slide-toggle
-        [checked]="e.case_sensitive ?? false"
-        (change)="setFlag('case_sensitive', $event)"
-        matTooltip="Match keys case-sensitively"
-      >
-        Case Sensitive
-      </mat-slide-toggle>
-    </div>
+          Enabled
+        </mat-slide-toggle>
 
-    <div class="field-row keys-row">
-      <mat-form-field
-        class="keys-field grow"
-        subscriptSizing="dynamic"
-        (click)="focusPrimaryKeys()"
-      >
-        <mat-label>Primary Keys</mat-label>
-        <mat-chip-grid #keysGrid aria-label="Primary keys">
-          @for (key of e.keys; track $index) {
-            @if (isEditing('keys', $index)) {
-              <input
-                #keyEditInput
-                class="chip-edit"
-                [value]="editValue()"
-                (input)="setEditValue($event)"
-                (keydown.enter)="$event.preventDefault(); commitEdit()"
-                (keydown.escape)="cancelEdit()"
-                (blur)="commitEdit()"
-                (click)="$event.stopPropagation()"
-                [attr.aria-label]="'Edit primary key ' + key"
-              />
-            } @else {
-              <mat-chip-row
-                (removed)="removeKey('keys', $index)"
-                (dblclick)="startEdit('keys', $index, key)"
-              >
-                {{ key }}
-                <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + key">
-                  <mat-icon>cancel</mat-icon>
-                </button>
-              </mat-chip-row>
-            }
-          }
-          <input
-            #primaryKeyInput
-            matChipInput
-            [matChipInputFor]="keysGrid"
-            [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
-            (matChipInputTokenEnd)="addKey('keys', $event)"
-            placeholder="Add key…"
-            aria-label="Add primary key"
-          />
-        </mat-chip-grid>
-        <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
-      </mat-form-field>
+        <mat-button-toggle-group
+          class="strategy-toggle"
+          [value]="triggerState()"
+          (change)="setTriggerState($event.value)"
+          hideSingleSelectionIndicator
+          aria-label="Trigger strategy"
+        >
+          <mat-button-toggle
+            value="normal"
+            matTooltip="🟢 Triggered only in the presence of a key"
+            aria-label="Normal: keyword-triggered"
+          >
+            🟢 Normal
+          </mat-button-toggle>
+          <mat-button-toggle
+            value="constant"
+            matTooltip="🔵 Does not need any keywords, and will trigger regardless of content"
+            aria-label="Constant: always inserted"
+          >
+            🔵 Constant
+          </mat-button-toggle>
+          <mat-button-toggle
+            value="vectorized"
+            matTooltip="🔗 Allowed to be inserted by embedding similarity (Vector Storage)"
+            aria-label="Vectorized: inserted by embedding similarity"
+          >
+            🔗 Vector
+          </mat-button-toggle>
+        </mat-button-toggle-group>
 
-      @if (e.selective) {
+        <mat-chip-listbox class="modifier-chips" multiple aria-label="Execution modifiers">
+          <mat-chip-option
+            [selected]="e.selective ?? false"
+            [disabled]="isConstant()"
+            (selectionChange)="setChipFlag('selective', $event)"
+            [matTooltip]="
+              isConstant()
+                ? 'Not available while Constant — the entry always triggers regardless of keys'
+                : 'Use secondary keys to filter matches'
+            "
+          >
+            Selective
+          </mat-chip-option>
+          <mat-chip-option
+            [selected]="e.case_sensitive ?? false"
+            [disabled]="isConstant()"
+            (selectionChange)="setChipFlag('case_sensitive', $event)"
+            [matTooltip]="
+              isConstant()
+                ? 'Not available while Constant — keys are not scanned'
+                : 'Match keys case-sensitively'
+            "
+          >
+            Case Sensitive
+          </mat-chip-option>
+        </mat-chip-listbox>
+      </div>
+    </mat-card>
+
+    <mat-card appearance="filled" class="cluster-card keys-card">
+      <div class="field-row keys-row">
         <mat-form-field
           class="keys-field grow"
           subscriptSizing="dynamic"
-          (click)="focusSecondaryKeys()"
+          appearance="fill"
+          (click)="focusPrimaryKeys()"
         >
-          <mat-label>Secondary Keys</mat-label>
-          <mat-chip-grid #secondaryGrid aria-label="Secondary keys">
-            @for (key of e.secondary_keys ?? []; track $index) {
-              @if (isEditing('secondary_keys', $index)) {
+          <mat-label>Primary Keys</mat-label>
+          <mat-chip-grid #keysGrid aria-label="Primary keys">
+            @for (key of e.keys; track $index) {
+              @if (isEditing('keys', $index)) {
                 <input
                   #keyEditInput
                   class="chip-edit"
@@ -211,40 +188,88 @@
                   (keydown.escape)="cancelEdit()"
                   (blur)="commitEdit()"
                   (click)="$event.stopPropagation()"
-                  [attr.aria-label]="'Edit secondary key ' + key"
+                  [attr.aria-label]="'Edit primary key ' + key"
                 />
               } @else {
                 <mat-chip-row
-                  (removed)="removeKey('secondary_keys', $index)"
-                  (dblclick)="startEdit('secondary_keys', $index, key)"
+                  (removed)="removeKey('keys', $index)"
+                  (dblclick)="startEdit('keys', $index, key)"
                 >
                   {{ key }}
-                  <button
-                    matChipRemove
-                    type="button"
-                    [attr.aria-label]="'Remove secondary key ' + key"
-                  >
+                  <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + key">
                     <mat-icon>cancel</mat-icon>
                   </button>
                 </mat-chip-row>
               }
             }
             <input
-              #secondaryKeyInput
+              #primaryKeyInput
               matChipInput
-              [matChipInputFor]="secondaryGrid"
+              [matChipInputFor]="keysGrid"
               [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
-              (matChipInputTokenEnd)="addKey('secondary_keys', $event)"
-              placeholder="Add secondary key…"
-              aria-label="Add secondary key"
+              (matChipInputTokenEnd)="addKey('keys', $event)"
+              placeholder="Add key…"
+              aria-label="Add primary key"
             />
           </mat-chip-grid>
           <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
         </mat-form-field>
-      }
-    </div>
 
-    <mat-form-field class="content-field" subscriptSizing="dynamic">
+        @if (e.selective) {
+          <mat-form-field
+            class="keys-field grow"
+            subscriptSizing="dynamic"
+            appearance="fill"
+            (click)="focusSecondaryKeys()"
+          >
+            <mat-label>Secondary Keys</mat-label>
+            <mat-chip-grid #secondaryGrid aria-label="Secondary keys">
+              @for (key of e.secondary_keys ?? []; track $index) {
+                @if (isEditing('secondary_keys', $index)) {
+                  <input
+                    #keyEditInput
+                    class="chip-edit"
+                    [value]="editValue()"
+                    (input)="setEditValue($event)"
+                    (keydown.enter)="$event.preventDefault(); commitEdit()"
+                    (keydown.escape)="cancelEdit()"
+                    (blur)="commitEdit()"
+                    (click)="$event.stopPropagation()"
+                    [attr.aria-label]="'Edit secondary key ' + key"
+                  />
+                } @else {
+                  <mat-chip-row
+                    (removed)="removeKey('secondary_keys', $index)"
+                    (dblclick)="startEdit('secondary_keys', $index, key)"
+                  >
+                    {{ key }}
+                    <button
+                      matChipRemove
+                      type="button"
+                      [attr.aria-label]="'Remove secondary key ' + key"
+                    >
+                      <mat-icon>cancel</mat-icon>
+                    </button>
+                  </mat-chip-row>
+                }
+              }
+              <input
+                #secondaryKeyInput
+                matChipInput
+                [matChipInputFor]="secondaryGrid"
+                [matChipInputSeparatorKeyCodes]="separatorKeyCodes"
+                (matChipInputTokenEnd)="addKey('secondary_keys', $event)"
+                placeholder="Add secondary key…"
+                aria-label="Add secondary key"
+              />
+            </mat-chip-grid>
+            <mat-hint>Enter / comma to add · double-click a key to edit</mat-hint>
+          </mat-form-field>
+        }
+      </div>
+    </mat-card>
+
+    <mat-form-field class="content-field" subscriptSizing="dynamic" appearance="fill">
       <mat-label>Content</mat-label>
       <textarea
         matInput
@@ -281,7 +306,7 @@
         <mat-panel-description>Extensions carried in exports</mat-panel-description>
       </mat-expansion-panel-header>
       <div class="field-row advanced-grid">
-        <mat-form-field subscriptSizing="dynamic">
+        <mat-form-field subscriptSizing="dynamic" appearance="fill">
           <mat-label>Probability %</mat-label>
           <input
             matInput
@@ -292,7 +317,7 @@
             (input)="setExtensionNumber('probability', $event, 100)"
           />
         </mat-form-field>
-        <mat-form-field subscriptSizing="dynamic">
+        <mat-form-field subscriptSizing="dynamic" appearance="fill">
           <mat-label>Secondary Logic</mat-label>
           <mat-select
             [value]="e.extensions['selectiveLogic']"

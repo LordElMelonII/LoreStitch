@@ -5,14 +5,36 @@
 .fields {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   padding: 16px 16px 24px;
+}
+
+// ---------------------------------------------------------------------------
+// Cluster cards (MD3 filled card)
+// Toned to `surface-container`: one step above the editor canvas (`surface`)
+// so control clusters group visibly without hairline borders.
+// ---------------------------------------------------------------------------
+
+.cluster-card {
+  --mat-card-filled-container-color: var(--mat-sys-surface-container);
+  --mat-card-filled-container-shape: var(--mat-sys-corner-medium);
+  padding: 12px 16px 16px;
+}
+
+.metadata-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.strip-card {
+  padding: 8px 16px;
 }
 
 .field-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
 
   .grow {
@@ -21,49 +43,33 @@
   }
 
   .num {
-    width: 110px;
+    width: 112px;
   }
 }
 
-.header-fields {
-  // Both cells grow from a zero basis, exactly like the `.keys-field`s below,
-  // so both rows split into identical (width - gap) / 2 halves and the name
-  // field lines up precisely with the Primary/Secondary Keys fields.
-  > * {
-    flex: 1 1 0;
-  }
+// ---------------------------------------------------------------------------
+// Control strip: master switch · trigger strategy · execution modifiers
+// ---------------------------------------------------------------------------
+
+.control-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 48px;
 }
 
-.toggles {
-  row-gap: 8px;
-}
-
-// Trigger strategy selector (normal 🟢 / constant 🔵 / vectorized 🔗),
-// color-coded to match the SillyTavern legend.
+// MD3 segmented buttons use the full corner shape.
 .strategy-toggle {
-  mat-button-toggle {
-    mat-icon.strategy-dot {
-      margin-right: 6px;
-      font-size: 13px;
-      width: 13px;
-      height: 13px;
-
-      &.green {
-        color: #4caf50;
-      }
-      &.blue {
-        color: #2196f3;
-      }
-    }
-  }
+  --mat-button-toggle-shape: var(--mat-sys-corner-full);
 }
 
 .keys-row {
   align-items: stretch;
 }
 
-// Key chip fields are real outlined form fields (label in the notch, hint
-// below). Stretch both fields so their outline boxes and hints match heights.
+// Key chip fields are real filled form fields (label in the field, hint
+// below). Stretch both fields so their boxes and hints match heights.
 .keys-field {
   cursor: text;
   display: flex;
@@ -85,13 +91,17 @@
   }
 }
 
+// Recessed content well: the MD3 filled-field fill is the deepest container
+// tone on the canvas, so the main text area reads as a sunken input surface.
 .content-field {
+  --mat-form-field-filled-container-shape: var(--mat-sys-corner-medium);
+
   flex: 1;
-  min-height: 200px;
+  min-height: 220px;
   width: 100%;
 
   .content-textarea {
-    min-height: 180px;
+    min-height: 200px;
     resize: vertical;
     font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
     font-size: 13px;
@@ -103,9 +113,14 @@
   }
 }
 
+// Advanced accordion styled as a card matching the cluster cards.
 .advanced {
+  --mat-expansion-container-background-color: var(--mat-sys-surface-container);
+  --mat-expansion-container-shape: var(--mat-sys-corner-medium);
+  --mat-expansion-container-elevation-shadow: none;
+
   .advanced-grid {
-    row-gap: 12px;
+    row-gap: 8px;
 
     mat-form-field {
       width: 160px;
