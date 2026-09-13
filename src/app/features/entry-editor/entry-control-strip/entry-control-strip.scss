@@ -21,6 +21,10 @@
   margin-bottom: 16px;
 }
 
+.position {
+  min-width: 16em;
+}
+
 // MD3 segmented buttons use the full corner shape.
 .strategy-toggle {
   --mat-button-toggle-shape: var(--mat-sys-corner-full);
