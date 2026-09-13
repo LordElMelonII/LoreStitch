@@ -1,6 +1,6 @@
 @if (entry(); as e) {
   <div class="fields">
-    <div class="field-row">
+    <div class="field-row header-fields">
       <mat-form-field class="grow" subscriptSizing="dynamic">
         <mat-label>Name / Comment</mat-label>
         <input
@@ -11,89 +11,86 @@
         />
       </mat-form-field>
 
-      <mat-form-field
-        subscriptSizing="dynamic"
-        matTooltip="Where in the prompt this entry is inserted"
-      >
-        <mat-label>Position</mat-label>
-        <mat-select
-          [value]="e.position ?? 'before_char'"
-          (selectionChange)="setPosition($event.value)"
-        >
-          @for (option of positionOptions; track option.value) {
-            <mat-option [value]="option.value">{{ option.label }}</mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
-
-      @if (isAtDepth()) {
-        <mat-form-field
-          class="num"
-          subscriptSizing="dynamic"
-          matTooltip="0 is the bottom of the prompt; messages deeper in the chat have larger depth"
-        >
-          <mat-label>Depth</mat-label>
-          <input
-            matInput
-            type="number"
-            min="0"
-            [value]="e.extensions['depth'] ?? 4"
-            (input)="setExtensionNumber('depth', $event, 4)"
-          />
-        </mat-form-field>
-
+      <div class="field-row">
         <mat-form-field
           subscriptSizing="dynamic"
-          matTooltip="Message role used when the entry is injected at depth"
+          matTooltip="Where in the prompt this entry is inserted"
         >
-          <mat-label>Role</mat-label>
+          <mat-label>Position</mat-label>
           <mat-select
-            [value]="e.extensions['role'] ?? 0"
-            (selectionChange)="setExtension('role', $event.value)"
+            [value]="e.position ?? 'before_char'"
+            (selectionChange)="setPosition($event.value)"
           >
-            @for (role of roleOptions; track role.value) {
-              <mat-option [value]="role.value">{{ role.icon }} {{ role.label }}</mat-option>
+            @for (option of positionOptions; track option.value) {
+              <mat-option [value]="option.value">{{ option.label }}</mat-option>
             }
           </mat-select>
         </mat-form-field>
-      }
-
-      @if (isOutlet()) {
-        <mat-form-field
-          class="grow"
-          subscriptSizing="dynamic"
-          matTooltip="Name used to pull this content into the prompt with the outlet macro in the Prompt Manager / Advanced Formatting"
-        >
-          <mat-label>Outlet Name</mat-label>
+        @if (isAtDepth()) {
+          <mat-form-field
+            class="num"
+            subscriptSizing="dynamic"
+            matTooltip="0 is the bottom of the prompt; messages deeper in the chat have larger depth"
+          >
+            <mat-label>Depth</mat-label>
+            <input
+              matInput
+              type="number"
+              min="0"
+              [value]="e.extensions['depth'] ?? 4"
+              (input)="setExtensionNumber('depth', $event, 4)"
+            />
+          </mat-form-field>
+          <mat-form-field
+            subscriptSizing="dynamic"
+            matTooltip="Message role used when the entry is injected at depth"
+          >
+            <mat-label>Role</mat-label>
+            <mat-select
+              [value]="e.extensions['role'] ?? 0"
+              (selectionChange)="setExtension('role', $event.value)"
+            >
+              @for (role of roleOptions; track role.value) {
+                <mat-option [value]="role.value">{{ role.icon }} {{ role.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
+        @if (isOutlet()) {
+          <mat-form-field
+            class="grow"
+            subscriptSizing="dynamic"
+            matTooltip="Name used to pull this content into the prompt with the outlet macro in the Prompt Manager / Advanced Formatting"
+          >
+            <mat-label>Outlet Name</mat-label>
+            <input
+              matInput
+              [value]="e.extensions['outlet_name'] ?? ''"
+              (input)="setExtensionText('outlet_name', $event)"
+              placeholder="e.g. scene-notes"
+            />
+          </mat-form-field>
+        }
+        <mat-form-field class="num" subscriptSizing="dynamic">
+          <mat-label>Order</mat-label>
           <input
             matInput
-            [value]="e.extensions['outlet_name'] ?? ''"
-            (input)="setExtensionText('outlet_name', $event)"
-            placeholder="e.g. scene-notes"
+            type="number"
+            [value]="e.insertion_order"
+            (input)="setNumber('insertion_order', $event)"
           />
         </mat-form-field>
-      }
-
-      <mat-form-field class="num" subscriptSizing="dynamic">
-        <mat-label>Order</mat-label>
-        <input
-          matInput
-          type="number"
-          [value]="e.insertion_order"
-          (input)="setNumber('insertion_order', $event)"
-        />
-      </mat-form-field>
-
-      <mat-form-field class="num" subscriptSizing="dynamic">
-        <mat-label>Priority</mat-label>
-        <input
-          matInput
-          type="number"
-          [value]="e.priority ?? ''"
-          (input)="setNumber('priority', $event)"
-          placeholder="—"
-        />
-      </mat-form-field>
+        <mat-form-field class="num" subscriptSizing="dynamic">
+          <mat-label>Priority</mat-label>
+          <input
+            matInput
+            type="number"
+            [value]="e.priority ?? ''"
+            (input)="setNumber('priority', $event)"
+            placeholder="—"
+          />
+        </mat-form-field>
+      </div>
     </div>
 
     <div class="field-row toggles">

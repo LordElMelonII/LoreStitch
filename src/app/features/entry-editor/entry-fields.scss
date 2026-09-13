@@ -25,6 +25,15 @@
   }
 }
 
+.header-fields {
+  // Both cells grow from a zero basis, exactly like the `.keys-field`s below,
+  // so both rows split into identical (width - gap) / 2 halves and the name
+  // field lines up precisely with the Primary/Secondary Keys fields.
+  > * {
+    flex: 1 1 0;
+  }
+}
+
 .toggles {
   row-gap: 8px;
 }
