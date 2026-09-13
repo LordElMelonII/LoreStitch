@@ -5,13 +5,10 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   CharacterBookEntry,
-  entryTriggerState,
   ST_ROLE,
-  WI_POSITION_OPTIONS,
-  WiTriggerState,
+  WI_POSITION_OPTIONS
 } from '../../../core/models/lorebook.model';
 import { EntryUpdatesService } from '../entry-updates.service';
-import { MatChipsModule } from '@angular/material/chips';
 
 /**
  * Placement section of the entry options panel: where the entry lands in the
@@ -20,7 +17,7 @@ import { MatChipsModule } from '@angular/material/chips';
  */
 @Component({
   selector: 'app-entry-placement',
-  imports: [MatChipsModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule],
+  imports: [MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule],
   templateUrl: './entry-placement.html',
   styleUrl: './entry-placement.scss',
   host: { class: 'entry-panel-section' },
@@ -44,10 +41,4 @@ export class EntryPlacement {
 
   /** Outlet entries are pulled into the prompt manually via the outlet macro. */
   protected readonly isOutlet = computed(() => this.entry().position === 'outlet');
-
-  /** True while the entry always triggers — key-based modifiers don't apply. */
-  protected readonly isConstant = computed(() => this.triggerState() === 'constant');
-
-  /** The entry's trigger strategy: normal 🟢 / constant 🔵 / vectorized 🔗. */
-  protected readonly triggerState = computed<WiTriggerState>(() => entryTriggerState(this.entry()));
 }

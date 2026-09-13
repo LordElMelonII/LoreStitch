@@ -64,20 +64,7 @@
       />
     </mat-form-field>
   }
-  <mat-chip-listbox class="modifier-chips" multiple aria-label="Execution modifiers">
-    <mat-chip-option
-      [selected]="entry().case_sensitive ?? false"
-      [disabled]="isConstant()"
-      (selectionChange)="updates.setChipFlag(entry(), 'case_sensitive', $event)"
-      [matTooltip]="
-        isConstant()
-          ? 'Not available while Constant — keys are not scanned'
-          : 'Match keys case-sensitively'
-      "
-    >
-      Case Sensitive
-    </mat-chip-option>
-  </mat-chip-listbox>
+
   <mat-form-field
     class="num"
     subscriptSizing="dynamic"

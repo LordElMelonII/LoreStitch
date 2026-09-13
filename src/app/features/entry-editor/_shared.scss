@@ -28,11 +28,11 @@
     flex: 1 1 220px;
     min-width: 0;
   }
+}
 
-  .num {
-    flex: none;
-    width: 112px;
-  }
+.num {
+  flex: none;
+  width: 112px;
 }
 
 // Compact numeric fields: the native spin buttons collide with the floating

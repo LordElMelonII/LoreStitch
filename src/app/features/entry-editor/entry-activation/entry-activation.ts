@@ -6,7 +6,9 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   CharacterBookEntry,
   ST_TRIGGER_OPTIONS,
+  WiTriggerState,
   entryCharacterFilter,
+  entryTriggerState,
   entryTriggers,
 } from '../../../core/models/lorebook.model';
 import { EntryUpdatesService } from '../entry-updates.service';
@@ -50,4 +52,10 @@ export class EntryActivation {
   protected ext(key: string): unknown {
     return this.entry().extensions[key];
   }
+
+  /** True while the entry always triggers — key-based modifiers don't apply. */
+  protected readonly isConstant = computed(() => this.triggerState() === 'constant');
+
+  /** The entry's trigger strategy: normal 🟢 / constant 🔵 / vectorized 🔗. */
+  protected readonly triggerState = computed<WiTriggerState>(() => entryTriggerState(this.entry()));
 }
