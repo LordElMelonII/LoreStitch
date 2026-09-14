@@ -6,13 +6,13 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ParsedImport, ImportExportService } from '../../core/services/import-export.service';
 import { ProjectWorkspace } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
-import { MergeOutcome, MergeResolverDialog } from '../merge-resolver/merge-resolver-dialog';
+import { MergeResolverDialog } from '../merge-resolver/merge-resolver-dialog';
+import { type MergeOutcome } from '../merge-resolver/merge-resolver.model';
 import { NewProjectDialog } from './new-project-dialog';
+import { type NewProjectResult } from './new-project.model';
+import { IMPORT_ACCEPT, MERGE_ACCEPT } from './project-actions.constants';
 import { ConfirmDialog } from '../../shared/components/confirm-dialog/confirm-dialog';
-
-const IMPORT_ACCEPT = '.json,.stproj,application/json';
-const MERGE_ACCEPT = '.json,application/json';
-const NARROW_QUERY = '(max-width: 767px)';
+import { MOBILE_BREAKPOINT_QUERY } from '../../shared/constants/breakpoints';
 
 /**
  * Project lifecycle & import orchestration shared by the topbar and the
@@ -31,8 +31,9 @@ export class ProjectActionsService {
   // -------------------------------------------------------------------------
 
   async newProject(): Promise<void> {
-    const result = (await firstValueFrom(this.dialog.open(NewProjectDialog).afterClosed())) as
-      { title: string; targetType: ProjectWorkspace['targetType'] } | undefined;
+    const result = (await firstValueFrom(
+      this.dialog.open(NewProjectDialog).afterClosed(),
+    )) as NewProjectResult | undefined;
     if (result) {
       await this.workspace.createProject(result.title, result.targetType);
     }
@@ -154,7 +155,7 @@ export class ProjectActionsService {
           data: {
             incoming: parsed.book,
             sourceName: fileName,
-            mode: this.breakpoints.isMatched(NARROW_QUERY) ? 'unified' : 'split',
+            mode: this.breakpoints.isMatched(MOBILE_BREAKPOINT_QUERY) ? 'unified' : 'split',
           },
         })
         .afterClosed(),

@@ -1,24 +1,29 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { FormField, form, submit, validate } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ProjectCommit } from '../../core/models/lorebook.model';
 import { shortHash, VcsService } from '../../core/services/vcs.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { type CommitRow } from './commit-history.model';
 import { DiffViewer } from '../../shared/components/diff-viewer/diff-viewer';
 
-interface CommitRow {
-  commit: ProjectCommit;
-  parent: ProjectCommit | null;
+/** Form model of the commit box. */
+interface CommitMessageModel {
+  message: string;
 }
+
+/** Longest commit message the UI accepts. */
+const MAX_COMMIT_MESSAGE = 200;
 
 /** Right-hand drawer: commit box plus scrollable history with per-commit diffs. */
 @Component({
   selector: 'app-commit-history',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    FormField,
     MatButtonModule,
     MatFormFieldModule,
     MatIconModule,
@@ -33,7 +38,24 @@ export class CommitHistory {
   protected readonly workspace = inject(WorkspaceService);
   private readonly vcs = inject(VcsService);
 
-  protected readonly message = signal('');
+  private readonly messageModel = signal<CommitMessageModel>({ message: '' });
+
+  protected readonly commitForm = form(this.messageModel, (s) => {
+    validate(s.message, ({ value }) => {
+      const text = value().trim();
+      if (!text) {
+        return { kind: 'required', message: 'A commit message is required' };
+      }
+      if (text.length > MAX_COMMIT_MESSAGE) {
+        return {
+          kind: 'maxlength',
+          message: `Keep the message under ${MAX_COMMIT_MESSAGE} characters`,
+        };
+      }
+      return undefined;
+    });
+  });
+
   protected readonly expanded = signal<string | null>(null);
   protected readonly committing = signal(false);
 
@@ -49,27 +71,24 @@ export class CommitHistory {
     }));
   });
 
-  protected canCommit = computed(() => {
-    const message = this.message().trim();
-    return this.workspace.hasUnsavedChanges() && message.length > 0 && !this.committing();
-  });
-
-  protected onMessageInput(event: Event): void {
-    this.message.set((event.target as HTMLInputElement).value);
-  }
+  protected canCommit = computed(
+    () => this.workspace.hasUnsavedChanges() && !this.committing() && this.commitForm().valid(),
+  );
 
   protected async commit(): Promise<void> {
-    const text = this.message().trim();
-    if (!text || this.committing()) {
+    if (this.committing()) {
       return;
     }
-    this.committing.set(true);
-    try {
-      await this.workspace.commit(text);
-      this.message.set('');
-    } finally {
-      this.committing.set(false);
-    }
+    await submit(this.commitForm, async () => {
+      const text = this.messageModel().message.trim();
+      this.committing.set(true);
+      try {
+        await this.workspace.commit(text);
+        this.messageModel.set({ message: '' });
+      } finally {
+        this.committing.set(false);
+      }
+    });
   }
 
   protected async restore(row: CommitRow): Promise<void> {

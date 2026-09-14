@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 680px;
-  max-width: 92vw;
+  // Wide on desktop, phone-safe on mobile (no hard floor to overflow against).
+  width: min(92vw, 680px);
 }
 
 .summary {
@@ -56,11 +56,13 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
   }
 
   .action-select {
     width: 180px;
-    flex: none;
+    max-width: 100%;
+    flex: 1 1 180px;
   }
 
   .row-info {

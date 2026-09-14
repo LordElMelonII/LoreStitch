@@ -16,10 +16,11 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   CharacterBookEntry,
-  ST_LOGIC,
+  ST_LOGIC_OPTIONS,
   entryTriggerState,
 } from '../../../core/models/lorebook.model';
 import { EntryUpdatesService } from '../entry-updates.service';
+import { type KeyEditTarget, type KeyListField } from '../entry-editor.model';
 
 /**
  * Keys section of the entry options panel: the Selective (Optional Filter)
@@ -43,15 +44,10 @@ export class EntryKeys {
   /** True while the entry always triggers — key-based modifiers don't apply. */
   protected readonly isConstant = computed(() => entryTriggerState(this.entry()) === 'constant');
 
-  protected readonly logicOptions = [
-    { value: ST_LOGIC.AND_ANY, label: 'AND Any' },
-    { value: ST_LOGIC.NOT_ALL, label: 'NOT All' },
-    { value: ST_LOGIC.NOT_ANY, label: 'NOT Any' },
-    { value: ST_LOGIC.AND_ALL, label: 'AND All' },
-  ];
+  protected readonly logicOptions = ST_LOGIC_OPTIONS;
 
   /** Template constant: fallback secondary logic when the entry has none. */
-  protected readonly defaultLogic = ST_LOGIC.AND_ANY;
+  protected readonly defaultLogic = ST_LOGIC_OPTIONS[0].value;
 
   protected readonly separatorKeyCodes = [ENTER, COMMA];
 
@@ -60,10 +56,7 @@ export class EntryKeys {
   private readonly keyEditInput = viewChild<ElementRef<HTMLInputElement>>('keyEditInput');
 
   /** The key currently being edited in place (double-click a chip). */
-  protected readonly editingKey = signal<{
-    field: 'keys' | 'secondary_keys';
-    index: number;
-  } | null>(null);
+  protected readonly editingKey = signal<KeyEditTarget | null>(null);
   protected readonly editValue = signal('');
 
   constructor() {
@@ -93,12 +86,12 @@ export class EntryKeys {
     this.secondaryKeyInput()?.nativeElement.focus();
   }
 
-  protected isEditing(field: 'keys' | 'secondary_keys', index: number): boolean {
+  protected isEditing(field: KeyListField, index: number): boolean {
     const editing = this.editingKey();
     return editing?.field === field && editing.index === index;
   }
 
-  protected startEdit(field: 'keys' | 'secondary_keys', index: number, current: string): void {
+  protected startEdit(field: KeyListField, index: number, current: string): void {
     this.editingKey.set({ field, index });
     this.editValue.set(current);
   }

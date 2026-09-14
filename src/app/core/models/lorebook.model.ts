@@ -177,6 +177,17 @@ export const ST_LOGIC = {
   AND_ALL: 3,
 } as const;
 
+/** One of SillyTavern's `world_info_logic` values. */
+export type StLogic = (typeof ST_LOGIC)[keyof typeof ST_LOGIC];
+
+/** UI options for the secondary-keys logic selector, ordered like the ST docs. */
+export const ST_LOGIC_OPTIONS: readonly { value: StLogic; label: string }[] = [
+  { value: ST_LOGIC.AND_ANY, label: 'AND Any' },
+  { value: ST_LOGIC.NOT_ALL, label: 'NOT All' },
+  { value: ST_LOGIC.NOT_ANY, label: 'NOT Any' },
+  { value: ST_LOGIC.AND_ALL, label: 'AND All' },
+];
+
 /**
  * `GENERATION_TYPE_TRIGGERS` from SillyTavern's script.js — the generation
  * types a per-entry `triggers` filter may restrict activation to. An empty
@@ -223,6 +234,16 @@ export const ST_ROLE = {
   user: 1,
   assistant: 2,
 } as const;
+
+/** One of SillyTavern's `extension_prompt_roles` values. */
+export type StRole = (typeof ST_ROLE)[keyof typeof ST_ROLE];
+
+/** UI options for the at-depth message role selector. */
+export const ST_ROLE_OPTIONS: readonly { value: StRole; icon: string; label: string }[] = [
+  { value: ST_ROLE.system, icon: '⚙️', label: 'System' },
+  { value: ST_ROLE.user, icon: '👤', label: 'User' },
+  { value: ST_ROLE.assistant, icon: '🤖', label: 'Assistant' },
+];
 
 /** `WiPosition` -> `world_info_position` numeric value. */
 export const WI_POSITION_TO_ST: Record<WiPosition, number> = {
@@ -360,12 +381,26 @@ export function entryCharacterFilter(entry: CharacterBookEntry): NormalizedChara
 }
 
 /**
+ * Parses a comma-separated character-name list into the normalized filter
+ * shape: trimmed, de-duplicated, empty items dropped.
+ */
+export function parseNameList(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/**
  * Produces a spec-clean book for V2 exports: `position` collapses to the two
  * spec-legal values (SillyTavern's own convention) while the true numeric
  * position is preserved in `extensions.position`.
  */
-export function toSpecCompliantBook(book: CharacterBook): CharacterBook {
-  return {
+export function toSpecCompliantBook(book: CharacterBook): CharacterBook {  return {
     ...structuredClone(book),
     entries: book.entries.map((entry) => ({
       ...entry,
@@ -693,7 +728,12 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
   };
 }
 
-interface StNativeExtensions {
+/**
+ * The normalized extension fields LoreStitch maintains on every entry.
+ * Third-party fields are preserved as-is outside this shape (the native view
+ * below adds an index signature), so imports round-trip untouched.
+ */
+export interface EntryExtensions {
   position?: number;
   vectorized?: boolean;
   selectiveLogic?: number;
@@ -725,6 +765,13 @@ interface StNativeExtensions {
   match_scenario?: boolean;
   match_creator_notes?: boolean;
   character_filter?: NormalizedCharacterFilter | null;
+}
+
+/** Names of the normalized extension fields (type-checked in templates). */
+export type EntryExtensionKey = keyof EntryExtensions;
+
+/** `CharacterBookEntry.extensions` as the native SillyTavern conversion sees it. */
+export interface StNativeExtensions extends EntryExtensions {
   [key: string]: unknown;
 }
 

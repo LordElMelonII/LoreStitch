@@ -59,12 +59,7 @@
 
     <mat-form-field class="num" subscriptSizing="dynamic" appearance="fill">
       <mat-label>Order</mat-label>
-      <input
-        matInput
-        type="number"
-        [value]="entry().insertion_order"
-        (input)="updates.setNumber(entry(), 'insertion_order', $event)"
-      />
+      <input matInput type="number" [formField]="stripForm.order" />
     </mat-form-field>
 
     <button

@@ -3,6 +3,7 @@ import { MatChipInputEvent, MatChipSelectionChange } from '@angular/material/chi
 import { MatSlideToggleChange } from '@angular/material/slide-toggle';
 import {
   CharacterBookEntry,
+  EntryExtensionKey,
   NormalizedCharacterFilter,
   ST_TRIGGERS,
   StTrigger,
@@ -14,9 +15,7 @@ import {
   triggerStatePatch,
 } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
-
-/** The two entry fields that hold key lists. */
-type KeyListField = 'keys' | 'secondary_keys';
+import { type KeyListField } from './entry-editor.model';
 
 /**
  * Field-level mutations shared by the entry field editor sections
@@ -30,25 +29,6 @@ type KeyListField = 'keys' | 'secondary_keys';
 export class EntryUpdatesService {
   private readonly workspace = inject(WorkspaceService);
 
-  /** Text edits: name / comment / content. */
-  setText(entry: CharacterBookEntry, field: 'comment' | 'name' | 'content', event: Event): void {
-    const value = (event.target as HTMLTextAreaElement | HTMLInputElement).value;
-    this.patch(entry, { [field]: value });
-  }
-
-  /** Numeric edits: insertion order and priority (an empty priority clears it). */
-  setNumber(entry: CharacterBookEntry, field: 'insertion_order' | 'priority', event: Event): void {
-    const raw = (event.target as HTMLInputElement).value;
-    if (field === 'priority' && raw === '') {
-      this.patch(entry, { priority: undefined });
-      return;
-    }
-    const value = Number(raw);
-    if (!Number.isNaN(value)) {
-      this.patch(entry, { [field]: value });
-    }
-  }
-
   /**
    * Changes the insertion position. The ST-native numeric mirror in
    * `extensions.position` is kept in sync so exports round-trip.
@@ -60,34 +40,8 @@ export class EntryUpdatesService {
     });
   }
 
-  setExtension(entry: CharacterBookEntry, key: string, value: unknown): void {
+  setExtension(entry: CharacterBookEntry, key: EntryExtensionKey, value: unknown): void {
     this.patch(entry, { extensions: { ...entry.extensions, [key]: value } });
-  }
-
-  setExtensionText(entry: CharacterBookEntry, key: string, event: Event): void {
-    this.setExtension(entry, key, (event.target as HTMLInputElement).value);
-  }
-
-  /** Numeric extension edits; an empty input falls back to `fallback`. */
-  setExtensionNumber(
-    entry: CharacterBookEntry,
-    key: string,
-    event: Event,
-    fallback: number | null,
-  ): void {
-    const raw = (event.target as HTMLInputElement).value;
-    if (raw === '') {
-      this.setExtension(entry, key, fallback);
-      return;
-    }
-    const value = Number(raw);
-    if (!Number.isNaN(value)) {
-      this.setExtension(entry, key, value);
-    }
-  }
-
-  setExtensionFlag(entry: CharacterBookEntry, key: string, change: MatSlideToggleChange): void {
-    this.setExtension(entry, key, change.checked);
   }
 
   /** Master flags driven by slide toggles. */
@@ -114,7 +68,7 @@ export class EntryUpdatesService {
   /** Filter-chip counterpart of `setExtension` for boolean extension flags. */
   setExtensionChipFlag(
     entry: CharacterBookEntry,
-    key: string,
+    key: EntryExtensionKey,
     change: MatChipSelectionChange,
   ): void {
     if (!change.isUserInput) {
@@ -159,21 +113,6 @@ export class EntryUpdatesService {
     this.setExtension(entry, 'delay_until_recursion', value);
   }
 
-  /** Recursion level input: empty = level 1 (stored as `true`), like ST. */
-  setDelayUntilRecursionLevel(entry: CharacterBookEntry, event: Event): void {
-    const raw = ((event.target as HTMLInputElement).value ?? '').trim();
-    if (raw === '') {
-      this.setExtension(entry, 'delay_until_recursion', true);
-      return;
-    }
-    const value = Number(raw);
-    if (Number.isNaN(value)) {
-      this.setExtension(entry, 'delay_until_recursion', false);
-      return;
-    }
-    this.setExtension(entry, 'delay_until_recursion', value === 1 ? true : value);
-  }
-
   /** The entry's character activation filter (lazily defaulted for editing). */
   characterFilter(entry: CharacterBookEntry): NormalizedCharacterFilter {
     return entryCharacterFilter(entry);
@@ -188,20 +127,6 @@ export class EntryUpdatesService {
       ...entryCharacterFilter(entry),
       is_exclude: change.selected,
     });
-  }
-
-  /** Splits the comma-separated character name list into the filter. */
-  setCharacterFilterNames(entry: CharacterBookEntry, event: Event): void {
-    const raw = (event.target as HTMLInputElement).value;
-    const names = [
-      ...new Set(
-        raw
-          .split(',')
-          .map((name) => name.trim())
-          .filter(Boolean),
-      ),
-    ];
-    this.setExtension(entry, 'character_filter', { ...entryCharacterFilter(entry), names });
   }
 
   /** Switches the trigger strategy (normal 🟢 / constant 🔵 / vectorized 🔗). */

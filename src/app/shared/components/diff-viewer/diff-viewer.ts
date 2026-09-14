@@ -2,19 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
 import { diffLines, type Change } from 'diff';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
-
-export type DiffMode = 'unified' | 'split';
-
-interface DiffLine {
-  type: 'added' | 'removed' | 'context';
-  text: string;
-}
-
-/** A pair of rows for side-by-side rendering; either side may be empty. */
-interface SplitRow {
-  left: DiffLine | null;
-  right: DiffLine | null;
-}
+import { type DiffLine, type DiffMode, type SplitRow } from './diff-viewer.model';
 
 /** Splits a diff hunk value into display lines, dropping the phantom ''. */
 function toLines(value: string, type: DiffLine['type']): DiffLine[] {

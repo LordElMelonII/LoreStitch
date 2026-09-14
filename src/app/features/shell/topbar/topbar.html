@@ -1,4 +1,4 @@
-<mat-toolbar class="topbar">
+<mat-toolbar class="topbar" aria-label="Application toolbar">
   <button
     matIconButton
     type="button"
@@ -15,10 +15,13 @@
   </div>
 
   @if (workspace.activeProject(); as project) {
-    <div class="project-info" [matTooltip]="project.title">
+    <div
+      class="project-info"
+      [matTooltip]="workspace.hasUnsavedChanges() ? project.title + ' — uncommitted changes' : project.title"
+    >
       <span class="project-title">{{ projectName() }}</span>
       @if (workspace.hasUnsavedChanges()) {
-        <span class="unsaved-dot" title="Uncommitted changes"></span>
+        <span class="unsaved-dot" aria-label="Uncommitted changes"></span>
       }
     </div>
   } @else {
@@ -74,7 +77,7 @@
 
     <mat-divider class="toolbar-divider" [vertical]="true"></mat-divider>
   }
-  <mat-menu #exportMenu="matMenu" classList="export-menu">
+  <mat-menu #exportMenu="matMenu" class="export-menu">
     <div class="menu-section">Use in SillyTavern</div>
     <button mat-menu-item (click)="exportStNative()">
       <mat-icon>data_object</mat-icon>
@@ -136,7 +139,7 @@
       <span>Theme</span>
     </button>
   </mat-menu>
-  <mat-menu #themeMenu="matMenu" classList="theme-menu">
+  <mat-menu #themeMenu="matMenu" class="theme-menu">
     <button
       mat-menu-item
       (click)="theme.setMode('system')"

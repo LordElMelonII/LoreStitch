@@ -17,9 +17,27 @@
   flex: 1;
   width: 100%;
 
+  // The form-field host is already a column flex box whose wrapper grows
+  // (`flex: auto`), but MDC baseline-aligns the contents inside it, so the
+  // input never follows the grown well down. Stretch the internals instead;
+  // the hints strip keeps its natural height below the wrapper.
+  ::ng-deep .mat-mdc-text-field-wrapper {
+    align-items: stretch;
+  }
+
+  // Stretch within the flex row (which keeps its baseline alignment for the
+  // suffix button) and become the column the textarea fills. The floating
+  // label is absolutely positioned, so the column change doesn't move it.
+  ::ng-deep .mat-mdc-form-field-infix {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+  }
+
   .content-textarea {
-    min-height: 200px;
-    resize: vertical;
+    // Sized by the container now, so manual dragging has nothing to change.
+    resize: none;
+    height: 100%;
     font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
     font-size: 13px;
     line-height: 1.55;

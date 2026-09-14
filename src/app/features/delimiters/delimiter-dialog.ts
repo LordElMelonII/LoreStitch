@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { FormField, disabled, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -16,28 +17,34 @@ import {
 } from '../../core/models/delimiters';
 import { entryTitle } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import {
+  type DelimiterDialogData,
+  type DelimiterScope,
+  type EntryPreview,
+} from './delimiter-dialog.model';
 import { DiffViewer } from '../../shared/components/diff-viewer/diff-viewer';
 
-export interface DelimiterDialogData {
-  activeEntryId: number | null;
-}
-
-interface EntryPreview {
-  entryId: number;
-  title: string;
-  current: string;
-  next: string;
-  changed: boolean;
+/** Form model of the delimiter dialog. */
+interface DelimiterFormModel {
+  /** Fixed wrapper name (skipped when every entry supplies its own). */
+  name: string;
+  style: DelimiterStyle;
+  scope: DelimiterScope;
+  useEachName: boolean;
 }
 
 /**
  * Recognizes, adds, changes, and removes content delimiters — for the active
- * entry or the whole book — with a live diff preview before applying.
+ * entry or the whole book — with a live diff preview before applying. The
+ * four controls share one Signal Form model; the Material select / checkbox
+ * write into it from their change events (they are CVA components, so only
+ * the name input binds `[formField]` directly).
  */
 @Component({
   selector: 'app-delimiter-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    FormField,
     MatButtonModule,
     MatCheckboxModule,
     MatDialogModule,
@@ -59,15 +66,38 @@ export class DelimiterDialog {
 
   protected readonly styleOptions = DELIMITER_STYLE_OPTIONS;
 
-  protected readonly scope = signal<'entry' | 'all'>('entry');
-  protected readonly style = signal<DelimiterStyle>('tag');
-  protected readonly name = signal(
-    entryDelimiterName(
+  private readonly model = signal<DelimiterFormModel>({
+    name: entryDelimiterName(
       this.workspace.entries().find((e) => e.id === this.data.activeEntryId) ?? { keys: [] },
     ),
-  );
-  /** Batch mode only: derive each entry's name from its own comment/keys. */
-  protected readonly useEachName = signal(true);
+    style: 'tag',
+    scope: 'entry',
+    useEachName: true,
+  });
+
+  protected readonly delimiterForm = form(this.model, (s) => {
+    // Batch mode with per-entry names never reads the fixed name.
+    disabled(s.name, {
+      when: ({ valueOf }) => valueOf(s.scope) === 'all' && valueOf(s.useEachName),
+    });
+  });
+
+  protected readonly scope = computed(() => this.model().scope);
+  protected readonly style = computed(() => this.model().style);
+  protected readonly name = computed(() => this.model().name);
+  protected readonly useEachName = computed(() => this.model().useEachName);
+
+  protected setScope(scope: DelimiterScope): void {
+    this.model.update((m) => ({ ...m, scope }));
+  }
+
+  protected setStyle(style: DelimiterStyle): void {
+    this.model.update((m) => ({ ...m, style }));
+  }
+
+  protected setUseEachName(useEachName: boolean): void {
+    this.model.update((m) => ({ ...m, useEachName }));
+  }
 
   protected readonly needsName = computed(
     () => this.style() === 'tag' || this.style() === 'bracket',
@@ -134,10 +164,6 @@ export class DelimiterDialog {
         return ['Entry content…'];
     }
   });
-
-  protected setName(event: Event): void {
-    this.name.set((event.target as HTMLInputElement).value);
-  }
 
   protected apply(): void {
     const changedIds = this.previews()

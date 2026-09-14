@@ -14,15 +14,15 @@ import { MatTabChangeEvent, MatTabGroup, MatTabsModule } from '@angular/material
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { TAB_STRIP_DRAG_SLOP_PX } from './entry-editor.constants';
+import {
+  EntryLookup,
+  ScrollableTabHeader,
+  type TabItem,
+} from './entry-editor.model';
 import { EntryContentField } from './entry-content-field/entry-content-field';
 import { EntryName } from './entry-name/entry-name';
 import { EntryOptionsAccordion } from './entry-options-accordion/entry-options-accordion';
-
-interface TabItem {
-  id: number;
-  title: string;
-  dirty: boolean;
-}
 
 /**
  * Turns a mouse wheel event into a horizontal scroll of the tab strip, per the
@@ -31,7 +31,7 @@ interface TabItem {
  * when the strip actually moved (so the caller can claim the event).
  */
 export function scrollTabStripOnWheel(
-  header: { scrollDistance: number } | undefined,
+  header: ScrollableTabHeader | undefined,
   event: WheelEvent,
 ): boolean {
   const target = event.target as HTMLElement | null;
@@ -56,9 +56,6 @@ export function scrollTabStripOnWheel(
   return true;
 }
 
-/** Minimum pointer travel before a gesture counts as a drag instead of a tap. */
-export const TAB_STRIP_DRAG_SLOP_PX = 8;
-
 /**
  * Touch/pen counterpart of `scrollTabStripOnWheel`: tracks a horizontal swipe
  * that starts on the tab strip and drags the strip with the finger. A gesture
@@ -75,7 +72,7 @@ export class TabStripDragScroller {
    * Begins tracking a potential drag. Only primary touch/pen pointers that
    * start on the strip qualify; mouse users scroll with the wheel and chevrons.
    */
-  onPointerDown(header: { scrollDistance: number } | undefined, event: PointerEvent): void {
+  onPointerDown(header: ScrollableTabHeader | undefined, event: PointerEvent): void {
     this.pointerId = null;
     this.moved = false;
     if (!header || !event.isPrimary || event.pointerType === 'mouse') {
@@ -98,7 +95,7 @@ export class TabStripDragScroller {
   }
 
   /** Drags the strip opposite to the pointer travel; true when it scrolled. */
-  onPointerMove(header: { scrollDistance: number } | undefined, event: PointerEvent): boolean {
+  onPointerMove(header: ScrollableTabHeader | undefined, event: PointerEvent): boolean {
     if (this.pointerId === null || event.pointerId !== this.pointerId || !header) {
       return false;
     }
@@ -174,7 +171,7 @@ export class EntryEditor {
     this.tabs().findIndex((tab) => tab.id === this.workspace.activeTabId()),
   );
 
-  protected readonly entryFor = computed(() => {
+  protected readonly entryFor = computed<EntryLookup>(() => {
     const byId = new Map<number, CharacterBookEntry>(
       this.workspace.entries().flatMap((e) => (e.id === undefined ? [] : [[e.id, e] as const])),
     );

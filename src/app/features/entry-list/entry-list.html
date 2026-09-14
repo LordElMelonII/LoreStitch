@@ -19,8 +19,7 @@
       matInput
       type="text"
       placeholder="Filter keys, names, content…"
-      [value]="filter()"
-      (input)="onFilterInput($event)"
+      [formField]="filterForm.query"
       aria-label="Filter entries"
     />
     @if (filter()) {
@@ -28,7 +27,7 @@
         matIconButton
         matSuffix
         type="button"
-        (click)="filter.set('')"
+        (click)="clearFilter()"
         aria-label="Clear filter"
       >
         <mat-icon>close</mat-icon>

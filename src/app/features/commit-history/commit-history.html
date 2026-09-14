@@ -6,11 +6,13 @@
       <input
         matInput
         placeholder="Describe your changes…"
-        [value]="message()"
-        (input)="onMessageInput($event)"
+        [formField]="commitForm.message"
         (keydown.enter)="commit()"
         aria-label="Commit message"
       />
+      @if (commitForm.message().touched() && commitForm.message().errors()[0]; as error) {
+        <mat-error>{{ error.message }}</mat-error>
+      }
     </mat-form-field>
     <div class="commit-actions">
       @if (workspace.hasUnsavedChanges()) {

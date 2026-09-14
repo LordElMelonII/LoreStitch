@@ -8,29 +8,14 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBook, CharacterBookEntry, entryTitle } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import {
+  type MergeAction,
+  type MergeDialogData,
+  type MergeOutcome,
+  type MergePendingCounts,
+  type MergeRow,
+} from './merge-resolver.model';
 import { DiffViewer } from '../../shared/components/diff-viewer/diff-viewer';
-
-export type MergeAction = 'import' | 'overwrite' | 'skip';
-
-export interface MergeDialogData {
-  incoming: CharacterBook;
-  sourceName: string;
-  /** Diff layout; mobile shells pass 'unified'. */
-  mode?: 'unified' | 'split';
-}
-
-export interface MergeOutcome {
-  entries: CharacterBookEntry[];
-  imported: number;
-  overwritten: number;
-  skipped: number;
-}
-
-interface MergeRow {
-  incoming: CharacterBookEntry;
-  local: CharacterBookEntry | null;
-  identical: boolean;
-}
 
 function normalizeKey(key: string): string {
   return key.trim().toLowerCase();
@@ -111,8 +96,8 @@ export class MergeResolverDialog {
     this.actions.set(next);
   }
 
-  protected pendingCounts = computed(() => {
-    const counts = { import: 0, overwrite: 0, skip: 0 };
+  protected pendingCounts = computed<MergePendingCounts>(() => {
+    const counts: MergePendingCounts = { import: 0, overwrite: 0, skip: 0 };
     this.rows().forEach((_row, index) => counts[this.action(index)]++);
     return counts;
   });

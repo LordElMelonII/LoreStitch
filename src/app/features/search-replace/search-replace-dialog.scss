@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 640px;
-  max-width: 90vw;
+  // Wide on desktop, phone-safe on mobile (no hard floor to overflow against).
+  width: min(90vw, 640px);
 }
 
 .controls {
@@ -14,9 +14,12 @@
   .query-row {
     display: flex;
     gap: 12px;
+    flex-wrap: wrap;
 
+    // Two side-by-side fields on wide dialogs, stacked on phones.
     .grow {
-      flex: 1;
+      flex: 1 1 220px;
+      min-width: 0;
     }
   }
 

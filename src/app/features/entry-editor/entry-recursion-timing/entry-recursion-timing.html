@@ -31,14 +31,10 @@
       matTooltip="Recursion pass this entry wakes up at: level 1 matches first, deeper levels only after no more level-1 matches"
     >
       <mat-label>Recursion Level</mat-label>
-      <input
-        matInput
-        type="number"
-        min="1"
-        [value]="delayRecursionLevel() ?? ''"
-        (input)="updates.setDelayUntilRecursionLevel(entry(), $event)"
-        placeholder="1"
-      />
+      <input matInput type="number" [formField]="timingForm.recursionLevel" placeholder="1" />
+      @if (timingForm.recursionLevel().errors()[0]; as error) {
+        <mat-error>{{ error.message }}</mat-error>
+      }
     </mat-form-field>
   </div>
 }
@@ -51,14 +47,10 @@
     matTooltip="Stays active for N messages after being activated (0 = off)"
   >
     <mat-label>Sticky</mat-label>
-    <input
-      matInput
-      type="number"
-      min="0"
-      [value]="ext('sticky') ?? ''"
-      (input)="updates.setExtensionNumber(entry(), 'sticky', $event, null)"
-      placeholder="Off"
-    />
+    <input matInput type="number" [formField]="timingForm.sticky" placeholder="Off" />
+    @if (timingForm.sticky().errors()[0]; as error) {
+      <mat-error>{{ error.message }}</mat-error>
+    }
   </mat-form-field>
   <mat-form-field
     class="num"
@@ -67,14 +59,10 @@
     matTooltip="Cannot be activated for N messages after being activated (0 = off)"
   >
     <mat-label>Cooldown</mat-label>
-    <input
-      matInput
-      type="number"
-      min="0"
-      [value]="ext('cooldown') ?? ''"
-      (input)="updates.setExtensionNumber(entry(), 'cooldown', $event, null)"
-      placeholder="Off"
-    />
+    <input matInput type="number" [formField]="timingForm.cooldown" placeholder="Off" />
+    @if (timingForm.cooldown().errors()[0]; as error) {
+      <mat-error>{{ error.message }}</mat-error>
+    }
   </mat-form-field>
   <mat-form-field
     class="num"
@@ -83,13 +71,9 @@
     matTooltip="Cannot be activated until at least N messages exist in the chat (0 = off)"
   >
     <mat-label>Delay</mat-label>
-    <input
-      matInput
-      type="number"
-      min="0"
-      [value]="ext('delay') ?? ''"
-      (input)="updates.setExtensionNumber(entry(), 'delay', $event, null)"
-      placeholder="Off"
-    />
+    <input matInput type="number" [formField]="timingForm.delay" placeholder="Off" />
+    @if (timingForm.delay().errors()[0]; as error) {
+      <mat-error>{{ error.message }}</mat-error>
+    }
   </mat-form-field>
 </div>

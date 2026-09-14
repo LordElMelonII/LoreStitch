@@ -4,11 +4,11 @@
 
 .topbar {
   gap: 6px;
+  height: 56px;
   background: var(--mat-sys-primary-container);
   color: var(--mat-sys-primary);
   flex: none;
   z-index: 10;
-  max-height: 56px;
 
   button {
     color: var(--mat-sys-primary);

@@ -4,6 +4,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { WorkspaceService } from './core/services/workspace.service';
+import { MOBILE_BREAKPOINT_QUERY } from './shared/constants/breakpoints';
 import { EntryList } from './features/entry-list/entry-list';
 import { EntryEditor } from './features/entry-editor/entry-editor';
 import { CommitHistory } from './features/commit-history/commit-history';
@@ -23,7 +24,7 @@ export class App {
   private readonly breakpoints = inject(BreakpointObserver);
 
   protected readonly isMobile = toSignal(
-    this.breakpoints.observe('(max-width: 767px)').pipe(map((r) => r.matches)),
+    this.breakpoints.observe(MOBILE_BREAKPOINT_QUERY).pipe(map((r) => r.matches)),
     { initialValue: false },
   );
 

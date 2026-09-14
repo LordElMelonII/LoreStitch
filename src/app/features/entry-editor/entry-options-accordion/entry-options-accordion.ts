@@ -1,6 +1,7 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
@@ -15,12 +16,19 @@ import {
   WiTriggerState,
   entryTriggerState,
 } from '../../../core/models/lorebook.model';
+import { MOBILE_BREAKPOINT_QUERY } from '../../../shared/constants/breakpoints';
+import { entrySliceSignal } from '../entry-edit-form';
 import { EntryActivation } from '../entry-activation/entry-activation';
 import { EntryKeys } from '../entry-keys/entry-keys';
 import { EntryMatchingSources } from '../entry-matching-sources/entry-matching-sources';
 import { EntryPlacement } from '../entry-placement/entry-placement';
 import { EntryRecursionTiming } from '../entry-recursion-timing/entry-recursion-timing';
 import { EntryUpdatesService } from '../entry-updates.service';
+
+/** Form model of the always-visible trigger strip's order field. */
+interface TriggerStripModel {
+  order: number;
+}
 
 /**
  * Bottom accordion of the entry editor: the basic controls (Enabled, trigger
@@ -36,6 +44,7 @@ import { EntryUpdatesService } from '../entry-updates.service';
 @Component({
   selector: 'app-entry-options-accordion',
   imports: [
+    FormField,
     MatButtonModule,
     MatButtonToggleModule,
     MatCardModule,
@@ -61,6 +70,15 @@ export class EntryOptionsAccordion {
   /** The entry being edited (owned by the enclosing `EntryEditor`). */
   readonly entry = input.required<CharacterBookEntry>();
 
+  private readonly stripModel = entrySliceSignal<TriggerStripModel>({
+    source: this.entry,
+    fallback: { order: 100 },
+    pick: (entry) => ({ order: entry.insertion_order ?? 100 }),
+    toPatch: (_entry, model) => ({ insertion_order: model.order ?? 100 }),
+  });
+
+  protected readonly stripForm = form(this.stripModel);
+
   /** Whether the full option panel is expanded above/below the trigger row. */
   protected readonly expanded = signal(false);
 
@@ -68,7 +86,7 @@ export class EntryOptionsAccordion {
   // direction: the panel opens downward in flow on mobile, upward on desktop.
   private readonly breakpoints = inject(BreakpointObserver);
   protected readonly isMobile = toSignal(
-    this.breakpoints.observe('(max-width: 767px)').pipe(map((r) => r.matches)),
+    this.breakpoints.observe(MOBILE_BREAKPOINT_QUERY).pipe(map((r) => r.matches)),
     { initialValue: false },
   );
 

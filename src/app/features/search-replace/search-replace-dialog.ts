@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -10,32 +11,18 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry, entryTitle } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import {
+  compileSearchPattern,
+  type FieldHits,
+  type MatchRow,
+  type SearchReplaceDialogData,
+} from './search-replace.model';
 import { DiffViewer } from '../../shared/components/diff-viewer/diff-viewer';
 
-export interface SearchReplaceDialogData {
-  activeEntryId: number | null;
-}
-
-interface FieldHits {
-  content: number;
-  keys: number;
-  names: number;
-}
-
-interface MatchRow {
-  entryId: number;
-  title: string;
-  hits: FieldHits;
-  total: number;
-  /** Replacement result per field, only for fields with hits. */
-  nextContent: string | null;
-  nextKeys: string[] | null;
-  nextName: string | null;
-  changed: boolean;
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Form model of the search & replace dialog's text fields. */
+interface SearchReplaceFormModel {
+  query: string;
+  replacement: string;
 }
 
 /** Global search & replace across entries with a safe batch preview. */
@@ -43,6 +30,7 @@ function escapeRegExp(text: string): string {
   selector: 'app-search-replace-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    FormField,
     MatButtonModule,
     MatCheckboxModule,
     MatDialogModule,
@@ -62,8 +50,13 @@ export class SearchReplaceDialog {
   protected readonly workspace = inject(WorkspaceService);
   private readonly snackBar = inject(MatSnackBar);
 
-  protected readonly query = signal('');
-  protected readonly replacement = signal('');
+  private readonly model = signal<SearchReplaceFormModel>({ query: '', replacement: '' });
+
+  protected readonly replaceForm = form(this.model);
+
+  protected readonly query = computed(() => this.model().query);
+  protected readonly replacement = computed(() => this.model().replacement);
+
   protected readonly matchCase = signal(false);
   protected readonly wholeWord = signal(false);
   protected readonly regexMode = signal(false);
@@ -75,21 +68,14 @@ export class SearchReplaceDialog {
   protected readonly excluded = signal<Set<number>>(new Set());
 
   /** The active regex, or null while the pattern is invalid/empty. */
-  protected readonly pattern = computed<RegExp | null>(() => {
-    const source = this.query();
-    if (!source) {
-      return null;
-    }
-    let body = this.regexMode() ? source : escapeRegExp(source);
-    if (this.wholeWord()) {
-      body = `\\b(?:${body})\\b`;
-    }
-    try {
-      return new RegExp(body, this.matchCase() ? 'g' : 'gi');
-    } catch {
-      return null;
-    }
-  });
+  protected readonly pattern = computed<RegExp | null>(() =>
+    compileSearchPattern({
+      query: this.query(),
+      regexMode: this.regexMode(),
+      wholeWord: this.wholeWord(),
+      matchCase: this.matchCase(),
+    }),
+  );
 
   protected readonly patternError = computed(() => {
     if (!this.query()) {

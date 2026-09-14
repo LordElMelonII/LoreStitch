@@ -10,8 +10,7 @@
         <mat-label>Search</mat-label>
         <input
           matInput
-          [value]="query()"
-          (input)="query.set($any($event.target).value)"
+          [formField]="replaceForm.query"
           placeholder="Find…"
           aria-label="Search query"
         />
@@ -23,8 +22,7 @@
         <mat-label>Replace with</mat-label>
         <input
           matInput
-          [value]="replacement()"
-          (input)="replacement.set($any($event.target).value)"
+          [formField]="replaceForm.replacement"
           placeholder="Replacement (regex groups allowed)"
           aria-label="Replacement text"
         />

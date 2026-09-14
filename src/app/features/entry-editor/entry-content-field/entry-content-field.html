@@ -3,8 +3,7 @@
   <textarea
     matInput
     class="content-textarea"
-    [value]="entry().content"
-    (input)="updates.setText(entry(), 'content', $event)"
+    [formField]="contentForm.content"
     spellcheck="false"
     aria-label="Entry content"
     placeholder="Lore content inserted when this entry activates…"

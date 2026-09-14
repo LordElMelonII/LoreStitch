@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { ScrollingModule } from '@angular/cdk/scrolling';
+import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -8,15 +9,11 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { entryTitle, entryTriggerState, WiTriggerState } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { type EntryListItem } from './entry-list.model';
 
-interface EntryListItem {
-  id: number;
-  title: string;
-  keys: string[];
-  enabled: boolean;
-  state: WiTriggerState;
-  dirty: boolean;
-  content: string;
+/** Form model of the sidebar filter box. */
+interface EntryFilterModel {
+  query: string;
 }
 
 /** Sidebar listing every entry; supports filtering, drag reorder and actions. */
@@ -26,6 +23,7 @@ interface EntryListItem {
   imports: [
     DragDropModule,
     ScrollingModule,
+    FormField,
     MatButtonModule,
     MatFormFieldModule,
     MatIconModule,
@@ -38,7 +36,16 @@ interface EntryListItem {
 export class EntryList {
   protected readonly workspace = inject(WorkspaceService);
 
-  protected readonly filter = signal('');
+  private readonly filterModel = signal<EntryFilterModel>({ query: '' });
+  protected readonly filterForm = form(this.filterModel);
+
+  /** Current filter text (single source: the form model). */
+  protected readonly filter = computed(() => this.filterModel().query);
+
+  /** Clears the filter box. */
+  protected clearFilter(): void {
+    this.filterModel.set({ query: '' });
+  }
 
   protected readonly items = computed<EntryListItem[]>(() => {
     const dirty = this.workspace.dirtyEntryIds();
@@ -68,10 +75,6 @@ export class EntryList {
   });
 
   protected readonly activeId = computed(() => this.workspace.activeTabId());
-
-  protected onFilterInput(event: Event): void {
-    this.filter.set((event.target as HTMLInputElement).value);
-  }
 
   protected open(item: EntryListItem): void {
     this.workspace.openEntry(item.id);
