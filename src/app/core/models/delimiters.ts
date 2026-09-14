@@ -54,7 +54,7 @@ export function wrapContent(
     case 'bracket':
       return `[${safeName}=\n${body}]`;
     case 'separator':
-      return body ? `${body}\n\n---` : '---';
+      return body ? `${body}\n---` : '---';
   }
 }
 
@@ -93,11 +93,11 @@ export const DELIMITER_STYLE_OPTIONS: readonly {
   label: string;
   hint: string;
 }[] = [
-  { value: 'tag', label: 'Tag — <Name> … </Name>', hint: 'XML-style block' },
-  { value: 'bracket', label: 'Bracket — [Name= … ]', hint: 'Assignment-style block' },
-  { value: 'separator', label: 'Separator — ---', hint: 'Dashed line after the content' },
-  { value: 'none', label: 'None — remove delimiters', hint: 'Strip any recognized wrapper' },
-];
+    { value: 'tag', label: 'Tag — <Name> … </Name>', hint: 'XML-style block' },
+    { value: 'bracket', label: 'Bracket — [Name= … ]', hint: 'Assignment-style block' },
+    { value: 'separator', label: 'Separator — ---', hint: 'Dashed line after the content' },
+    { value: 'none', label: 'None — remove delimiters', hint: 'Strip any recognized wrapper' },
+  ];
 
 /**
  * Default delimiter name for an entry: comment, then name, then first key.
