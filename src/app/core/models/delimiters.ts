@@ -93,15 +93,23 @@ export const DELIMITER_STYLE_OPTIONS: readonly {
   label: string;
   hint: string;
 }[] = [
-    { value: 'tag', label: 'Tag — <Name> … </Name>', hint: 'XML-style block' },
-    { value: 'bracket', label: 'Bracket — [Name= … ]', hint: 'Assignment-style block' },
-    { value: 'separator', label: 'Separator — ---', hint: 'Dashed line after the content' },
-    { value: 'none', label: 'None — remove delimiters', hint: 'Strip any recognized wrapper' },
-  ];
+  { value: 'tag', label: 'Tag — <Name> … </Name>', hint: 'XML-style block' },
+  { value: 'bracket', label: 'Bracket — [Name= … ]', hint: 'Assignment-style block' },
+  { value: 'separator', label: 'Separator — ---', hint: 'Dashed line after the content' },
+  { value: 'none', label: 'None — remove delimiters', hint: 'Strip any recognized wrapper' },
+];
+
+/** Collapses characters that would break the wrapping syntax to spaces. */
+function cleanDelimiterName(raw: string): string {
+  return raw
+    .replace(/[<>=[\]\n\r]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
 
 /**
  * Default delimiter name for an entry: comment, then name, then first key.
- * Characters that would break the wrapping syntax are collapsed to spaces.
  */
 export function entryDelimiterName(entry: {
   comment?: string;
@@ -110,12 +118,20 @@ export function entryDelimiterName(entry: {
 }): string {
   const raw =
     entry.comment?.trim() || entry.name?.trim() || entry.keys?.find((k) => k.trim())?.trim() || '';
-  const clean = raw
-    .replace(/[<>=[\]\n\r]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80);
-  return clean || 'entry';
+  return cleanDelimiterName(raw) || 'entry';
+}
+
+/**
+ * Delimiter name taken from the entry's first primary key, falling back to
+ * the default resolution (comment/name/first key) when the entry has no keys.
+ */
+export function entryDelimiterNameFromKey(entry: {
+  comment?: string;
+  name?: string;
+  keys?: string[];
+}): string {
+  const key = entry.keys?.find((k) => k.trim()) ?? '';
+  return cleanDelimiterName(key) || entryDelimiterName(entry);
 }
 
 /** Compact badge label for a detected delimiter (e.g. `<London>`, `---`). */

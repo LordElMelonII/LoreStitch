@@ -13,9 +13,10 @@ import {
   DELIMITER_STYLE_OPTIONS,
   DelimiterStyle,
   entryDelimiterName,
+  entryDelimiterNameFromKey,
   rewrapContent,
 } from '../../core/models/delimiters';
-import { entryTitle } from '../../core/models/lorebook.model';
+import { CharacterBookEntry, entryTitle } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import {
   type DelimiterDialogData,
@@ -31,6 +32,8 @@ interface DelimiterFormModel {
   style: DelimiterStyle;
   scope: DelimiterScope;
   useEachName: boolean;
+  /** Wrap with the entry's first primary key instead of its name. */
+  usePrimaryKey: boolean;
 }
 
 /**
@@ -73,12 +76,15 @@ export class DelimiterDialog {
     style: 'tag',
     scope: 'entry',
     useEachName: true,
+    usePrimaryKey: false,
   });
 
   protected readonly delimiterForm = form(this.model, (s) => {
-    // Batch mode with per-entry names never reads the fixed name.
+    // Batch mode with per-entry names — and key-derived names everywhere —
+    // never reads the fixed name.
     disabled(s.name, {
-      when: ({ valueOf }) => valueOf(s.scope) === 'all' && valueOf(s.useEachName),
+      when: ({ valueOf }) =>
+        valueOf(s.usePrimaryKey) || (valueOf(s.scope) === 'all' && valueOf(s.useEachName)),
     });
   });
 
@@ -86,6 +92,7 @@ export class DelimiterDialog {
   protected readonly style = computed(() => this.model().style);
   protected readonly name = computed(() => this.model().name);
   protected readonly useEachName = computed(() => this.model().useEachName);
+  protected readonly usePrimaryKey = computed(() => this.model().usePrimaryKey);
 
   protected setScope(scope: DelimiterScope): void {
     this.model.update((m) => ({ ...m, scope }));
@@ -99,6 +106,10 @@ export class DelimiterDialog {
     this.model.update((m) => ({ ...m, useEachName }));
   }
 
+  protected setUsePrimaryKey(usePrimaryKey: boolean): void {
+    this.model.update((m) => ({ ...m, usePrimaryKey }));
+  }
+
   protected readonly needsName = computed(
     () => this.style() === 'tag' || this.style() === 'bracket',
   );
@@ -108,8 +119,13 @@ export class DelimiterDialog {
     () => this.scope() === 'all' && this.useEachName(),
   );
 
+  /** The fixed typed name is skipped entirely (per-entry name resolution). */
+  protected readonly nameSkipped = computed(
+    () => this.usePrimaryKey() || this.nameResolvedFromEntries(),
+  );
+
   protected readonly nameMissing = computed(
-    () => this.needsName() && !this.nameResolvedFromEntries() && !this.name().trim(),
+    () => this.needsName() && !this.nameSkipped() && !this.name().trim(),
   );
 
   protected readonly targets = computed(() => {
@@ -119,13 +135,21 @@ export class DelimiterDialog {
       : entries;
   });
 
+  /**
+   * The wrapper name for one entry: its first primary key when key mode is
+   * on, else its own name in batch mode, else the fixed typed name.
+   */
+  private resolveName(entry: CharacterBookEntry): string {
+    if (this.usePrimaryKey()) {
+      return entryDelimiterNameFromKey(entry);
+    }
+    return this.nameResolvedFromEntries() ? entryDelimiterName(entry) : this.name().trim();
+  }
+
   protected readonly previews = computed<EntryPreview[]>(() => {
     const style = this.style();
-    const ownNames = this.nameResolvedFromEntries();
-    const fixedName = this.name().trim();
     return this.targets().map((entry) => {
-      const resolvedName = ownNames ? entryDelimiterName(entry) : fixedName;
-      const next = rewrapContent(entry.content ?? '', style, resolvedName);
+      const next = rewrapContent(entry.content ?? '', style, this.resolveName(entry));
       return {
         entryId: entry.id ?? -1,
         title: entryTitle(entry),
@@ -151,8 +175,11 @@ export class DelimiterDialog {
 
   /** Formats the chosen style with the resolved name, as a reference card. */
   protected readonly example = computed<string[]>(() => {
-    const ownNames = this.nameResolvedFromEntries();
-    const name = ownNames ? '<entry name>' : this.name().trim() || '<entry name>';
+    const name = this.nameSkipped()
+      ? this.usePrimaryKey()
+        ? '<first key>'
+        : '<entry name>'
+      : this.name().trim() || '<entry name>';
     switch (this.style()) {
       case 'tag':
         return [`<${name}>`, 'Entry content…', `</${name}>`];
@@ -174,14 +201,8 @@ export class DelimiterDialog {
       return;
     }
     const style = this.style();
-    const ownNames = this.nameResolvedFromEntries();
-    const fixedName = this.name().trim();
     this.workspace.updateManyEntries(changedIds, (entry) => ({
-      content: rewrapContent(
-        entry.content ?? '',
-        style,
-        ownNames ? entryDelimiterName(entry) : fixedName,
-      ),
+      content: rewrapContent(entry.content ?? '', style, this.resolveName(entry)),
     }));
     this.snackBar.open(
       `Delimiters updated on ${changedIds.length} entr${changedIds.length === 1 ? 'y' : 'ies'}.`,

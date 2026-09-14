@@ -3,6 +3,7 @@ import {
   delimiterLabel,
   detectDelimiter,
   entryDelimiterName,
+  entryDelimiterNameFromKey,
   rewrapContent,
   unwrapContent,
   wrapContent,
@@ -100,6 +101,24 @@ describe('delimiters', () => {
     it('sanitizes characters that would break the wrapper', () => {
       expect(entryDelimiterName({ comment: '<River> = [Thames]' })).toBe('River Thames');
       expect(entryDelimiterName({ comment: '' })).toBe('entry');
+    });
+  });
+
+  describe('entryDelimiterNameFromKey', () => {
+    it('uses the first non-empty primary key', () => {
+      expect(entryDelimiterNameFromKey({ comment: 'London', keys: ['fuyuki', 'city'] })).toBe(
+        'fuyuki',
+      );
+      expect(entryDelimiterNameFromKey({ keys: ['', 'city'] })).toBe('city');
+    });
+
+    it('falls back to the default name resolution when there are no keys', () => {
+      expect(entryDelimiterNameFromKey({ comment: 'London', keys: [] })).toBe('London');
+      expect(entryDelimiterNameFromKey({ comment: '' })).toBe('entry');
+    });
+
+    it('sanitizes keys that would break the wrapper', () => {
+      expect(entryDelimiterNameFromKey({ keys: ['<River>'] })).toBe('River');
     });
   });
 

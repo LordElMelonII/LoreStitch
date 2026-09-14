@@ -36,9 +36,11 @@
         class="grow"
         subscriptSizing="dynamic"
         [matTooltip]="
-          nameResolvedFromEntries()
-            ? 'Each entry uses the name from its comment or first key'
-            : 'Name used in the wrapper'
+          usePrimaryKey()
+            ? 'Each entry is wrapped with its first primary key'
+            : nameResolvedFromEntries()
+              ? 'Each entry uses the name from its comment or first key'
+              : 'Name used in the wrapper'
         "
       >
         <mat-label>Wrapper name</mat-label>
@@ -53,7 +55,15 @@
         }
       </mat-form-field>
 
-      @if (scope() === 'all') {
+      <mat-checkbox
+        [checked]="usePrimaryKey()"
+        (change)="setUsePrimaryKey($event.checked)"
+        matTooltip="Wrap each entry with its first primary key instead of its name — entries without keys fall back to their name"
+      >
+        Use first primary key
+      </mat-checkbox>
+
+      @if (scope() === 'all' && !usePrimaryKey()) {
         <mat-checkbox
           [checked]="useEachName()"
           (change)="setUseEachName($event.checked)"
