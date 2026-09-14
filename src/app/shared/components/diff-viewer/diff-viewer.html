@@ -9,7 +9,36 @@
       <mat-button-toggle value="unified">Unified</mat-button-toggle>
       <mat-button-toggle value="split">Split</mat-button-toggle>
     </mat-button-toggle-group>
+  } @else {
+    <span class="header-spacer"></span>
   }
+
+  @if (hunkCount()) {
+    <div class="hunk-nav" role="group" aria-label="Navigate changes">
+      <span class="hunk-counter">{{ currentHunk() + 1 }} / {{ hunkCount() }}</span>
+      <button
+        matIconButton
+        type="button"
+        class="hunk-button"
+        (click)="prevHunk()"
+        matTooltip="Previous change (wraps around)"
+        aria-label="Previous change"
+      >
+        <mat-icon>keyboard_arrow_up</mat-icon>
+      </button>
+      <button
+        matIconButton
+        type="button"
+        class="hunk-button"
+        (click)="nextHunk()"
+        matTooltip="Next change (wraps around)"
+        aria-label="Next change"
+      >
+        <mat-icon>keyboard_arrow_down</mat-icon>
+      </button>
+    </div>
+  }
+
   <span class="stats">
     <span class="stat added">+{{ stats().added }}</span>
     <span class="stat removed">−{{ stats().removed }}</span>
@@ -19,7 +48,12 @@
 @if (effectiveMode() === 'unified') {
   <div class="diff-body unified" role="table" aria-label="Differences">
     @for (line of unifiedLines(); track $index) {
-      <div class="diff-line" [class]="line.type">
+      <div
+        class="diff-line"
+        [class]="line.type"
+        [attr.data-hunk]="unifiedHunkStarts().get($index)"
+        [class.hunk-current]="unifiedHunkStarts().get($index) === currentHunk()"
+      >
         <span class="sign">{{
           line.type === 'added' ? '+' : line.type === 'removed' ? '−' : ' '
         }}</span>
@@ -30,7 +64,11 @@
 } @else {
   <div class="diff-body split" role="table" aria-label="Differences side by side">
     @for (row of splitRows(); track $index) {
-      <div class="split-row">
+      <div
+        class="split-row"
+        [attr.data-hunk]="splitHunkStarts().get($index)"
+        [class.hunk-current]="splitHunkStarts().get($index) === currentHunk()"
+      >
         <div class="diff-line" [class]="row.left?.type ?? 'empty'">
           <span class="sign">{{
             row.left === null ? '' : row.left.type === 'removed' ? '−' : ' '

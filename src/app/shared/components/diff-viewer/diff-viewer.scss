@@ -21,6 +21,39 @@
     --mat-button-toggle-height: 32px;
   }
 
+  // Keeps the stats right-aligned when the switcher is absent.
+  .header-spacer {
+    flex: 1;
+  }
+
+  // Hunk navigator: prev/next jump through the changed blocks. Dense 32px
+  // controls on desktop; the global mobile rules grow icon buttons to the
+  // 48dp touch target.
+  .hunk-nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+
+    .hunk-counter {
+      font: var(--mat-sys-label-medium);
+      font-variant-numeric: tabular-nums;
+      color: var(--mat-sys-on-surface-variant);
+      padding-inline: 4px;
+      white-space: nowrap;
+    }
+
+    .hunk-button {
+      --mat-icon-button-state-layer-size: 32px;
+
+      mat-icon {
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+      }
+    }
+  }
+
   .stats {
     display: flex;
     gap: 8px;
@@ -37,6 +70,7 @@
 }
 
 .diff-body {
+  position: relative; // offsetParent for the hunk jump (see goToHunk).
   overflow: auto;
   min-height: 0;
   font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
@@ -81,4 +115,13 @@
   &.empty {
     background: var(--mat-sys-surface-container-lowest);
   }
+}
+
+// The hunk the navigator is parked on: a primary accent bar on the start row.
+.diff-line.hunk-current {
+  box-shadow: inset 3px 0 0 var(--mat-sys-primary);
+}
+
+.split-row.hunk-current {
+  box-shadow: inset 3px 0 0 var(--mat-sys-primary);
 }
