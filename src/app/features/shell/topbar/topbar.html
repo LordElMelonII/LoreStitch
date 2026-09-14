@@ -54,6 +54,25 @@
       <mat-icon>find_replace</mat-icon>
     </button>
 
+    @if (isDesktop()) {
+      <button
+        matIconButton
+        type="button"
+        class="focus-toggle"
+        [class.toggle-active]="layout.focusMode()"
+        (click)="layout.toggleFocusMode()"
+        [matTooltip]="
+          layout.focusMode()
+            ? 'Exit focus mode — restore full editor width'
+            : 'Focus mode — narrow the editor for easier reading'
+        "
+        [attr.aria-pressed]="layout.focusMode()"
+        aria-label="Toggle focus mode"
+      >
+        <mat-icon>center_focus_strong</mat-icon>
+      </button>
+    }
+
     <button
       matIconButton
       type="button"
@@ -90,7 +109,9 @@
       <mat-icon>archive</mat-icon>
       <span class="menu-text">
         <span class="menu-title">Project archive (.stproj)</span>
-        <span class="menu-desc">Full backup with version history — reopen in LoreStitch</span>
+        <span class="menu-desc"
+          >Full backup with version history — export regularly, reopen in LoreStitch</span
+        >
       </span>
     </button>
 

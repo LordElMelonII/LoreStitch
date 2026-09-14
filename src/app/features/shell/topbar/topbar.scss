@@ -78,6 +78,13 @@
     flex: 1;
   }
 
+  // Two-state toolbar buttons (focus mode): a tonal pill while active, per
+  // the M3 "selected icon button" treatment.
+  .toggle-active {
+    background: var(--mat-sys-secondary-container);
+    color: var(--mat-sys-on-secondary-container);
+  }
+
   // Compact phones: primary actions live in the overflow menu and the brand
   // collapses to its icon so every action stays reachable.
   @media (max-width: 599px) {

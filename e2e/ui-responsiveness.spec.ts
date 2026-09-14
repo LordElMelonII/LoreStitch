@@ -125,6 +125,42 @@ test.describe('responsive studio shell', () => {
           await expect(entries).toBeInViewport();
           await expect(history).toBeInViewport();
         });
+
+        test('focus mode narrows the editor and toggles back off', async ({ page }) => {
+          await createProject(page);
+          await addEntry(page, vp.kind);
+
+          const toggle = page.locator('[aria-label="Toggle focus mode"]');
+          await expect(toggle).toBeVisible();
+
+          // On: the editor column is constrained to the reading measure.
+          await toggle.click();
+          await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+          const maxWidth = await page
+            .locator('app-entry-editor')
+            .evaluate((el) => getComputedStyle(el).maxWidth);
+          expect(parseFloat(maxWidth)).toBeLessThanOrEqual(780);
+
+          // Wide windows actually see the pane shrink to that measure.
+          if (vp.width >= 1920) {
+            const box = (await page.locator('app-entry-editor').boundingBox())!;
+            expect(box.width).toBeLessThanOrEqual(781);
+          }
+
+          // Off: the constraint is lifted.
+          await toggle.click();
+          await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+          const restored = await page
+            .locator('app-entry-editor')
+            .evaluate((el) => getComputedStyle(el).maxWidth);
+          expect(restored).toBe('none');
+        });
+      } else {
+        test('focus mode is not offered below desktop widths', async ({ page }) => {
+          await createProject(page);
+          await addEntry(page, vp.kind);
+          await expect(page.locator('[aria-label="Toggle focus mode"]')).toHaveCount(0);
+        });
       }
 
       if (vp.kind === 'tablet') {

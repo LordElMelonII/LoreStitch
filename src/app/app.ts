@@ -15,6 +15,7 @@ import { EntryEditor } from './features/entry-editor/entry-editor';
 import { CommitHistory } from './features/commit-history/commit-history';
 import { Topbar } from './features/shell/topbar/topbar';
 import { WelcomeScreen } from './features/shell/welcome-screen/welcome-screen';
+import { LayoutService } from './shared/services/layout.service';
 
 /** Studio shell: top bar, entry sidenav, tabbed editor, commit history drawer. */
 @Component({
@@ -22,10 +23,14 @@ import { WelcomeScreen } from './features/shell/welcome-screen/welcome-screen';
   imports: [MatSidenavModule, Topbar, WelcomeScreen, EntryList, EntryEditor, CommitHistory],
   templateUrl: './app.html',
   styleUrl: './app.scss',
-  host: { '[class.mobile]': 'viewport() === "mobile"' },
+  host: {
+    '[class.mobile]': 'viewport() === "mobile"',
+    '[class.focus-mode]': 'layout.focusMode() && viewport() === "desktop"',
+  },
 })
 export class App {
   protected readonly workspace = inject(WorkspaceService);
+  protected readonly layout = inject(LayoutService);
   private readonly breakpoints = inject(BreakpointObserver);
 
   /**
@@ -68,6 +73,14 @@ export class App {
           this.leftOpened.set(true);
           this.rightOpened.set(true);
           break;
+      }
+    });
+
+    // Focus mode is a desktop-only affordance: shrinking the window below
+    // the desktop class ends it instead of leaving a cramped editor.
+    effect(() => {
+      if (this.viewport() !== 'desktop' && this.layout.focusMode()) {
+        this.layout.focusMode.set(false);
       }
     });
   }

@@ -30,6 +30,19 @@
   background: var(--mat-sys-surface);
 }
 
+// ---------------------------------------------------------------------------
+// Focus mode (desktop only): narrow the editor column to a comfortable
+// reading measure and center it between the docked panels. The side panels
+// stay put — only the writing surface narrows.
+// ---------------------------------------------------------------------------
+
+:host(.focus-mode) .editor-content app-entry-editor {
+  width: 100%;
+  max-width: 780px;
+  margin-inline: auto;
+  transition: max-width 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
 .side-placeholder {
   height: 100%;
 }

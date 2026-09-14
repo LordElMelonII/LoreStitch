@@ -1,4 +1,7 @@
 import { Component, computed, inject, output } from '@angular/core';
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatBadgeModule } from '@angular/material/badge';
@@ -10,6 +13,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ImportExportService } from '../../../core/services/import-export.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { DESKTOP_BREAKPOINT_QUERY } from '../../../shared/constants/breakpoints';
+import { LayoutService } from '../../../shared/services/layout.service';
 import { SearchReplaceDialog } from '../../search-replace/search-replace-dialog';
 import { ProjectActionsService } from '../project-actions.service';
 
@@ -31,13 +36,24 @@ import { ProjectActionsService } from '../project-actions.service';
 export class Topbar {
   protected readonly workspace = inject(WorkspaceService);
   protected readonly theme = inject(ThemeService);
+  protected readonly layout = inject(LayoutService);
   protected readonly actions = inject(ProjectActionsService);
   private readonly dialog = inject(MatDialog);
   private readonly importer = inject(ImportExportService);
+  private readonly breakpoints = inject(BreakpointObserver);
 
   /** Drawer toggles, handled by the shell that owns the sidenav layout. */
   readonly toggleEntries = output<void>();
   readonly toggleHistory = output<void>();
+
+  /**
+   * Focus mode exists only where the constrained width has room to center
+   * in: desktop viewports. The toggle button is hidden below 1280px.
+   */
+  protected readonly isDesktop = toSignal(
+    this.breakpoints.observe(DESKTOP_BREAKPOINT_QUERY).pipe(map((r) => r.matches)),
+    { initialValue: false },
+  );
 
   protected readonly projectName = computed(
     () => this.workspace.activeProject()?.title ?? 'LoreStitch',
