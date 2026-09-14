@@ -76,6 +76,9 @@ export class EntryContentField {
   protected openDelimiterDialog(): void {
     this.dialog.open(DelimiterDialog, {
       maxWidth: 'min(96vw, 860px)',
+      // MD3 adaptive behavior: the dialog goes full-screen on compact screens
+      // (see the global .app-compact-fullscreen-dialog rules).
+      panelClass: 'app-compact-fullscreen-dialog',
       data: { activeEntryId: this.entry().id },
     });
   }

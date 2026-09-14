@@ -1,11 +1,19 @@
+// Material marks the dialog component host `display: contents` so the title,
+// content, and actions participate directly in the surface's flex column
+// (title/actions pinned, content scrolls). Any other display value here turns
+// the host into a block that overflows the surface and scrolls it as a whole.
 :host {
-  display: block;
+  display: contents;
 }
 
 .dialog-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  // mat-dialog-content is a flex item of the dialog surface: without this it
+  // refuses to shrink below its content and the whole surface scrolls (title
+  // and actions drift off-screen) instead of the content scrolling in place.
+  min-height: 0;
 }
 
 .dialog-intro {
@@ -73,6 +81,10 @@
 }
 
 .preview-diff {
+  // Once mat-dialog-content's 65vh cap engages, this flex sibling would be
+  // squeezed down to its toolbar (its host allows min-height: 0). Stay intact
+  // and let the dialog content scroll instead.
+  flex-shrink: 0;
   max-height: 300px;
   overflow: auto;
   border: 1px solid var(--mat-sys-outline-variant);

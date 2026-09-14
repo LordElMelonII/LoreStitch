@@ -235,6 +235,41 @@ test.describe('responsive studio shell', () => {
           }
         });
 
+        test('content delimiters dialog is full-screen with a readable diff', async ({ page }) => {
+          await createProject(page);
+          await addEntry(page, vp.kind);
+          await page.locator('[aria-label="Entry content"]').fill(LONG_CONTENT);
+
+          // Stress the short end of the compact class (landscape phones):
+          // there the dialog content must overflow into a scroll instead of
+          // squeezing the diff or clipping the actions.
+          await page.setViewportSize({ width: vp.width, height: 500 });
+
+          await page.locator('[aria-label="Content delimiters"]').click();
+          const pane = page.locator('.cdk-overlay-pane.app-compact-fullscreen-dialog');
+          await expect(pane).toBeVisible();
+
+          // MD3 compact screens get the full-screen dialog, edge to edge.
+          const box = (await pane.boundingBox())!;
+          const viewport = page.viewportSize()!;
+          expect(box.width).toBeGreaterThanOrEqual(viewport.width - 1);
+          expect(box.height).toBeGreaterThanOrEqual(viewport.height - 1);
+
+          // The preview diff must keep its body instead of being squeezed down
+          // to its toolbar by the dialog's flex column.
+          const diffBody = pane.locator('app-diff-viewer .diff-body');
+          await expect(diffBody).toBeVisible();
+          expect((await diffBody.boundingBox())!.height).toBeGreaterThan(50);
+
+          // Long content overflows into the dialog content scroll, with the
+          // actions still pinned in view.
+          const scrollable = await pane
+            .locator('.mat-mdc-dialog-content')
+            .evaluate((el) => el.scrollHeight > el.clientHeight);
+          expect(scrollable, 'dialog content should scroll').toBe(true);
+          await expect(pane.getByRole('button', { name: /Apply/ })).toBeInViewport();
+        });
+
         test('entry row actions are visible without hover', async ({ page }) => {
           await createProject(page);
           await addEntry(page, vp.kind);

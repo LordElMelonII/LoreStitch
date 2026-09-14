@@ -81,8 +81,31 @@ body {
   background: transparent;
 }
 // ---------------------------------------------------------------------------
-// Menus (render in a CDK overlay, so these must be global styles)
+// Dialogs (render in a CDK overlay, so these must be global styles)
 // ---------------------------------------------------------------------------
+
+// MD3 adaptive behavior: dialogs go full-screen on compact screens (< 600dp,
+// the same breakpoint Material's own dialog panel styles use) and stay
+// centered on medium+. Sizing the pane is enough — Material chains
+// width/height down pane → container → surface via `inherit`. The inline
+// max-width from the dialog config needs !important to be beaten.
+.app-compact-fullscreen-dialog {
+  @media (max-width: 599px) {
+    width: 100%;
+    height: 100%;
+    max-width: 100% !important;
+
+    .mat-mdc-dialog-surface {
+      border-radius: 0;
+    }
+
+    // The centered-dialog 65vh content cap would strand the lower half of the
+    // screen; full-screen, the flex column owns the space and content scrolls.
+    .mat-mdc-dialog-content {
+      max-height: none;
+    }
+  }
+}
 
 .mat-mdc-menu-panel.export-menu {
   .mat-mdc-menu-item {
