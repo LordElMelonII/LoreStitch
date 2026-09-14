@@ -44,18 +44,13 @@
   overflow-y: auto;
 }
 
-// Mobile keeps the plain scrolling column: name, content and the accordion
-// flow downward as one page (the accordion expands in that flow too). Padding
-// tightens to the 8dp grid and the writing well keeps a comfortable height.
+// Mobile keeps the same flex column as desktop: the writing well grows to
+// claim the leftover height, so the option accordion sits at the bottom edge
+// of the viewport instead of floating mid-page under short content. Padding
+// tightens to the 8dp grid.
 :host-context(.mobile) {
   .fields {
-    height: auto;
     padding: 12px 12px 16px;
-  }
-
-  .fields-scroll {
-    flex: 0 0 auto;
-    overflow: visible;
   }
 }
 
