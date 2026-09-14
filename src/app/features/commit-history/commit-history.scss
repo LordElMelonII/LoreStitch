@@ -51,6 +51,31 @@
       flex: 1;
     }
   }
+
+  // Backup guidance: version history lives in IndexedDB, so only a .stproj
+  // export preserves it durably. Sits quietly under the commit controls.
+  .history-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--mat-sys-outline-variant);
+
+    mat-icon {
+      flex: none;
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      color: var(--mat-sys-on-surface-variant);
+    }
+
+    .hint-text {
+      flex: 1;
+      font: var(--mat-sys-label-small);
+      color: var(--mat-sys-on-surface-variant);
+    }
+  }
 }
 
 .timeline {

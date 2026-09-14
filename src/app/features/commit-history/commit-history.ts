@@ -8,6 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { shortHash, VcsService } from '../../core/services/vcs.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { ImportExportService } from '../../core/services/import-export.service';
 import { type CommitRow } from './commit-history.model';
 import { DiffViewer } from '../../shared/components/diff-viewer/diff-viewer';
 
@@ -39,6 +40,7 @@ const MAX_COMMIT_MESSAGE = 200;
 export class CommitHistory {
   protected readonly workspace = inject(WorkspaceService);
   private readonly vcs = inject(VcsService);
+  private readonly importer = inject(ImportExportService);
 
   private readonly messageModel = signal<CommitMessageModel>({ message: '' });
 
@@ -95,6 +97,14 @@ export class CommitHistory {
 
   protected async restore(row: CommitRow): Promise<void> {
     await this.workspace.rollbackTo(row.commit.id);
+  }
+
+  /** Downloads the full project (commits included) as a `.stproj` archive. */
+  protected exportArchive(): void {
+    const project = this.workspace.activeProject();
+    if (project) {
+      this.importer.exportProject(project);
+    }
   }
 
   protected toggleDiff(id: string): void {

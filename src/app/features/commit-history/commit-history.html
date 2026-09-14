@@ -29,6 +29,18 @@
         }
       </button>
     </div>
+
+    <div
+      class="history-hint"
+      matTooltip="Version history is stored in this browser's IndexedDB. Only a .stproj export carries the commits to another device."
+    >
+      <mat-icon aria-hidden="true">info</mat-icon>
+      <span class="hint-text">
+        History lives in this browser — export a <strong>.stproj</strong> archive regularly to
+        preserve it.
+      </span>
+      <button matButton type="button" (click)="exportArchive()">Export .stproj</button>
+    </div>
   </mat-card>
 
   <div class="timeline">
