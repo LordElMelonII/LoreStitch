@@ -57,7 +57,7 @@
   >
     <mat-icon class="drag-handle" cdkDragHandle>drag_indicator</mat-icon>
     <div class="item-main">
-      <div class="item-title">
+      <div class="item-title" [matTooltip]="item.title">
         @if (item.dirty) {
           <span class="dirty" title="Uncommitted changes">*</span>
         }
@@ -80,10 +80,12 @@
           }
         }
         @for (key of item.keys.slice(0, 3); track key) {
-          <span class="key-chip">{{ key }}</span>
+          <span class="key-chip" [matTooltip]="key">{{ key }}</span>
         }
         @if (item.keys.length > 3) {
-          <span class="key-chip more">+{{ item.keys.length - 3 }}</span>
+          <span class="key-chip more" [matTooltip]="item.keys.slice(3).join(', ')">
+            +{{ item.keys.length - 3 }}
+          </span>
         }
         @if (!item.keys.length && item.state === 'normal') {
           <span class="no-keys">no keys</span>
