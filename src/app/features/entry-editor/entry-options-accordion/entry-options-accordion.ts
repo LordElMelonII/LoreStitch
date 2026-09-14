@@ -1,5 +1,5 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
@@ -24,6 +24,7 @@ import { EntryMatchingSources } from '../entry-matching-sources/entry-matching-s
 import { EntryPlacement } from '../entry-placement/entry-placement';
 import { EntryRecursionTiming } from '../entry-recursion-timing/entry-recursion-timing';
 import { EntryUpdatesService } from '../entry-updates.service';
+import { EntryOptionsPanelState } from './entry-options-panel-state';
 
 /** Form model of the always-visible trigger strip's order field. */
 interface TriggerStripModel {
@@ -39,8 +40,8 @@ interface TriggerStripModel {
  * bottom edge of the scrollport, on mobile. The panel content is composed of
  * the section components (`EntryPlacement`, `EntryActivation`, `EntryKeys`,
  * `EntryRecursionTiming`, `EntryMatchingSources`); this component owns only
- * the trigger row, the expand state and the panel chrome. A section of
- * `EntryEditor`.
+ * the trigger row and the panel chrome, while the expand state is shared
+ * studio-wide through `EntryOptionsPanelState`. A section of `EntryEditor`.
  */
 @Component({
   selector: 'app-entry-options-accordion',
@@ -80,8 +81,12 @@ export class EntryOptionsAccordion {
 
   protected readonly stripForm = form(this.stripModel);
 
-  /** Whether the full option panel is expanded above/below the trigger row. */
-  protected readonly expanded = signal(false);
+  /**
+   * Whether the full option panel is expanded. The signal lives in the shared
+   * `EntryOptionsPanelState`, so the choice sticks across editor tabs: a new
+   * or re-opened tab inherits the expanded bar instead of collapsing it.
+   */
+  protected readonly expanded = inject(EntryOptionsPanelState).expanded;
 
   // Mirrors the shell's mobile breakpoint (`App`), which drives the expansion
   // direction: the panel opens downward in flow on mobile, upward on desktop.
@@ -94,13 +99,11 @@ export class EntryOptionsAccordion {
   /** The entry's trigger strategy: normal 🟢 / constant 🔵 / vectorized 🔗. */
   protected readonly triggerState = computed<WiTriggerState>(() => entryTriggerState(this.entry()));
 
-/** Chevron pointing where the panel will move: closed shows an up chevron
- * (the panel opens upward, anchored above the strip), open shows a down
- * chevron (collapse downward). Both layout classes expand upward now — on
- * desktop as an overlay, on mobile as a sheet above the sticky strip. */
-protected readonly toggleIcon = computed(() =>
-  this.expanded() ? 'expand_more' : 'expand_less',
-);
+  /** Chevron pointing where the panel will move: closed shows an up chevron
+   * (the panel opens upward, anchored above the strip), open shows a down
+   * chevron (collapse downward). Both layout classes expand upward now — on
+   * desktop as an overlay, on mobile as a sheet above the sticky strip. */
+  protected readonly toggleIcon = computed(() => (this.expanded() ? 'expand_more' : 'expand_less'));
 
   /** Stable id for the panel / `aria-controls` pair (one accordion per tab). */
   protected readonly panelId = computed(() => `entry-options-panel-${this.entry().id}`);
