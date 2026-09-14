@@ -52,9 +52,7 @@ export class EntryRecursionTiming {
         ...entry.extensions,
         // Level 1 (or a cleared field) stays the plain `true` of world-info.js.
         delay_until_recursion:
-          model.recursionLevel === null || model.recursionLevel <= 1
-            ? true
-            : model.recursionLevel,
+          model.recursionLevel === null || model.recursionLevel <= 1 ? true : model.recursionLevel,
         sticky: model.sticky,
         cooldown: model.cooldown,
         delay: model.delay,

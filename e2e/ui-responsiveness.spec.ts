@@ -92,8 +92,7 @@ test.describe('responsive studio shell', () => {
         await addEntry(page, vp.kind);
 
         const overflow = await page.evaluate(() => ({
-          document:
-            document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
           body: document.body.scrollWidth - document.body.clientWidth,
           topbar:
             document.querySelector('.topbar')!.scrollWidth -
@@ -201,20 +200,14 @@ test.describe('responsive studio shell', () => {
 
           // Touch has no hover: duplicate/delete must be painted, inside the
           // row, and reachable without scrolling the list sideways.
-          const duplicate = page
-            .locator('app-entry-list [aria-label="Duplicate entry"]')
-            .first();
+          const duplicate = page.locator('app-entry-list [aria-label="Duplicate entry"]').first();
           await expect(duplicate).toBeVisible();
           await expect(duplicate).toHaveCSS('opacity', '1');
           const dupBox = (await duplicate.boundingBox())!;
-          const rowBox = (await page
-            .locator('app-entry-list .entry-item')
-            .first()
-            .boundingBox())!;
+          const rowBox = (await page.locator('app-entry-list .entry-item').first().boundingBox())!;
           expect(dupBox.x + dupBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
           const docOverflow = await page.evaluate(
-            () =>
-              document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
           );
           expect(docOverflow).toBeLessThanOrEqual(0);
         });
@@ -235,9 +228,7 @@ test.describe('responsive studio shell', () => {
           const well = await content.boundingBox();
           expect(well!.height).toBeGreaterThanOrEqual(220);
         }
-        const scrollable = await content.evaluate(
-          (el) => el.scrollHeight > el.clientHeight,
-        );
+        const scrollable = await content.evaluate((el) => el.scrollHeight > el.clientHeight);
         expect(scrollable, 'content should overflow into its own scroll').toBe(true);
         await content.evaluate((el) => (el.scrollTop = el.scrollHeight));
         await expect(page.locator('.mat-mdc-tab-header')).toBeInViewport();
@@ -284,9 +275,7 @@ test.describe('responsive studio shell', () => {
         expect(rowBox.x).toBeGreaterThanOrEqual(panelBox.x);
         expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 1);
 
-        const duplicate = page
-          .locator('app-entry-list [aria-label="Duplicate entry"]')
-          .first();
+        const duplicate = page.locator('app-entry-list [aria-label="Duplicate entry"]').first();
         const dupBox = (await duplicate.boundingBox())!;
         expect(dupBox.x + dupBox.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 1);
       });

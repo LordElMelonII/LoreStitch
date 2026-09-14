@@ -3,10 +3,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import {
-  CharacterBookEntry,
-  EntryExtensionKey,
-} from '../../../core/models/lorebook.model';
+import { CharacterBookEntry, EntryExtensionKey } from '../../../core/models/lorebook.model';
 import { EntryUpdatesService } from '../entry-updates.service';
 import { MATCH_SOURCE_OPTIONS } from './entry-matching-sources.constants';
 

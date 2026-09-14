@@ -7,7 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   CharacterBookEntry,
   ST_ROLE_OPTIONS,
-  WI_POSITION_OPTIONS
+  WI_POSITION_OPTIONS,
 } from '../../../core/models/lorebook.model';
 import { EntryUpdatesService } from '../entry-updates.service';
 import { entrySliceSignal, extNumber, extText } from '../entry-edit-form';

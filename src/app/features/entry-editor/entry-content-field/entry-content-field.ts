@@ -6,10 +6,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import {
-  CharacterBookEntry,
-  estimateTokens,
-} from '../../../core/models/lorebook.model';
+import { CharacterBookEntry, estimateTokens } from '../../../core/models/lorebook.model';
 import { DelimiterDialog } from '../../delimiters/delimiter-dialog';
 import { delimiterLabel, detectDelimiter } from '../../../core/models/delimiters';
 import { entrySliceSignal } from '../entry-edit-form';

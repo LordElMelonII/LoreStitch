@@ -15,11 +15,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { TAB_STRIP_DRAG_SLOP_PX } from './entry-editor.constants';
-import {
-  EntryLookup,
-  ScrollableTabHeader,
-  type TabItem,
-} from './entry-editor.model';
+import { EntryLookup, ScrollableTabHeader, type TabItem } from './entry-editor.model';
 import { EntryContentField } from './entry-content-field/entry-content-field';
 import { EntryName } from './entry-name/entry-name';
 import { EntryOptionsAccordion } from './entry-options-accordion/entry-options-accordion';
