@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Service } from '@angular/core';
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { ProjectWorkspace } from '../models/lorebook.model';
 
@@ -25,7 +25,7 @@ export const LAST_PROJECT_KEY = 'lastProjectId';
  * Offline persistence layer. Projects live in IndexedDB via `idb`; edits are
  * flushed with a short debounce so rapid keystrokes don't thrash the store.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class StorageService {
   private readonly db: Promise<IDBPDatabase<LoreStitchDb>>;
   private readonly pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();

@@ -108,8 +108,15 @@ export class SearchReplaceDialog {
     () => this.rows().filter((row) => !this.excluded().has(row.entryId) && row.changed).length,
   );
 
+  /** Preview row of an entry, or empty. */
   private matchEntry(entry: CharacterBookEntry, regex: RegExp): MatchRow[] {
     const replacement = this.replacement();
+    // In literal (non-regex) mode the replacement must not be interpreted:
+    // passing it as a function keeps `$&`, `$1` etc. verbatim.
+    const apply = (text: string): string =>
+      this.regexMode()
+        ? text.replace(regex, replacement)
+        : text.replace(regex, () => replacement);
     const hits: FieldHits = { content: 0, keys: 0, names: 0 };
 
     const contentHits = entry.content.match(regex)?.length ?? 0;
@@ -135,9 +142,10 @@ export class SearchReplaceDialog {
       return [];
     }
 
-    const nextContent = hits.content ? entry.content.replace(regex, replacement) : null;
-    const nextKeys = hits.keys ? keyList.map((k) => k.replace(regex, replacement)) : null;
-    const nextName = hits.names ? (entry.comment ?? '').replace(regex, replacement) : null;
+    const nextContent = hits.content ? apply(entry.content) : null;
+    const nextKeys = hits.keys ? keyList.map(apply) : null;
+    const nextSecondaryKeys = hits.keys ? secondary.map(apply) : null;
+    const nextName = hits.names ? apply(entry.comment ?? '') : null;
 
     return [
       {
@@ -147,6 +155,7 @@ export class SearchReplaceDialog {
         total,
         nextContent,
         nextKeys,
+        nextSecondaryKeys,
         nextName,
         changed: true,
       },
@@ -185,6 +194,7 @@ export class SearchReplaceDialog {
       }
       if (row.nextKeys !== null) {
         patch.keys = row.nextKeys;
+        patch.secondary_keys = row.nextSecondaryKeys ?? undefined;
         occurrences += row.hits.keys;
       }
       if (row.nextName !== null) {

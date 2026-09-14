@@ -134,7 +134,7 @@
             <span class="old">{{ row.title }}</span>
             <mat-icon>arrow_forward</mat-icon>
             <span class="new">
-              @for (key of row.nextKeys; track $index) {
+              @for (key of row.nextKeys.concat(row.nextSecondaryKeys ?? []); track $index) {
                 <span class="key-chip">{{ key }}</span>
               }
             </span>

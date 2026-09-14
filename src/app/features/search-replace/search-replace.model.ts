@@ -19,6 +19,7 @@ export interface MatchRow {
   /** Replacement result per field, only for fields with hits. */
   nextContent: string | null;
   nextKeys: string[] | null;
+  nextSecondaryKeys: string[] | null;
   nextName: string | null;
   changed: boolean;
 }

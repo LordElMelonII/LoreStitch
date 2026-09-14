@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Service, signal } from '@angular/core';
 
 /**
  * Shared expansion state of the advanced options panel (the expandable bar
@@ -7,7 +7,7 @@ import { Injectable, signal } from '@angular/core';
  * user expands the bar it stays expanded when they open another entry or
  * switch tabs, instead of each tab starting collapsed again.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class EntryOptionsPanelState {
   /** Whether the full option panel is expanded above/below the trigger row. */
   readonly expanded = signal(false);

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Service } from '@angular/core';
 import { CharacterBook, ProjectCommit, ProjectWorkspace } from '../models/lorebook.model';
 import { hasSubtleCrypto, sha256Hex } from './sha256';
 
@@ -19,7 +19,7 @@ function toHex(digest: ArrayBuffer): string {
  * produce identical hashes. Each commit stores a full `CharacterBook`
  * snapshot, making rollback O(1).
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class VcsService {
   /**
    * Hashes `parentId + serialized book` with SHA-256. WebCrypto is used when

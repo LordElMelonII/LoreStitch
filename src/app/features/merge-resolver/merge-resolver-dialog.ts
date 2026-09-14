@@ -120,6 +120,8 @@ export class MergeResolverDialog {
           clone.id = nextId++;
           if (clone.extensions) {
             clone.extensions['display_index'] = current.length;
+          } else {
+            clone.extensions = { display_index: current.length };
           }
           current.push(clone);
           imported++;

@@ -6,6 +6,40 @@
 // full token set on `html`, so loading both would let the last one win.
 @use '@angular/material' as mat;
 
+// ---------------------------------------------------------------------------
+// Material Symbols Outlined (self-hosted, pre-subsetted)
+// ---------------------------------------------------------------------------
+// The full variable icon font from Google Fonts weighs ~3.9 MB. This copy was
+// subsetted via the Google Fonts API `icon_names` parameter to the ~39 icons
+// LoreStitch actually uses (~33 KB). When adding a new `<mat-icon>name`,
+// re-request a subset including it:
+// https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=<comma,separated,names>&display=block
+// and replace public/fonts/material-symbols-outlined.woff2 with the served font.
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url('/fonts/material-symbols-outlined.woff2') format('woff2');
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+
 html {
   height: 100%;
   color-scheme: light;

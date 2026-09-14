@@ -1,4 +1,4 @@
-import { Injectable, effect, signal } from '@angular/core';
+import { Service, effect, signal } from '@angular/core';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
@@ -9,7 +9,7 @@ const THEME_KEY = 'lorestitch-theme';
  * light = azure-blue, dark = cyan-orange (`theme-dark` class on <html>).
  * `system` follows the OS `prefers-color-scheme` and reacts to changes live.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class ThemeService {
   private readonly media = window.matchMedia('(prefers-color-scheme: dark)');
 

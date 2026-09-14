@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Service } from '@angular/core';
 import {
   CharacterBook,
   LoreFileFormat,
@@ -29,7 +29,7 @@ export interface MarkdownDigestOptions {
  * Import auto-detection and export for all supported LoreStitch formats.
  * Files are produced/consumed via `Blob` + `URL.createObjectURL`.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class ImportExportService {
   /** Reads a `File` as text (imports are JSON only). */
   async readFileText(file: File): Promise<string> {

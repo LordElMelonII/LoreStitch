@@ -1,4 +1,4 @@
-import { computed, Injectable, inject, signal } from '@angular/core';
+import { Service, computed, inject, signal } from '@angular/core';
 import {
   CharacterBook,
   CharacterBookEntry,
@@ -17,7 +17,7 @@ import { VcsService } from './vcs.service';
  * reference (structural sharing via shallow copies) and schedules a debounced
  * IndexedDB save.
  */
-@Injectable({ providedIn: 'root' })
+@Service()
 export class WorkspaceService {
   private readonly storage = inject(StorageService);
   private readonly vcs = inject(VcsService);
