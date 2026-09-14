@@ -3,7 +3,7 @@
 <mat-sidenav-container class="workspace">
   <mat-sidenav
     class="entries-sidenav"
-    [mode]="isMobile() ? 'over' : 'side'"
+    [mode]="viewport() === 'mobile' ? 'over' : 'side'"
     [opened]="leftOpened()"
     (closed)="closeLeft()"
   >
@@ -25,7 +25,7 @@
   <mat-sidenav
     class="history-sidenav"
     position="end"
-    [mode]="isMobile() ? 'over' : 'side'"
+    [mode]="viewport() === 'desktop' ? 'side' : 'over'"
     [opened]="rightOpened()"
     (closed)="closeRight()"
   >

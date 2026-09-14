@@ -5,8 +5,14 @@
   min-height: 0;
 }
 
+// Explicit flex column: the tab group fills the pane and the body wrapper
+// below can claim the leftover height without scroll-clipping the strip.
 .entry-tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   height: 100%;
+  min-height: 0;
 }
 
 // Editor pane of an open entry: the writing surface scrolls (or fills) above
@@ -39,10 +45,12 @@
 }
 
 // Mobile keeps the plain scrolling column: name, content and the accordion
-// flow downward as one page (the accordion expands in that flow too).
+// flow downward as one page (the accordion expands in that flow too). Padding
+// tightens to the 8dp grid and the writing well keeps a comfortable height.
 :host-context(.mobile) {
   .fields {
     height: auto;
+    padding: 12px 12px 16px;
   }
 
   .fields-scroll {

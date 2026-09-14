@@ -3,55 +3,63 @@
 }
 
 .topbar {
-  gap: 6px;
+  // M3 top app bar: tonal surface, never the saturated primary. Primary stays
+  // reserved for interactive states and active indicators.
+  gap: 8px;
   height: 56px;
-  background: var(--mat-sys-primary-container);
-  color: var(--mat-sys-primary);
+  background: var(--mat-sys-surface-container);
+  color: var(--mat-sys-on-surface);
   flex: none;
   z-index: 10;
 
-  button {
-    color: var(--mat-sys-primary);
-  }
+  // M3 app-bar grouping: icon buttons separate by standard spacing instead of
+  // hardcoded divider glyphs.
+  padding-inline: 8px 12px;
 
   .brand {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     margin-right: 8px;
+    min-width: 0;
 
     .brand-icon {
       color: var(--mat-sys-primary);
+      flex: none;
     }
 
     .brand-name {
-      font: var(--mat-sys-title-large);
-      letter-spacing: 0.3px;
+      font: var(--mat-sys-title-medium);
+      letter-spacing: 0.2px;
+      white-space: nowrap;
     }
   }
 
-  .project-info {
-    display: flex;
+  // Current file badge: a quiet pill next to the brand, separated by the
+  // toolbar gap. `label-large` keeps the hierarchy under the brand title.
+  .project-badge {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
     flex: 0 1 auto;
-    max-width: 320px;
-    overflow: hidden;
+    max-width: min(360px, 44vw);
+    padding: 4px 12px;
+    border-radius: var(--mat-sys-corner-full);
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-on-surface-variant);
 
     .project-title {
-      font: var(--mat-sys-body-large);
+      font: var(--mat-sys-label-large);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      color: var(--mat-sys-on-surface-variant);
     }
 
     &.no-project {
-      display: block;
-      font: var(--mat-sys-body-large);
+      font: var(--mat-sys-label-large);
       font-style: italic;
-      color: var(--mat-sys-outline);
+      background: transparent;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -70,13 +78,6 @@
     flex: 1;
   }
 
-  // Vertical separators between action groups (M3 app-bar grouping).
-  .toolbar-divider {
-    height: 24px;
-    align-self: center;
-    margin: 0 4px;
-  }
-
   // Compact phones: primary actions live in the overflow menu and the brand
   // collapses to its icon so every action stays reachable.
   @media (max-width: 599px) {
@@ -86,6 +87,10 @@
 
     .brand-name {
       display: none;
+    }
+
+    .project-badge {
+      max-width: 40vw;
     }
   }
 }

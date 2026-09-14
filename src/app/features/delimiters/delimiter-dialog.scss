@@ -40,8 +40,8 @@
   gap: 4px;
   padding: 10px 12px;
   border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 8px;
-  background: var(--mat-sys-surface-container-lowest, var(--mat-sys-surface));
+  border-radius: var(--mat-sys-corner-small);
+  background: var(--mat-sys-surface-container-lowest);
 
   .example-label {
     font: var(--mat-sys-label-small);
@@ -76,5 +76,5 @@
   max-height: 300px;
   overflow: auto;
   border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 8px;
+  border-radius: var(--mat-sys-corner-small);
 }

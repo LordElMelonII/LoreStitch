@@ -45,7 +45,7 @@
 
 .merge-row {
   border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: 8px;
+  border-radius: var(--mat-sys-corner-small);
   padding: 6px 10px;
 
   &.identical {
@@ -78,7 +78,7 @@
 
     .flag {
       font: var(--mat-sys-label-small);
-      border-radius: 999px;
+      border-radius: var(--mat-sys-corner-full);
       padding: 1px 8px;
       margin-left: 6px;
       vertical-align: middle;
@@ -105,8 +105,8 @@
       font: var(--mat-sys-label-small);
       background: var(--mat-sys-surface-container-high);
       color: var(--mat-sys-on-surface-variant);
-      border-radius: 4px;
-      padding: 0 4px;
+      border-radius: var(--mat-sys-corner-full);
+      padding: 0 6px;
     }
   }
 

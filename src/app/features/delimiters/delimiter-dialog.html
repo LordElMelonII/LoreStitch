@@ -10,7 +10,7 @@
   </p>
 
   <div class="controls">
-    <mat-form-field subscriptSizing="dynamic">
+    <mat-form-field subscriptSizing="dynamic" appearance="fill">
       <mat-label>Apply to</mat-label>
       <mat-select [value]="scope()" (selectionChange)="setScope($event.value)">
         <mat-option value="entry">This entry only</mat-option>
@@ -18,7 +18,7 @@
       </mat-select>
     </mat-form-field>
 
-    <mat-form-field class="grow" subscriptSizing="dynamic">
+    <mat-form-field class="grow" subscriptSizing="dynamic" appearance="fill">
       <mat-label>Delimiter style</mat-label>
       <mat-select [value]="style()" (selectionChange)="setStyle($event.value)">
         @for (option of styleOptions; track option.value) {

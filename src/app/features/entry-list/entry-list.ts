@@ -7,7 +7,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { entryTitle, entryTriggerState, WiTriggerState } from '../../core/models/lorebook.model';
+import { entryTitle, entryTriggerState } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { type EntryListItem } from './entry-list.model';
 

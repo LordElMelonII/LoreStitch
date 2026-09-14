@@ -771,9 +771,7 @@ export interface EntryExtensions {
 export type EntryExtensionKey = keyof EntryExtensions;
 
 /** `CharacterBookEntry.extensions` as the native SillyTavern conversion sees it. */
-export interface StNativeExtensions extends EntryExtensions {
-  [key: string]: unknown;
-}
+export type StNativeExtensions = EntryExtensions & Record<string, unknown>;
 
 /**
  * Reads a match flag that was normalized in a later version: books imported

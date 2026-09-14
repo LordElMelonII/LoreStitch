@@ -9,6 +9,12 @@
   width: 100%;
 }
 
+// Compact screens: the writing well keeps a usable height inside the single
+// scrolling column instead of collapsing to the bare minimum.
+:host-context(.mobile) {
+  min-height: min(52vh, 340px);
+}
+
 // Recessed content well: the MD3 filled-field fill is the deepest container
 // tone on the canvas, so the main text area reads as a sunken input surface.
 .content-field {

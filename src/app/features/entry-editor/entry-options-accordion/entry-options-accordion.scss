@@ -98,12 +98,26 @@
 }
 
 // Mobile: the panel leaves the anchored-overlay mode and becomes a plain
-// in-flow card under the trigger, expanding downward in the scroll flow.
+// in-flow sheet above the trigger card, while the whole section sticks to the
+// bottom edge of the scrollport — a bottom-sheet-style control bar that stays
+// reachable while the content scrolls behind it. The host (not the card) is
+// the sticky element: a sticky box can only travel within its containing
+// block, and the host's block is the tall scrolling fields column.
 :host(.mobile) {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+
   .panel-anchor {
     position: static;
-    order: 2;
-    margin-top: 12px;
+    margin-bottom: 12px;
+  }
+
+  .trigger-card {
+    // Hairline instead of a hard shadow: M3 keeps elevation tonal, and the
+    // hairline separates the stuck bar from the content scrolling under it.
+    border-top: 1px solid var(--mat-sys-outline-variant);
+    box-shadow: var(--mat-sys-level1);
   }
 
   .panel {

@@ -52,7 +52,7 @@
     // projects, so give rows the interactive affordance here.
     .recent-list mat-list-item.recent-item {
       cursor: pointer;
-      border-radius: var(--mat-sys-corner-small, 8px);
+      border-radius: var(--mat-sys-corner-small);
 
       &:hover {
         background: var(--mat-sys-surface-container-high);

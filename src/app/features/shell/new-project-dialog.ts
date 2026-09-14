@@ -32,7 +32,7 @@ const MAX_PROJECT_TITLE = 80;
   template: `
     <h2 mat-dialog-title>New Project</h2>
     <mat-dialog-content class="body">
-      <mat-form-field class="title-field" subscriptSizing="dynamic">
+      <mat-form-field class="title-field" subscriptSizing="dynamic" appearance="fill">
         <mat-label>Project title</mat-label>
         <input
           matInput

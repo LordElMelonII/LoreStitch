@@ -21,8 +21,8 @@
     .count {
       font: var(--mat-sys-label-medium);
       color: var(--mat-sys-on-surface-variant);
-      background: var(--mat-sys-surface-container-high);
-      border-radius: 999px;
+      background: var(--mat-sys-surface-container-highest);
+      border-radius: var(--mat-sys-corner-full);
       padding: 1px 8px;
     }
 
@@ -40,6 +40,9 @@
 .list-viewport {
   flex: 1;
   min-height: 0;
+  // Rows truncate internally; the viewport never grows sideways (the mobile
+  // drawer showed a stray horizontal scrollbar otherwise).
+  overflow-x: hidden;
 }
 
 .entry-item {
@@ -53,7 +56,7 @@
   height: 56px;
   padding: 4px 8px 4px 4px;
   margin: 0 8px;
-  border-radius: var(--mat-sys-corner-small, 8px);
+  border-radius: var(--mat-sys-corner-small);
   cursor: pointer;
   user-select: none;
 
@@ -113,8 +116,8 @@
       font: var(--mat-sys-label-small);
       background: var(--mat-sys-surface-container-high);
       color: var(--mat-sys-on-surface-variant);
-      border-radius: 4px;
-      padding: 0 4px;
+      border-radius: var(--mat-sys-corner-full);
+      padding: 0 6px;
 
       &.constant {
         background: var(--mat-sys-tertiary-container);

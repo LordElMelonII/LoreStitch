@@ -3,7 +3,7 @@
   flex-direction: column;
   min-height: 0;
   border: 1px solid var(--mat-sys-outline-variant);
-  border-radius: var(--mat-sys-corner-small, 8px);
+  border-radius: var(--mat-sys-corner-small);
   overflow: hidden;
   background: var(--mat-sys-surface);
 }
@@ -79,6 +79,6 @@
     color: var(--ls-diff-remove-text);
   }
   &.empty {
-    background: var(--mat-sys-surface-container-lowest, transparent);
+    background: var(--mat-sys-surface-container-lowest);
   }
 }

@@ -34,12 +34,13 @@ interface TriggerStripModel {
  * Bottom accordion of the entry editor: the basic controls (Enabled, trigger
  * strategy, case sensitivity) stay visible as the trigger row while every
  * other option collapses into an expandable panel, keeping the writing phase
- * uncluttered. The panel is anchored above the strip on desktop and grows
- * upward over the content; on mobile it opens downward in the scroll flow.
- * The panel content is composed of the section components (`EntryPlacement`,
- * `EntryActivation`, `EntryKeys`, `EntryRecursionTiming`,
- * `EntryMatchingSources`); this component owns only the trigger row, the
- * expand state and the panel chrome. A section of `EntryEditor`.
+ * uncluttered. The panel always opens upward above the strip — as an anchored
+ * overlay on desktop and as a sheet above the strip, which sticks to the
+ * bottom edge of the scrollport, on mobile. The panel content is composed of
+ * the section components (`EntryPlacement`, `EntryActivation`, `EntryKeys`,
+ * `EntryRecursionTiming`, `EntryMatchingSources`); this component owns only
+ * the trigger row, the expand state and the panel chrome. A section of
+ * `EntryEditor`.
  */
 @Component({
   selector: 'app-entry-options-accordion',
@@ -93,14 +94,13 @@ export class EntryOptionsAccordion {
   /** The entry's trigger strategy: normal 🟢 / constant 🔵 / vectorized 🔗. */
   protected readonly triggerState = computed<WiTriggerState>(() => entryTriggerState(this.entry()));
 
-  /** Chevron pointing where the panel will move: down to open on mobile (in
-   * flow), up to open on desktop (anchored above the strip); inverted closed. */
-  protected readonly toggleIcon = computed(() => {
-    if (this.isMobile()) {
-      return this.expanded() ? 'expand_less' : 'expand_more';
-    }
-    return this.expanded() ? 'expand_more' : 'expand_less';
-  });
+/** Chevron pointing where the panel will move: closed shows an up chevron
+ * (the panel opens upward, anchored above the strip), open shows a down
+ * chevron (collapse downward). Both layout classes expand upward now — on
+ * desktop as an overlay, on mobile as a sheet above the sticky strip. */
+protected readonly toggleIcon = computed(() =>
+  this.expanded() ? 'expand_more' : 'expand_less',
+);
 
   /** Stable id for the panel / `aria-controls` pair (one accordion per tab). */
   protected readonly panelId = computed(() => `entry-options-panel-${this.entry().id}`);

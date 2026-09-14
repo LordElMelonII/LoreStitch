@@ -16,7 +16,7 @@
 
   @if (workspace.activeProject(); as project) {
     <div
-      class="project-info"
+      class="project-badge"
       [matTooltip]="workspace.hasUnsavedChanges() ? project.title + ' — uncommitted changes' : project.title"
     >
       <span class="project-title">{{ projectName() }}</span>
@@ -25,7 +25,7 @@
       }
     </div>
   } @else {
-    <span class="project-info no-project">No project open</span>
+    <span class="project-badge no-project">No project open</span>
   }
 
   <span class="spacer"></span>
@@ -52,8 +52,6 @@
       <mat-icon>find_replace</mat-icon>
     </button>
 
-    <mat-divider class="toolbar-divider desktop-only" [vertical]="true"></mat-divider>
-
     <button
       matIconButton
       type="button"
@@ -74,8 +72,6 @@
     >
       <mat-icon>more_vert</mat-icon>
     </button>
-
-    <mat-divider class="toolbar-divider" [vertical]="true"></mat-divider>
   }
   <mat-menu #exportMenu="matMenu" class="export-menu">
     <div class="menu-section">Use in SillyTavern</div>

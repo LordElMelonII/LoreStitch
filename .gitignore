@@ -50,3 +50,6 @@ Thumbs.db
 /.zcode
 /skills
 skills-lock.json
+# Playwright
+/test-results/
+/playwright-report/

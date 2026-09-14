@@ -26,10 +26,10 @@ export interface ScrollableTabHeader {
 export type KeyListField = 'keys' | 'secondary_keys';
 
 /** Fields a tab section may edit inline via double-click chip editing. */
-export type KeyEditTarget = {
+export interface KeyEditTarget {
   field: KeyListField;
   index: number;
-};
+}
 
 /** Convenience alias for template lookups of the entry under edit. */
 export type EntryLookup = (id: number) => CharacterBookEntry | undefined;
