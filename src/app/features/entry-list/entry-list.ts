@@ -1,6 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { DragDropModule } from '@angular/cdk/drag-drop';
-import { ScrollingModule } from '@angular/cdk/scrolling';
+import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -35,6 +44,35 @@ interface EntryFilterModel {
 })
 export class EntryList {
   protected readonly workspace = inject(WorkspaceService);
+
+  private readonly viewport = viewChild.required(CdkVirtualScrollViewport);
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+    afterNextRender(() => {
+      // Both observers are standard in every browser; skip exotic environments
+      // (e.g. bare jsdom) rather than crash.
+      if (typeof ResizeObserver === 'undefined' || typeof IntersectionObserver === 'undefined') {
+        return;
+      }
+      const viewport = this.viewport();
+      const element = viewport.elementRef.nativeElement;
+      // The CDK scroller measures its box once and only re-measures on window
+      // resize. On mobile this list is created while the entries drawer is
+      // still off-canvas, so that first measurement is wrong and would leave
+      // the viewport under-filled forever. Re-check on real box resizes
+      // (URL-bar dvh shifts) and whenever the drawer becomes visible; both
+      // no-op once the scroller agrees with the live layout.
+      const resizeObserver = new ResizeObserver(() => viewport.checkViewportSize());
+      resizeObserver.observe(element);
+      const intersectionObserver = new IntersectionObserver(() => viewport.checkViewportSize());
+      intersectionObserver.observe(element);
+      destroyRef.onDestroy(() => {
+        resizeObserver.disconnect();
+        intersectionObserver.disconnect();
+      });
+    });
+  }
 
   private readonly filterModel = signal<EntryFilterModel>({ query: '' });
   protected readonly filterForm = form(this.filterModel);

@@ -1,4 +1,5 @@
 import { devices, expect, type Page, test } from '@playwright/test';
+import { join } from 'node:path';
 
 /**
  * Responsive architecture suite for the LoreStitch studio shell.
@@ -36,6 +37,13 @@ const LONG_CONTENT = Array.from(
     `Entry line ${i}: Gensokyo is modern but sealed; villagers trade, youkai visit, ` +
     'incidents end over tea, and danmaku can be playful under fragile rules.',
 ).join('\n');
+
+/** Many-entry lorebook used to exercise the virtualized entry list. */
+const EXAMPLE_LOREBOOK = join(
+  process.cwd(),
+  'example_card',
+  'Fate Stay Night - Fuyuki Lorebook(1).json',
+);
 
 /** Creates a project through the welcome screen so the studio shell appears. */
 async function createProject(page: Page): Promise<void> {
@@ -247,11 +255,48 @@ test.describe('responsive studio shell', () => {
           );
           expect(docOverflow).toBeLessThanOrEqual(0);
         });
+
+        test('virtual entry list fills the drawer viewport once it opens', async ({ page }) => {
+          // Import a many-entry lorebook straight from the welcome screen so
+          // the list is created while the drawer is still off-canvas — the
+          // exact condition under which the CDK viewport mis-measured.
+          await page.goto('/');
+          const [chooser] = await Promise.all([
+            page.waitForEvent('filechooser'),
+            page.getByRole('button', { name: 'Import .json / .stproj' }).first().click(),
+          ]);
+          await chooser.setFiles(EXAMPLE_LOREBOOK);
+          await expect(page.locator('.entries-sidenav')).toBeAttached();
+          await expect(page.locator('.project-badge', { hasText: 'Fuyuki' })).toBeVisible();
+          await page.waitForTimeout(1000);
+
+          await page.locator('[aria-label="Toggle entries panel"]').click();
+          await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
+          await expect(page.locator('app-entry-list .entry-item').first()).toBeVisible();
+
+          // Rendered rows must reach the bottom of the scrollport, not stop
+          // after the first few items with dead space below.
+          const fill = await page.evaluate(() => {
+            const viewport = document.querySelector('.list-viewport')!;
+            const viewportBox = viewport.getBoundingClientRect();
+            const items = [...document.querySelectorAll('app-entry-list .entry-item')];
+            const lastBottom = Math.max(
+              -Infinity,
+              ...items.map((item) => item.getBoundingClientRect().bottom),
+            );
+            return {
+              rendered: items.length,
+              covered: lastBottom - viewportBox.top,
+              available: viewportBox.height,
+            };
+          });
+          expect(fill.rendered).toBeGreaterThan(4);
+          expect(fill.available).toBeGreaterThan(200);
+          expect(fill.covered).toBeGreaterThanOrEqual(fill.available - 8);
+        });
       }
 
-      test('editor body scrolls independently without clipping the tab strip', async ({
-        page,
-      }) => {
+      test('editor body scrolls independently without clipping the tab strip', async ({ page }) => {
         await createProject(page);
         await addEntry(page, vp.kind);
 
@@ -270,9 +315,7 @@ test.describe('responsive studio shell', () => {
         await expect(page.locator('.mat-mdc-tab-header')).toBeInViewport();
       });
 
-      test('long entry names and key chips keep row actions inside the panel', async ({
-        page,
-      }) => {
+      test('long entry names and key chips keep row actions inside the panel', async ({ page }) => {
         await createProject(page);
         await addEntry(page, vp.kind);
 
