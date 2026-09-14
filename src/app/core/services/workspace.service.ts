@@ -145,12 +145,12 @@ export class WorkspaceService {
       targetType: cardData ? 'tavern_card_v2' : 'standalone_lorebook',
       ...(cardData
         ? {
-            rawCardData: extractRawCardData({
-              spec: 'chara_card_v2',
-              spec_version: '2.0',
-              data: cardData,
-            }),
-          }
+          rawCardData: extractRawCardData({
+            spec: 'chara_card_v2',
+            spec_version: '2.0',
+            data: cardData,
+          }),
+        }
         : {}),
       activeBook: book,
       headCommitId: null,
@@ -318,7 +318,7 @@ export class WorkspaceService {
     this.openTabEntryIds.update((tabs) => tabs.filter((id) => id !== entryId));
     if (this.activeTabId() === entryId) {
       const remaining = this.openTabEntryIds();
-      this.activeTabId.set(remaining.length ? remaining[remaining.length - 1] : null);
+      this.activeTabId.set(remaining.length ? remaining.at(-1)! : null);
     }
   }
 

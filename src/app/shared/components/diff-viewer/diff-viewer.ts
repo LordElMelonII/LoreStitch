@@ -7,7 +7,7 @@ import { type DiffLine, type DiffMode, type SplitRow } from './diff-viewer.model
 /** Splits a diff hunk value into display lines, dropping the phantom ''. */
 function toLines(value: string, type: DiffLine['type']): DiffLine[] {
   const parts = value.split('\n');
-  if (parts.length && parts[parts.length - 1] === '') {
+  if (parts.length && parts.at(-1) === '') {
     parts.pop();
   }
   return parts.map((text) => ({ type, text }));
