@@ -1,17 +1,22 @@
 /**
  * LoreStitch core data model.
  *
- * The canonical editing format is the SillyTavern Character Book V2 schema
- * (`spec: 'chara_card_v2'`). Native SillyTavern world-info files (the
- * `{ entries: { uid: {...} } }` shape produced by `world-info.js`) are
- * imported by converting them to `CharacterBook`; the conversion mirrors
- * SillyTavern's own `convertCharacterBook()` so values survive a round trip.
+ * The canonical editing format is the SillyTavern Character Book V2 schema.
+ * Native SillyTavern world-info files (the `{ entries: { uid: {...} } }` shape
+ * produced by `world-info.js`) are imported by converting them to
+ * `CharacterBook`; the conversion mirrors SillyTavern's own
+ * `convertCharacterBook()` so values survive a round trip.
  */
 
 // ============================================================================
 // SillyTavern Character Card V2 spec
 // ============================================================================
 
+/**
+ * Legacy card metadata kept only so projects imported from character cards in
+ * older LoreStitch versions still load. Card import/export is no longer a
+ * feature; the field round-trips untouched in `.stproj` archives.
+ */
 export interface TavernCardV2 {
   spec: 'chara_card_v2';
   spec_version: '2.0';
@@ -146,7 +151,13 @@ export interface ProjectWorkspace {
   title: string;
   createdAt: number;
   updatedAt: number;
+  /**
+   * Legacy field: character-card projects existed before card support was
+   * removed. New projects are always `standalone_lorebook`; the value is kept
+   * so old `.stproj` archives and IndexedDB stores keep loading.
+   */
   targetType: 'standalone_lorebook' | 'tavern_card_v2';
+  /** Legacy card metadata from removed card imports; preserved verbatim. */
   rawCardData?: Omit<TavernCardV2['data'], 'character_book'>;
   activeBook: CharacterBook;
   headCommitId: string | null;
@@ -400,7 +411,8 @@ export function parseNameList(raw: string): string[] {
  * spec-legal values (SillyTavern's own convention) while the true numeric
  * position is preserved in `extensions.position`.
  */
-export function toSpecCompliantBook(book: CharacterBook): CharacterBook {  return {
+export function toSpecCompliantBook(book: CharacterBook): CharacterBook {
+  return {
     ...structuredClone(book),
     entries: book.entries.map((entry) => ({
       ...entry,
@@ -477,21 +489,19 @@ export interface SillyTavernWorldInfo {
 // Import format detection
 // ============================================================================
 
-export type LoreFileFormat = 'character_book' | 'tavern_card_v2' | 'sillytavern_native' | 'stproj';
+export type LoreFileFormat = 'character_book' | 'sillytavern_native' | 'stproj';
 
 interface LooseImportJson {
   format?: unknown;
   workspace?: unknown;
-  spec?: unknown;
-  data?: unknown;
   entries?: unknown;
   stlo?: unknown;
 }
 
 /**
  * Detects whether a parsed JSON document is a bare `CharacterBook`, a
- * `TavernCardV2`, a LoreStitch project archive, or a native SillyTavern
- * world-info export.
+ * LoreStitch project archive, or a native SillyTavern world-info export.
+ * Character cards are intentionally not recognized (card support was removed).
  */
 export function detectLoreFileFormat(json: unknown): LoreFileFormat | null {
   if (json === null || typeof json !== 'object') {
@@ -501,9 +511,6 @@ export function detectLoreFileFormat(json: unknown): LoreFileFormat | null {
 
   if (obj.format === 'lorestitch-project' && obj.workspace && typeof obj.workspace === 'object') {
     return 'stproj';
-  }
-  if (obj.spec === 'chara_card_v2' && obj.data && typeof obj.data === 'object') {
-    return 'tavern_card_v2';
   }
   if (
     obj.entries &&
@@ -874,10 +881,4 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
       ? { recursive_scanning: book.recursive_scanning }
       : {}),
   };
-}
-
-/** Extracts the raw card metadata (everything except `character_book`). */
-export function extractRawCardData(card: TavernCardV2): ProjectWorkspace['rawCardData'] {
-  const { character_book: _characterBook, ...raw } = card.data;
-  return raw;
 }

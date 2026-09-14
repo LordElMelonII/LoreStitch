@@ -69,10 +69,10 @@ describe('lorebook model', () => {
       );
     });
 
-    it('detects a TavernCardV2', () => {
-      expect(detectLoreFileFormat({ spec: 'chara_card_v2', spec_version: '2.0', data: {} })).toBe(
-        'tavern_card_v2',
-      );
+    it('no longer detects character cards (card support was removed)', () => {
+      expect(
+        detectLoreFileFormat({ spec: 'chara_card_v2', spec_version: '2.0', data: {} }),
+      ).toBeNull();
     });
 
     it('detects a LoreStitch project archive', () => {

@@ -31,11 +31,10 @@ export class ProjectActionsService {
   // -------------------------------------------------------------------------
 
   async newProject(): Promise<void> {
-    const result = (await firstValueFrom(
-      this.dialog.open(NewProjectDialog).afterClosed(),
-    )) as NewProjectResult | undefined;
+    const result = (await firstValueFrom(this.dialog.open(NewProjectDialog).afterClosed())) as
+      NewProjectResult | undefined;
     if (result) {
-      await this.workspace.createProject(result.title, result.targetType);
+      await this.workspace.createProject(result.title);
     }
   }
 
@@ -113,7 +112,7 @@ export class ProjectActionsService {
     }
     if (!parsed) {
       this.snackBar.open(
-        'Unsupported format — expected a lorebook, character card, SillyTavern world info, or .stproj file.',
+        'Unsupported format — expected a lorebook, SillyTavern world info, or .stproj file.',
         'OK',
         { duration: 5000 },
       );
@@ -131,11 +130,7 @@ export class ProjectActionsService {
       return;
     }
 
-    await this.workspace.startProjectFromBook(
-      parsed.suggestedTitle,
-      parsed.book,
-      parsed.card?.data,
-    );
+    await this.workspace.startProjectFromBook(parsed.suggestedTitle, parsed.book);
     this.snackBar.open(`Imported ${parsed.book.entries.length} entries from ${file.name}.`, 'OK', {
       duration: 3500,
     });

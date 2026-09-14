@@ -3,11 +3,9 @@ import {
   CharacterBook,
   CharacterBookEntry,
   ProjectWorkspace,
-  TavernCardV2,
   createEmptyBook,
   createEmptyEntry,
   entryTitle,
-  extractRawCardData,
 } from '../models/lorebook.model';
 import { randomUuid } from './sha256';
 import { LAST_PROJECT_KEY, StorageService } from './storage.service';
@@ -86,7 +84,10 @@ export class WorkspaceService {
   // Project lifecycle
   // -------------------------------------------------------------------------
 
-  async createProject(title: string, targetType: ProjectWorkspace['targetType']): Promise<void> {
+  async createProject(
+    title: string,
+    targetType: ProjectWorkspace['targetType'] = 'standalone_lorebook',
+  ): Promise<void> {
     const now = Date.now();
     const project: ProjectWorkspace = {
       id: randomUuid(),
@@ -131,27 +132,14 @@ export class WorkspaceService {
   }
 
   /** Replaces the working book and resets VCS state (used by "new from import"). */
-  async startProjectFromBook(
-    title: string,
-    book: CharacterBook,
-    cardData?: TavernCardV2['data'],
-  ): Promise<void> {
+  async startProjectFromBook(title: string, book: CharacterBook): Promise<void> {
     const now = Date.now();
     const project: ProjectWorkspace = {
       id: randomUuid(),
       title,
       createdAt: now,
       updatedAt: now,
-      targetType: cardData ? 'tavern_card_v2' : 'standalone_lorebook',
-      ...(cardData
-        ? {
-          rawCardData: extractRawCardData({
-            spec: 'chara_card_v2',
-            spec_version: '2.0',
-            data: cardData,
-          }),
-        }
-        : {}),
+      targetType: 'standalone_lorebook',
       activeBook: book,
       headCommitId: null,
       commits: [],

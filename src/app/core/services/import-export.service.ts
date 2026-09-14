@@ -4,7 +4,6 @@ import {
   LoreFileFormat,
   ProjectWorkspace,
   SillyTavernWorldInfo,
-  TavernCardV2,
   characterBookToStNative,
   detectLoreFileFormat,
   entryTitle,
@@ -18,7 +17,6 @@ import {
 export interface ParsedImport {
   format: LoreFileFormat;
   book: CharacterBook;
-  card?: TavernCardV2;
   workspace?: ProjectWorkspace;
   suggestedTitle: string;
 }
@@ -40,8 +38,8 @@ export class ImportExportService {
 
   /**
    * Parses imported JSON and auto-detects its format: a bare
-   * `CharacterBook`, a `TavernCardV2`, a LoreStitch `.stproj` archive, or a
-   * native SillyTavern world-info export.
+   * `CharacterBook`, a LoreStitch `.stproj` archive, or a native SillyTavern
+   * world-info export.
    */
   parseImport(json: unknown, fallbackTitle = 'Imported Lorebook'): ParsedImport | null {
     const format = detectLoreFileFormat(json);
@@ -50,17 +48,6 @@ export class ImportExportService {
     }
 
     switch (format) {
-      case 'tavern_card_v2': {
-        const card = json as TavernCardV2;
-        return {
-          format,
-          card,
-          book: card.data.character_book
-            ? normalizeBookPositions(structuredClone(card.data.character_book))
-            : { extensions: {}, entries: [] },
-          suggestedTitle: card.data.name || fallbackTitle,
-        };
-      }
       case 'sillytavern_native': {
         const book = stNativeToCharacterBook(json as SillyTavernWorldInfo, fallbackTitle);
         return {
@@ -101,33 +88,6 @@ export class ImportExportService {
   /** Native SillyTavern world-info JSON, directly importable into ST. */
   exportStNative(book: CharacterBook, title: string): void {
     this.downloadJson(characterBookToStNative(book), `${this.fileName(title)}-world-info.json`);
-  }
-
-  /** TavernCardV2 JSON preserving the card metadata with the current book. */
-  exportTavernCard(project: ProjectWorkspace): void {
-    const base = project.rawCardData;
-    const card: TavernCardV2 = {
-      spec: 'chara_card_v2',
-      spec_version: '2.0',
-      data: {
-        name: base?.name ?? project.title,
-        description: base?.description ?? '',
-        personality: base?.personality ?? '',
-        scenario: base?.scenario ?? '',
-        first_mes: base?.first_mes ?? '',
-        mes_example: base?.mes_example ?? '',
-        creator_notes: base?.creator_notes ?? 'Edited in LoreStitch',
-        system_prompt: base?.system_prompt ?? '',
-        post_history_instructions: base?.post_history_instructions ?? '',
-        alternate_greetings: base?.alternate_greetings ?? [],
-        character_book: toSpecCompliantBook(project.activeBook),
-        tags: base?.tags ?? [],
-        creator: base?.creator ?? '',
-        character_version: base?.character_version ?? '',
-        extensions: base?.extensions ?? {},
-      },
-    };
-    this.downloadJson(card, `${this.fileName(card.data.name)}-card.json`);
   }
 
   /** Full project archive including the commit history. */

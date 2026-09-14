@@ -68,13 +68,6 @@ export class Topbar {
     }
   }
 
-  protected exportCard(): void {
-    const project = this.workspace.activeProject();
-    if (project) {
-      this.importer.exportTavernCard(project);
-    }
-  }
-
   protected exportProjectArchive(): void {
     const project = this.workspace.activeProject();
     if (project) {
