@@ -54,7 +54,7 @@ export function wrapContent(
     case 'bracket':
       return `[${safeName}=\n${body}]`;
     case 'separator':
-      return body ? `${body}\n---` : '---';
+      return body ? `${body}\n\n---` : '---';
   }
 }
 
