@@ -43,6 +43,14 @@
   // Rows truncate internally; the viewport never grows sideways (the mobile
   // drawer showed a stray horizontal scrollbar otherwise).
   overflow-x: hidden;
+
+  // The CDK's absolutely-positioned content wrapper defaults to shrink-to-fit
+  // sizing, so rows with long nowrap titles and key chips inflate it beyond
+  // the drawer and clip the row actions off-canvas. Pin it to the viewport
+  // width; the rows then truncate their own content internally.
+  ::ng-deep .cdk-virtual-scroll-content-wrapper {
+    width: 100%;
+  }
 }
 
 .entry-item {
@@ -62,6 +70,13 @@
 
   &:hover {
     background: var(--mat-sys-surface-container-high);
+    .item-actions .ghost {
+      opacity: 1;
+    }
+  }
+
+  // Keyboard users get the same reveal as mouse hover.
+  &:focus-within {
     .item-actions .ghost {
       opacity: 1;
     }
@@ -142,7 +157,10 @@
   .item-actions {
     display: flex;
     align-items: center;
-    gap: 0;
+    gap: 4px;
+    // Never shrink: the actions stay inside the row even when the key chips
+    // crowd the item main area, so no horizontal scrolling is ever needed.
+    flex: none;
 
     .state-icon {
       font-size: 16px;
@@ -159,6 +177,14 @@
         color: var(--mat-sys-error);
       }
     }
+  }
+}
+
+// Touch surfaces have no hover, so the hover-reveal would hide the duplicate
+// and delete actions forever — show them permanently there.
+@media (hover: none) {
+  .entry-item .item-actions .ghost {
+    opacity: 1;
   }
 }
 

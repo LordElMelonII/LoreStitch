@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { devices, expect, type Page, test } from '@playwright/test';
 
 /**
  * Responsive architecture suite for the LoreStitch studio shell.
@@ -18,14 +18,16 @@ type Viewport = {
   width: number;
   height: number;
   kind: 'desktop' | 'tablet' | 'mobile';
+  /** Real device descriptor (touch, mobile media, UA) for phone viewports. */
+  device?: keyof typeof devices;
 };
 
 const VIEWPORTS: Viewport[] = [
   { name: 'desktop-1920x1080', width: 1920, height: 1080, kind: 'desktop' },
   { name: 'desktop-1280x800', width: 1280, height: 800, kind: 'desktop' },
   { name: 'tablet-768x1024', width: 768, height: 1024, kind: 'tablet' },
-  { name: 'mobile-390x844', width: 390, height: 844, kind: 'mobile' },
-  { name: 'mobile-412x915', width: 412, height: 915, kind: 'mobile' },
+  { name: 'mobile-390x844', width: 390, height: 844, kind: 'mobile', device: 'iPhone 13' },
+  { name: 'mobile-412x915', width: 412, height: 915, kind: 'mobile', device: 'Pixel 7' },
 ];
 
 const LONG_CONTENT = Array.from(
@@ -76,7 +78,14 @@ async function openHistory(page: Page): Promise<void> {
 test.describe('responsive studio shell', () => {
   for (const vp of VIEWPORTS) {
     test.describe(`${vp.name} (${vp.kind})`, () => {
-      test.use({ viewport: { width: vp.width, height: vp.height } });
+      // The device preset's `defaultBrowserType` would force a new worker;
+      // the suite is already pinned to Chromium in the config's project.
+      if (vp.device) {
+        const { defaultBrowserType: _browser, ...device } = devices[vp.device];
+        test.use(device);
+      } else {
+        test.use({ viewport: { width: vp.width, height: vp.height } });
+      }
 
       test('top bar never causes horizontal overflow', async ({ page }) => {
         await createProject(page);
@@ -182,6 +191,33 @@ test.describe('responsive studio shell', () => {
             expect(size.height).toBeGreaterThanOrEqual(48);
           }
         });
+
+        test('entry row actions are visible without hover', async ({ page }) => {
+          await createProject(page);
+          await addEntry(page, vp.kind);
+
+          await page.locator('[aria-label="Toggle entries panel"]').click();
+          await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
+
+          // Touch has no hover: duplicate/delete must be painted, inside the
+          // row, and reachable without scrolling the list sideways.
+          const duplicate = page
+            .locator('app-entry-list [aria-label="Duplicate entry"]')
+            .first();
+          await expect(duplicate).toBeVisible();
+          await expect(duplicate).toHaveCSS('opacity', '1');
+          const dupBox = (await duplicate.boundingBox())!;
+          const rowBox = (await page
+            .locator('app-entry-list .entry-item')
+            .first()
+            .boundingBox())!;
+          expect(dupBox.x + dupBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
+          const docOverflow = await page.evaluate(
+            () =>
+              document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          );
+          expect(docOverflow).toBeLessThanOrEqual(0);
+        });
       }
 
       test('editor body scrolls independently without clipping the tab strip', async ({
@@ -207,34 +243,85 @@ test.describe('responsive studio shell', () => {
         await expect(page.locator('.mat-mdc-tab-header')).toBeInViewport();
       });
 
+      test('long entry names and key chips keep row actions inside the panel', async ({
+        page,
+      }) => {
+        await createProject(page);
+        await addEntry(page, vp.kind);
+
+        // Reproduce an imported-lorebook row: a long nowrap title plus enough
+        // keys to render three chips and a "+N" badge.
+        await page
+          .locator('input[placeholder="Entry name…"]')
+          .last()
+          .fill('Human Servant Status & The Edicts of Camelot Concerning Peerage');
+        await page.locator('[aria-label="Toggle entry options"]').click();
+        const keyInput = page.getByPlaceholder('Add key…').last();
+        await keyInput.waitFor({ state: 'visible' });
+        for (const key of ['human', 'humans', 'servant', 'camelot', 'peerage', 'edict']) {
+          await keyInput.fill(key);
+          await keyInput.press('Enter');
+        }
+        await page.locator('[aria-label="Toggle entry options"]').click();
+
+        if (vp.kind === 'mobile') {
+          await page.locator('[aria-label="Toggle entries panel"]').click();
+          await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
+          // Let the slide-in transition finish before measuring boxes.
+          await page.waitForTimeout(600);
+        }
+
+        // The virtual-scroll content wrapper must never exceed the panel, or
+        // the duplicate/delete actions end up clipped off-canvas.
+        const scroll = await page.locator('.list-viewport').evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(scroll.scrollWidth).toBeLessThanOrEqual(scroll.clientWidth + 1);
+
+        const panelBox = (await page.locator('.entries-sidenav').boundingBox())!;
+        const rowBox = (await page.locator('app-entry-list .entry-item').first().boundingBox())!;
+        expect(rowBox.x).toBeGreaterThanOrEqual(panelBox.x);
+        expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 1);
+
+        const duplicate = page
+          .locator('app-entry-list [aria-label="Duplicate entry"]')
+          .first();
+        const dupBox = (await duplicate.boundingBox())!;
+        expect(dupBox.x + dupBox.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 1);
+      });
+
       test('no element overflows the viewport width', async ({ page }) => {
         await createProject(page);
         await addEntry(page, vp.kind);
         // Open the options panel to check the expanded layout too.
         await page.locator('[aria-label="Toggle entry options"]').click();
 
-        const offenders = await page.evaluate(() => {
-          const docWidth = document.documentElement.clientWidth;
-          const bad: string[] = [];
-          for (const el of document.querySelectorAll<HTMLElement>('body *')) {
-            // Closed off-canvas drawers are intentionally outside the viewport.
-            if (el.closest('.mat-drawer:not(.mat-drawer-opened)')) continue;
-            if (el.closest('.cdk-overlay-container')) continue;
-            const style = getComputedStyle(el);
-            if (style.position === 'fixed' || style.visibility === 'hidden') continue;
-            const box = el.getBoundingClientRect();
-            if (
-              box.width > 0 &&
-              (box.right > docWidth + 1 || box.left < -1)
-            ) {
-              bad.push(`${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`);
+        const scan = () =>
+          page.evaluate(() => {
+            const docWidth = document.documentElement.clientWidth;
+            const bad: string[] = [];
+            for (const el of document.querySelectorAll<HTMLElement>('body *')) {
+              // Closed off-canvas drawers are intentionally outside the viewport.
+              if (el.closest('.mat-drawer:not(.mat-drawer-opened)')) continue;
+              if (el.closest('.cdk-overlay-container')) continue;
+              const style = getComputedStyle(el);
+              if (style.position === 'fixed' || style.visibility === 'hidden') continue;
+              if (el.classList.contains('cdk-visually-hidden')) continue;
+              const box = el.getBoundingClientRect();
+              if (box.width > 0 && (box.right > docWidth + 1 || box.left < -1)) {
+                bad.push(`${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`);
+              }
             }
-          }
-          return bad.slice(0, 5);
-        });
-        expect(offenders, `elements wider than the viewport: ${offenders.join(', ')}`).toEqual(
-          [],
-        );
+            return bad.slice(0, 5);
+          });
+
+        // Poll instead of scanning once: drawer/panel animations legitimately
+        // put elements outside the viewport for a few frames, but nothing may
+        // stay there.
+        await expect
+          .poll(scan, { timeout: 5_000, message: 'persistent viewport overflow' })
+          .toEqual([]);
       });
     });
   }
