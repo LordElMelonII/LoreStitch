@@ -29,36 +29,67 @@
       </mat-form-field>
     </div>
 
-    <div class="options-row">
-      <mat-slide-toggle [checked]="matchCase()" (change)="matchCase.set($event.checked)"
-        >Match case</mat-slide-toggle
-      >
-      <mat-slide-toggle [checked]="wholeWord()" (change)="wholeWord.set($event.checked)"
-        >Whole word</mat-slide-toggle
-      >
-      <mat-slide-toggle [checked]="regexMode()" (change)="regexMode.set($event.checked)"
-        >Regex</mat-slide-toggle
-      >
+    <div class="chip-row">
+      <span class="chip-label">Match</span>
+      <mat-chip-listbox multiple aria-label="Match options">
+        <mat-chip-option
+          [selected]="matchCase()"
+          (selectionChange)="matchCase.set($event.selected)"
+          matTooltip="Case-sensitive matching"
+        >
+          Match case
+        </mat-chip-option>
+        <mat-chip-option
+          [selected]="wholeWord()"
+          (selectionChange)="wholeWord.set($event.selected)"
+          matTooltip="Only match whole words"
+        >
+          Whole word
+        </mat-chip-option>
+        <mat-chip-option
+          [selected]="regexMode()"
+          (selectionChange)="regexMode.set($event.selected)"
+          matTooltip="Treat the query as a regular expression"
+        >
+          Regex
+        </mat-chip-option>
+      </mat-chip-listbox>
     </div>
 
-    <div class="options-row">
-      <mat-slide-toggle [checked]="!scopeActive()" (change)="scopeActive.set(!$event.checked)"
-        >All entries</mat-slide-toggle
-      >
-      <mat-slide-toggle [checked]="scopeActive()" (change)="scopeActive.set($event.checked)"
-        >Active entry only</mat-slide-toggle
-      >
+    <div class="chip-row">
+      <span class="chip-label">Scope</span>
+      <mat-chip-listbox aria-label="Search scope">
+        <mat-chip-option
+          [selected]="!scopeActive()"
+          (selectionChange)="scopeActive.set(!$event.selected)"
+        >
+          All entries
+        </mat-chip-option>
+        <mat-chip-option
+          [selected]="scopeActive()"
+          (selectionChange)="scopeActive.set($event.selected)"
+        >
+          Active entry only
+        </mat-chip-option>
+      </mat-chip-listbox>
     </div>
 
-    <div class="options-row fields-row">
-      <span class="fields-label">Fields:</span>
-      <mat-checkbox [checked]="inContent()" (change)="inContent.set($event.checked)"
-        >Content</mat-checkbox
-      >
-      <mat-checkbox [checked]="inKeys()" (change)="inKeys.set($event.checked)">Keys</mat-checkbox>
-      <mat-checkbox [checked]="inNames()" (change)="inNames.set($event.checked)"
-        >Names</mat-checkbox
-      >
+    <div class="chip-row">
+      <span class="chip-label">Fields</span>
+      <mat-chip-listbox multiple aria-label="Fields to search">
+        <mat-chip-option
+          [selected]="inContent()"
+          (selectionChange)="inContent.set($event.selected)"
+        >
+          Content
+        </mat-chip-option>
+        <mat-chip-option [selected]="inKeys()" (selectionChange)="inKeys.set($event.selected)">
+          Keys
+        </mat-chip-option>
+        <mat-chip-option [selected]="inNames()" (selectionChange)="inNames.set($event.selected)">
+          Names
+        </mat-chip-option>
+      </mat-chip-listbox>
     </div>
   </div>
 

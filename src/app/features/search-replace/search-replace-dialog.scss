@@ -23,15 +23,22 @@
     }
   }
 
-  .options-row {
+  // Filter-chip option rows, matching the editor's advanced options bar.
+  .chip-row {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     flex-wrap: wrap;
 
-    .fields-label {
+    .chip-label {
+      flex: none;
+      min-width: 48px;
       font: var(--mat-sys-label-medium);
       color: var(--mat-sys-on-surface-variant);
+    }
+
+    mat-chip-listbox {
+      flex-wrap: wrap;
     }
   }
 
