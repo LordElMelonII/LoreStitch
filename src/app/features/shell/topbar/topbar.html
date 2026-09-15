@@ -44,9 +44,12 @@
       <mat-icon>post_add</mat-icon>
     </button>
 
+    <!-- Search lives in the More actions menu too, so compact phones drop
+         this standalone button (the row cannot fit six 48px actions). -->
     <button
       matIconButton
       type="button"
+      class="desktop-only"
       (click)="openSearch()"
       matTooltip="Search & replace"
       aria-label="Search and replace"
@@ -146,10 +149,6 @@
       <mat-icon>file_download</mat-icon>
       <span>Export</span>
     </button>
-    <button mat-menu-item [matMenuTriggerFor]="themeMenu">
-      <mat-icon>brightness_auto</mat-icon>
-      <span>Theme</span>
-    </button>
   </mat-menu>
   <mat-menu #themeMenu="matMenu" class="theme-menu">
     <button
@@ -177,6 +176,19 @@
       <span>Dark — cyan orange</span>
     </button>
   </mat-menu>
+
+  <!-- Always rendered: theme must be reachable from the welcome screen,
+       before any project exists (it used to be buried in the project-gated
+       More actions menu). -->
+  <button
+    matIconButton
+    type="button"
+    [matMenuTriggerFor]="themeMenu"
+    matTooltip="Theme"
+    aria-label="Theme menu"
+  >
+    <mat-icon>brightness_auto</mat-icon>
+  </button>
 
   <button
     matIconButton
