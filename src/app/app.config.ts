@@ -31,9 +31,13 @@ export const appConfig: ApplicationConfig = {
     // `auto` mode stamps `touch-action: none` on every tooltip host, which
     // kills native panning for touches that start on those elements (the
     // entry list became unscrollable from any row). 'off' keeps the scroll.
+    // Non-interactive additionally makes the floating panel itself
+    // `pointer-events: none`, so gliding the cursor over a tooltip (e.g.
+    // moving down from an icon button onto the entry beneath it) passes
+    // straight through instead of getting stuck on the bubble.
     {
       provide: MAT_TOOLTIP_DEFAULT_OPTIONS,
-      useValue: { touchGestures: 'off' as const },
+      useValue: { touchGestures: 'off' as const, disableTooltipInteractivity: true },
     },
     // M3 iconography: Material Symbols Outlined replaces the legacy
     // Material Icons font as the default ligature set for <mat-icon>.
