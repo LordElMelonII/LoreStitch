@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ImportExportService } from '../../../core/services/import-export.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { GITHUB_REPO_URL } from '../../../shared/constants/github';
 import { DESKTOP_BREAKPOINT_QUERY } from '../../../shared/constants/breakpoints';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ProjectActionsService } from '../project-actions.service';
@@ -57,6 +58,9 @@ export class Topbar {
   protected readonly projectName = computed(
     () => this.workspace.activeProject()?.title ?? 'LoreStitch',
   );
+
+  /** External repository link (top bar on the welcome screen, More menu otherwise). */
+  protected readonly githubUrl = GITHUB_REPO_URL;
 
   protected async openSearch(): Promise<void> {
     // Lazy-loaded: keeps the search/replace UI out of the initial bundle.

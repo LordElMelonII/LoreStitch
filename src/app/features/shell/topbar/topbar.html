@@ -149,6 +149,11 @@
       <mat-icon>file_download</mat-icon>
       <span>Export</span>
     </button>
+    <mat-divider></mat-divider>
+    <a mat-menu-item [href]="githubUrl" target="_blank" rel="noopener noreferrer">
+      <mat-icon svgIcon="github"></mat-icon>
+      <span>GitHub repository</span>
+    </a>
   </mat-menu>
   <mat-menu #themeMenu="matMenu" class="theme-menu">
     <button
@@ -199,6 +204,22 @@
   >
     <mat-icon>folder_open</mat-icon>
   </button>
+
+  <!-- Repository link, parked on the bar only while no project is open —
+       with a project it moves into the More actions menu so the bar keeps
+       its space for project actions. -->
+  @if (!workspace.activeProject()) {
+    <a
+      matIconButton
+      [href]="githubUrl"
+      target="_blank"
+      rel="noopener noreferrer"
+      matTooltip="GitHub repository"
+      aria-label="GitHub repository"
+    >
+      <mat-icon svgIcon="github"></mat-icon>
+    </a>
+  }
   <mat-menu #projectMenu="matMenu">
     @for (saved of workspace.savedProjects(); track saved.id) {
       <button mat-menu-item (click)="actions.openProject(saved.id)">

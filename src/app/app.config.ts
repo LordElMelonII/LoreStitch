@@ -7,9 +7,11 @@ import {
 } from '@angular/core';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideServiceWorker } from '@angular/service-worker';
+import { DomSanitizer } from '@angular/platform-browser';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { MAT_TOOLTIP_DEFAULT_OPTIONS } from '@angular/material/tooltip';
 import { MatIconRegistry } from '@angular/material/icon';
+import { GITHUB_ICON } from './shared/constants/github';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -39,7 +41,14 @@ export const appConfig: ApplicationConfig = {
     // M3 iconography: Material Symbols Outlined replaces the legacy
     // Material Icons font as the default ligature set for <mat-icon>.
     provideAppInitializer(() => {
-      inject(MatIconRegistry).setDefaultFontSetClass('material-symbols-outlined');
+      const registry = inject(MatIconRegistry);
+      registry.setDefaultFontSetClass('material-symbols-outlined');
+      // Non-font glyph (the subsetted symbols font has no GitHub mark),
+      // inlined as a literal: no HTTP fetch, no HttpClient dependency.
+      registry.addSvgIconLiteral(
+        'github',
+        inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
+      );
     }),
   ],
 };
