@@ -53,3 +53,5 @@ skills-lock.json
 # Playwright
 /test-results/
 /playwright-report/
+
+/ROADMAP.md
