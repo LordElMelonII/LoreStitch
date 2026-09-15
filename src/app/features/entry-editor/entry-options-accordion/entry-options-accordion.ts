@@ -19,6 +19,7 @@ import {
 import { MOBILE_BREAKPOINT_QUERY } from '../../../shared/constants/breakpoints';
 import { entrySliceSignal } from '../entry-edit-form';
 import { EntryActivation } from '../entry-activation/entry-activation';
+import { EntryInclusionGroup } from '../entry-inclusion-group/entry-inclusion-group';
 import { EntryKeys } from '../entry-keys/entry-keys';
 import { EntryMatchingSources } from '../entry-matching-sources/entry-matching-sources';
 import { EntryPlacement } from '../entry-placement/entry-placement';
@@ -57,6 +58,7 @@ interface TriggerStripModel {
     MatSlideToggleModule,
     MatTooltipModule,
     EntryActivation,
+    EntryInclusionGroup,
     EntryKeys,
     EntryMatchingSources,
     EntryPlacement,

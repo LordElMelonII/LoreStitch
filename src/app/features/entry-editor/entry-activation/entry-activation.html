@@ -13,6 +13,13 @@
     >
       Case Sensitive
     </mat-chip-option>
+    <mat-chip-option
+      [selected]="!!ext('ignore_budget')"
+      (selectionChange)="updates.setExtensionChipFlag(entry(), 'ignore_budget', $event)"
+      matTooltip="Exempt this entry from the book's token budget — it is always inserted and may overflow the budget"
+    >
+      Ignore Budget
+    </mat-chip-option>
   </mat-chip-listbox>
 </div>
 <div class="field-row">

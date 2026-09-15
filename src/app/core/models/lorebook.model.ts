@@ -425,8 +425,9 @@ export function toSpecCompliantBook(book: CharacterBook): CharacterBook {
 /**
  * A native SillyTavern world-info entry. SillyTavern tolerates unknown/legacy
  * fields on entries; the fields LoreStitch edits are normalized into
- * `CharacterBookEntry.extensions` (see `stNativeToCharacterBook`), the rest
- * are ignored.
+ * `CharacterBookEntry.extensions` (see `stNativeToCharacterBook`), everything
+ * else — extension-derived attributes like `color` included — round-trips
+ * untouched through `extensions` as well.
  */
 export interface SillyTavernEntry {
   uid: number;
@@ -471,6 +472,7 @@ export interface SillyTavernEntry {
   matchScenario?: boolean;
   matchCreatorNotes?: boolean;
   characterFilter?: StCharacterFilter | null;
+  extensions?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -483,6 +485,161 @@ export interface SillyTavernWorldInfo {
   token_budget?: number;
   recursive_scanning?: boolean;
   [key: string]: unknown;
+}
+
+// ============================================================================
+// Lossless round-tripping of fields LoreStitch does not manage
+// ============================================================================
+
+/**
+ * Top-level keys of a native world-info file the converters consume; every
+ * other root key (`stlo`, `randomExtension`, …) is extension data that must
+ * survive import and export untouched (stored in `book.extensions`).
+ */
+const ST_BOOK_RESERVED_KEYS: ReadonlySet<string> = new Set([
+  'entries',
+  'name',
+  'description',
+  'scan_depth',
+  'token_budget',
+  'recursive_scanning',
+]);
+
+/**
+ * Top-level fields of a native entry the converters consume (keep in sync
+ * with `SillyTavernEntry`). Anything else on an entry — e.g. attributes added
+ * by SillyTavern extensions — is extension data.
+ */
+const ST_ENTRY_NATIVE_KEYS: ReadonlySet<string> = new Set([
+  'uid',
+  'key',
+  'keysecondary',
+  'comment',
+  'content',
+  'constant',
+  'vectorized',
+  'selective',
+  'selectiveLogic',
+  'addMemo',
+  'order',
+  'position',
+  'disable',
+  'excludeRecursion',
+  'preventRecursion',
+  'delayUntilRecursion',
+  'probability',
+  'useProbability',
+  'depth',
+  'outletName',
+  'group',
+  'groupOverride',
+  'groupWeight',
+  'scanDepth',
+  'caseSensitive',
+  'matchWholeWords',
+  'useGroupScoring',
+  'automationId',
+  'role',
+  'sticky',
+  'cooldown',
+  'delay',
+  'triggers',
+  'displayIndex',
+  'ignoreBudget',
+  'matchPersonaDescription',
+  'matchCharacterDescription',
+  'matchCharacterPersonality',
+  'matchCharacterDepthPrompt',
+  'matchScenario',
+  'matchCreatorNotes',
+  'characterFilter',
+  'extensions',
+]);
+
+/**
+ * The normalized `extensions` keys the converters map to native entry fields
+ * (keep in sync with `EntryExtensions`). On export these are rewritten to
+ * their native places, so they must never leak back as loose keys; everything
+ * else found in `entry.extensions` is spread verbatim onto the native entry.
+ */
+const ST_ENTRY_EXTENSION_KEYS: ReadonlySet<string> = new Set<string>([
+  'position',
+  'exclude_recursion',
+  'prevent_recursion',
+  'delay_until_recursion',
+  'display_index',
+  'probability',
+  'useProbability',
+  'depth',
+  'selectiveLogic',
+  'outlet_name',
+  'group',
+  'group_override',
+  'group_weight',
+  'scan_depth',
+  'case_sensitive',
+  'match_whole_words',
+  'use_group_scoring',
+  'automation_id',
+  'role',
+  'vectorized',
+  'sticky',
+  'cooldown',
+  'delay',
+  'triggers',
+  'ignore_budget',
+  'match_persona_description',
+  'match_character_description',
+  'match_character_personality',
+  'match_character_depth_prompt',
+  'match_scenario',
+  'match_creator_notes',
+  'character_filter',
+  'characterFilter',
+  'native_extensions',
+]);
+
+/**
+ * Unknown top-level entry keys — extension-derived attributes like `color` —
+ * parked into the normalized `extensions` bag so import -> export preserves
+ * them byte-for-byte. (Unknown keys inside the native entry's own
+ * `extensions` object ride along inside the parked mirror instead, so they
+ * are never written twice.)
+ */
+function stUnknownEntryExtensions(st: SillyTavernEntry): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(st).filter(([key]) => !ST_ENTRY_NATIVE_KEYS.has(key)),
+  );
+}
+
+/** Inverse of `stUnknownEntryExtensions` for the export direction. */
+function unknownEntryExtensionKeys(ext: StNativeExtensions): [string, unknown][] {
+  return Object.entries(ext).filter(([key]) => !ST_ENTRY_EXTENSION_KEYS.has(key));
+}
+
+/**
+ * Reads an entry field: the native camelCase key always wins when present —
+ * `null` included, since tri-states (`role`, `scanDepth`, …) use it to mean
+ * "unset" and SillyTavern edits keep the camelCase key authoritative. The
+ * normalized `extensions` mirror is only the fallback for books that carry a
+ * value exclusively there.
+ */
+function stEntryField<T>(
+  st: SillyTavernEntry,
+  nativeExtensions: Record<string, unknown>,
+  camelKey: string,
+  extKey: string,
+  fallback: T,
+): T {
+  const camel = st[camelKey];
+  if (camel !== undefined) {
+    return camel as T;
+  }
+  const mirrored = nativeExtensions[extKey];
+  if (mirrored !== undefined && mirrored !== null) {
+    return mirrored as T;
+  }
+  return fallback;
 }
 
 // ============================================================================
@@ -658,7 +815,9 @@ function toNativeCharacterFilter(value: unknown): StCharacterFilter | null {
 /**
  * Converts a native SillyTavern world-info export into a `CharacterBook`.
  * Field names mirror the inverse of SillyTavern's `convertCharacterBook()`:
- * anything outside the V2 schema is preserved inside `extensions`.
+ * anything outside the V2 schema — extension data on the file root (`stlo`,
+ * `randomExtension`, …) and on entries (`color`, unknown `extensions` keys,
+ * …) — is preserved inside `extensions` bags so exports round-trip untouched.
  */
 export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: string): CharacterBook {
   const rawEntries: SillyTavernEntry[] = Array.isArray(data.entries)
@@ -670,40 +829,63 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
   );
 
   const entries = sorted.map((st, index): CharacterBookEntry => {
-    const position = st.position ?? ST_POSITION.before;
+    const nativeExtensions =
+      st.extensions && typeof st.extensions === 'object' ? st.extensions : {};
+    const read = <T>(camelKey: string, extKey: string, fallback: T): T =>
+      stEntryField(st, nativeExtensions, camelKey, extKey, fallback);
+
+    const position = read('position', 'position', ST_POSITION.before as number);
     const extensions: Record<string, unknown> = {
+      ...stUnknownEntryExtensions(st),
+      // The native entry's own normalized mirror (world-info.js persists one
+      // per entry) rides along verbatim so exports stay byte-identical.
+      ...(Object.keys(nativeExtensions).length ? { native_extensions: { ...nativeExtensions } } : {}),
       position,
-      exclude_recursion: st.excludeRecursion ?? false,
-      prevent_recursion: st.preventRecursion ?? false,
-      delay_until_recursion: st.delayUntilRecursion ?? false,
-      display_index: st.displayIndex ?? index,
-      probability: st.probability ?? 100,
-      useProbability: st.useProbability ?? true,
-      depth: st.depth ?? 4,
-      selectiveLogic: st.selectiveLogic ?? ST_LOGIC.AND_ANY,
-      outlet_name: st.outletName ?? '',
-      group: st.group ?? '',
-      group_override: st.groupOverride ?? false,
-      group_weight: st.groupWeight ?? 100,
-      scan_depth: st.scanDepth ?? null,
-      case_sensitive: st.caseSensitive ?? null,
-      match_whole_words: st.matchWholeWords ?? null,
-      use_group_scoring: st.useGroupScoring ?? null,
-      automation_id: st.automationId ?? '',
-      role: st.role ?? ST_ROLE.system,
-      vectorized: st.vectorized ?? false,
-      sticky: st.sticky ?? null,
-      cooldown: st.cooldown ?? null,
-      delay: st.delay ?? null,
-      triggers: st.triggers ?? [],
-      ignore_budget: st.ignoreBudget ?? false,
-      match_persona_description: st.matchPersonaDescription ?? false,
-      match_character_description: st.matchCharacterDescription ?? false,
-      match_character_personality: st.matchCharacterPersonality ?? false,
-      match_character_depth_prompt: st.matchCharacterDepthPrompt ?? false,
-      match_scenario: st.matchScenario ?? false,
-      match_creator_notes: st.matchCreatorNotes ?? false,
-      character_filter: stNativeToCharacterFilter(st.characterFilter),
+      exclude_recursion: read('excludeRecursion', 'exclude_recursion', false),
+      prevent_recursion: read('preventRecursion', 'prevent_recursion', false),
+      delay_until_recursion: read('delayUntilRecursion', 'delay_until_recursion', false),
+      display_index: read('displayIndex', 'display_index', index),
+      probability: read('probability', 'probability', 100),
+      useProbability: read('useProbability', 'useProbability', true),
+      depth: read('depth', 'depth', 4),
+      selectiveLogic: read('selectiveLogic', 'selectiveLogic', ST_LOGIC.AND_ANY),
+      outlet_name: read('outletName', 'outlet_name', ''),
+      group: read('group', 'group', ''),
+      group_override: read('groupOverride', 'group_override', false),
+      group_weight: read('groupWeight', 'group_weight', 100),
+      scan_depth: read('scanDepth', 'scan_depth', null),
+      case_sensitive: read('caseSensitive', 'case_sensitive', null),
+      match_whole_words: read('matchWholeWords', 'match_whole_words', null),
+      use_group_scoring: read('useGroupScoring', 'use_group_scoring', null),
+      automation_id: read('automationId', 'automation_id', ''),
+      role: read('role', 'role', ST_ROLE.system),
+      vectorized: read('vectorized', 'vectorized', false),
+      sticky: read('sticky', 'sticky', null),
+      cooldown: read('cooldown', 'cooldown', null),
+      delay: read('delay', 'delay', null),
+      triggers: read('triggers', 'triggers', [] as string[]),
+      ignore_budget: read('ignoreBudget', 'ignore_budget', false),
+      match_persona_description: read('matchPersonaDescription', 'match_persona_description', false),
+      match_character_description: read(
+        'matchCharacterDescription',
+        'match_character_description',
+        false,
+      ),
+      match_character_personality: read(
+        'matchCharacterPersonality',
+        'match_character_personality',
+        false,
+      ),
+      match_character_depth_prompt: read(
+        'matchCharacterDepthPrompt',
+        'match_character_depth_prompt',
+        false,
+      ),
+      match_scenario: read('matchScenario', 'match_scenario', false),
+      match_creator_notes: read('matchCreatorNotes', 'match_creator_notes', false),
+      character_filter: stNativeToCharacterFilter(
+        read('characterFilter', 'character_filter', null as StCharacterFilter | null),
+      ),
     };
 
     return {
@@ -730,7 +912,9 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
     scan_depth: data.scan_depth ?? undefined,
     token_budget: data.token_budget ?? undefined,
     recursive_scanning: data.recursive_scanning ?? false,
-    extensions: Object.fromEntries(Object.entries(data).filter(([k]) => k === 'stlo')),
+    extensions: Object.fromEntries(
+      Object.entries(data).filter(([k]) => !ST_BOOK_RESERVED_KEYS.has(k)),
+    ),
     entries,
   };
 }
@@ -765,6 +949,7 @@ export interface EntryExtensions {
   delay?: number | null;
   triggers?: string[];
   display_index?: number;
+  ignore_budget?: boolean;
   match_persona_description?: boolean;
   match_character_description?: boolean;
   match_character_personality?: boolean;
@@ -791,7 +976,9 @@ function legacyFlag(ext: StNativeExtensions, normalized: string, legacy: string)
 
 /**
  * Converts a `CharacterBook` back to the native SillyTavern world-info shape,
- * compatible with direct import into SillyTavern.
+ * compatible with direct import into SillyTavern. Extension data parked in
+ * `extensions` bags at import time (book-level `stlo` / `randomExtension`,
+ * entry-level extras like `color`) is written back verbatim.
  */
 export function characterBookToStNative(book: CharacterBook): SillyTavernWorldInfo {
   const entries: Record<string, SillyTavernEntry> = {};
@@ -811,6 +998,9 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
     const characterFilter = toNativeCharacterFilter(ext.character_filter ?? ext['characterFilter']);
 
     entries[String(uid)] = {
+      // Extension-derived attributes round-trip at the native top level;
+      // known fields below always win over any stale parked copies.
+      ...Object.fromEntries(unknownEntryExtensionKeys(ext)),
       uid,
       key: entry.keys ?? [],
       keysecondary: entry.secondary_keys ?? [],
@@ -839,11 +1029,14 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
       matchWholeWords: ext.match_whole_words ?? null,
       useGroupScoring: ext.use_group_scoring ?? null,
       automationId: ext.automation_id ?? '',
-      role: ext.role ?? ST_ROLE.system,
+      // ST-native files use `null` for "not at depth"; keep it instead of
+      // coercing to system so imports round-trip untouched.
+      role: ext.role ?? null,
       sticky: ext.sticky ?? null,
       cooldown: ext.cooldown ?? null,
       delay: ext.delay ?? null,
       triggers: ext.triggers ?? [],
+      ignoreBudget: ext.ignore_budget ?? false,
       displayIndex: ext.display_index ?? index,
       matchPersonaDescription: legacyFlag(
         ext,
@@ -868,8 +1061,21 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
       matchScenario: legacyFlag(ext, 'match_scenario', 'matchScenario'),
       matchCreatorNotes: legacyFlag(ext, 'match_creator_notes', 'matchCreatorNotes'),
       ...(characterFilter ? { characterFilter } : {}),
+      // Imported entries that carried SillyTavern's per-entry normalized
+      // `extensions` mirror get it back verbatim (untracked edits live in the
+      // native fields above, which stay authoritative).
+      ...(ext['native_extensions'] &&
+      typeof ext['native_extensions'] === 'object' &&
+      Object.keys(ext['native_extensions']).length
+        ? { extensions: ext['native_extensions'] as Record<string, unknown> }
+        : {}),
     };
   });
+
+  // Extension metadata parked on the book root (stlo, randomExtension, …)
+  // rides along unmanaged; `entries` itself can never come from the bag.
+  const bookExtensions = book.extensions ?? {};
+  const { entries: _ignored, ...extensionData } = bookExtensions as Record<string, unknown>;
 
   return {
     entries,
@@ -880,5 +1086,6 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
     ...(book.recursive_scanning !== undefined
       ? { recursive_scanning: book.recursive_scanning }
       : {}),
+    ...extensionData,
   };
 }

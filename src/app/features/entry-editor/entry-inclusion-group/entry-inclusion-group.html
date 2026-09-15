@@ -1,0 +1,55 @@
+<p class="section-title">Inclusion Group</p>
+<p class="section-desc">
+  When several entries sharing a group trigger at once, only one is inserted
+</p>
+<div class="field-row">
+  <mat-form-field
+    class="grow"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="Comma-separated group labels — a single entry may belong to several groups, and winning any of them disables its rivals"
+  >
+    <mat-label>Group</mat-label>
+    <input matInput [formField]="groupForm.group" placeholder="None" />
+  </mat-form-field>
+  <mat-form-field
+    class="num"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="Higher weight wins the random roll when the group fires (1–10000, default 100)"
+  >
+    <mat-label>Group Weight</mat-label>
+    <input matInput type="number" [formField]="groupForm.groupWeight" />
+    @if (groupForm.groupWeight().errors()[0]; as error) {
+      <mat-error>{{ error.message }}</mat-error>
+    }
+  </mat-form-field>
+</div>
+
+<div class="field-row">
+  <mat-chip-listbox multiple aria-label="Group selection mode">
+    <mat-chip-option
+      [selected]="!!ext('group_override')"
+      (selectionChange)="updates.setExtensionChipFlag(entry(), 'group_override', $event)"
+      matTooltip="Prioritize Inclusion: the entry with the highest Order wins the group instead of the weighted random roll"
+    >
+      Prioritize Inclusion
+    </mat-chip-option>
+  </mat-chip-listbox>
+  <mat-form-field
+    class="logic-field"
+    subscriptSizing="dynamic"
+    appearance="fill"
+    matTooltip="Use Group Scoring: the entries with the most key matches win the group before the weight roll"
+  >
+    <mat-label>Use Group Scoring</mat-label>
+    <mat-select
+      [value]="groupScoring()"
+      (selectionChange)="updates.setExtension(entry(), 'use_group_scoring', $event.value)"
+    >
+      <mat-option [value]="null">Default (book setting)</mat-option>
+      <mat-option [value]="true">Enabled</mat-option>
+      <mat-option [value]="false">Disabled</mat-option>
+    </mat-select>
+  </mat-form-field>
+</div>
