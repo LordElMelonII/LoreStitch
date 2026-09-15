@@ -15,7 +15,6 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { DESKTOP_BREAKPOINT_QUERY } from '../../../shared/constants/breakpoints';
 import { LayoutService } from '../../../shared/services/layout.service';
-import { SearchReplaceDialog } from '../../search-replace/search-replace-dialog';
 import { ProjectActionsService } from '../project-actions.service';
 
 /** Top app bar: brand, project actions, export/theme/project menus. */
@@ -59,7 +58,9 @@ export class Topbar {
     () => this.workspace.activeProject()?.title ?? 'LoreStitch',
   );
 
-  protected openSearch(): void {
+  protected async openSearch(): Promise<void> {
+    // Lazy-loaded: keeps the search/replace UI out of the initial bundle.
+    const { SearchReplaceDialog } = await import('../../search-replace/search-replace-dialog');
     this.dialog.open(SearchReplaceDialog, {
       maxWidth: 'min(96vw, 900px)',
       data: { activeEntryId: this.workspace.activeTabId() },

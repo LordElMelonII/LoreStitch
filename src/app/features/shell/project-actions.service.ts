@@ -6,17 +6,18 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ParsedImport, ImportExportService } from '../../core/services/import-export.service';
 import { ProjectWorkspace } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
-import { MergeResolverDialog } from '../merge-resolver/merge-resolver-dialog';
 import { type MergeOutcome } from '../merge-resolver/merge-resolver.model';
-import { NewProjectDialog } from './new-project-dialog';
 import { type NewProjectResult } from './new-project.model';
 import { IMPORT_ACCEPT, MERGE_ACCEPT } from './project-actions.constants';
-import { ConfirmDialog } from '../../shared/components/confirm-dialog/confirm-dialog';
 import { MOBILE_BREAKPOINT_QUERY } from '../../shared/constants/breakpoints';
 
 /**
  * Project lifecycle & import orchestration shared by the topbar and the
  * welcome screen: dialogs for create/delete, file picking, and merge.
+ *
+ * Dialog components are loaded through dynamic imports so their code (and
+ * the diff viewer pulled in by the merge resolver) stays out of the initial
+ * bundle — they only run after an explicit user action.
  */
 @Service()
 export class ProjectActionsService {
@@ -31,6 +32,7 @@ export class ProjectActionsService {
   // -------------------------------------------------------------------------
 
   async newProject(): Promise<void> {
+    const { NewProjectDialog } = await import('./new-project-dialog');
     const result = (await firstValueFrom(this.dialog.open(NewProjectDialog).afterClosed())) as
       NewProjectResult | undefined;
     if (result) {
@@ -47,6 +49,7 @@ export class ProjectActionsService {
   }
 
   async deleteProject(project: ProjectWorkspace): Promise<void> {
+    const { ConfirmDialog } = await import('../../shared/components/confirm-dialog/confirm-dialog');
     const confirmed = await firstValueFrom(
       this.dialog
         .open(ConfirmDialog, {
@@ -143,6 +146,7 @@ export class ProjectActionsService {
       });
       return;
     }
+    const { MergeResolverDialog } = await import('../merge-resolver/merge-resolver-dialog');
     const outcome = await firstValueFrom(
       this.dialog
         .open(MergeResolverDialog, {

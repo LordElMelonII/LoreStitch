@@ -7,7 +7,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry, estimateTokens } from '../../../core/models/lorebook.model';
-import { DelimiterDialog } from '../../delimiters/delimiter-dialog';
 import { delimiterLabel, detectDelimiter } from '../../../core/models/delimiters';
 import { entrySliceSignal } from '../entry-edit-form';
 
@@ -73,7 +72,9 @@ export class EntryContentField {
     };
   });
 
-  protected openDelimiterDialog(): void {
+  protected async openDelimiterDialog(): Promise<void> {
+    // Lazy-loaded: keeps the delimiter picker out of the initial bundle.
+    const { DelimiterDialog } = await import('../../delimiters/delimiter-dialog');
     this.dialog.open(DelimiterDialog, {
       maxWidth: 'min(96vw, 860px)',
       // MD3 adaptive behavior: the dialog goes full-screen on compact screens
