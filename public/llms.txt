@@ -1,0 +1,10 @@
+# LoreStitch
+
+> LoreStitch is an offline studio for authoring SillyTavern lorebooks (World Info) with Git-like versioning. It is a single-page application that runs entirely in the browser: projects are stored locally in IndexedDB, and no user data ever leaves the device.
+
+LoreStitch is an application, not a content site. Crawling the app URL only yields the JavaScript application shell; all functionality requires a browser with JavaScript enabled. Import and export speak the SillyTavern World Info JSON format (plus V2-spec Character Books and LoreStitch `.stproj` archives), and unknown fields are preserved so files round-trip untouched.
+
+## Links
+
+- [LoreStitch web app](https://lorestitch.pages.dev/): the application itself.
+- [SillyTavern](https://sillytavern.ai): the AI frontend whose World Info / lorebook format LoreStitch edits.
