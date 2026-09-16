@@ -430,11 +430,13 @@ test.describe('responsive studio shell', () => {
           await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
         }
 
-        // The virtual-scroll content wrapper must never exceed the panel, or
-        // the duplicate/delete actions end up clipped off-canvas. Poll the
-        // containment instead of sleeping out the drawer's slide-in
-        // transition: intermediate animation frames can transiently measure
-        // past the panel edge, but the layout must settle inside it.
+        // Long titles and key chips now scroll the list viewport horizontally
+        // instead of truncating, so the containment contract changed: the
+        // overflow must stay inside the list viewport (never reach the page),
+        // and scrolling to the far right must bring the duplicate/delete
+        // actions fully into view. Poll instead of sleeping out the drawer's
+        // slide-in transition: intermediate animation frames can transiently
+        // mis-measure.
         await expect
           .poll(
             () =>
@@ -446,22 +448,30 @@ test.describe('responsive studio shell', () => {
                   }
                   return el;
                 };
-                const panel = query('.entries-sidenav').getBoundingClientRect();
+                const doc = document.documentElement;
                 const viewport = query('.list-viewport');
-                const row = query('app-entry-list .entry-item').getBoundingClientRect();
+                const pageOverflow = doc.scrollWidth - doc.clientWidth;
+                // Scrolling the viewport to its end must reveal the row
+                // actions; a boolean is enough — pixel-perfect alignment is
+                // not part of the contract.
+                viewport.scrollLeft = viewport.scrollWidth;
+                const viewportRect = viewport.getBoundingClientRect();
                 const duplicate = query(
                   'app-entry-list [aria-label="Duplicate entry"]',
                 ).getBoundingClientRect();
-                return Math.max(
-                  viewport.scrollWidth - viewport.clientWidth,
-                  row.right - panel.right,
-                  duplicate.right - panel.right,
-                  panel.left - row.left,
-                );
+                const actionsReachable =
+                  duplicate.right <= viewportRect.right + 1 &&
+                  duplicate.left >= viewportRect.left - 1;
+                viewport.scrollLeft = 0;
+                return actionsReachable ? pageOverflow : 1;
               }),
-            { timeout: 5_000, message: 'entry rows must stay inside the entries panel' },
+            {
+              timeout: 5_000,
+              message:
+                'row actions must stay reachable via horizontal scroll and overflow must not leak to the page',
+            },
           )
-          .toBeLessThanOrEqual(1);
+          .toBeLessThanOrEqual(0);
       });
 
       test('no element overflows the viewport width', async ({ page }) => {
