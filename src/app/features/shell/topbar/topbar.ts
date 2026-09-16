@@ -17,6 +17,7 @@ import { GITHUB_REPO_URL } from '../../../shared/constants/github';
 import { DESKTOP_BREAKPOINT_QUERY } from '../../../shared/constants/breakpoints';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ProjectActionsService } from '../project-actions.service';
+import { TokenMeter } from './token-meter';
 
 /** Top app bar: brand, project actions, export/theme/project menus. */
 @Component({
@@ -29,6 +30,7 @@ import { ProjectActionsService } from '../project-actions.service';
     MatMenuModule,
     MatToolbarModule,
     MatTooltipModule,
+    TokenMeter,
   ],
   templateUrl: './topbar.html',
   styleUrl: './topbar.scss',

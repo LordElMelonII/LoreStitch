@@ -7,6 +7,8 @@ import { ParsedImport, ImportExportService } from '../../core/services/import-ex
 import { ProjectWorkspace } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { type MergeOutcome } from '../merge-resolver/merge-resolver.model';
+import { type ExportSelection } from '../merge-resolver/export-selected.model';
+import { type ExportSelectedDialogData } from '../merge-resolver/export-selected-dialog';
 import { type NewProjectResult } from './new-project.model';
 import { IMPORT_ACCEPT, MERGE_ACCEPT } from './project-actions.constants';
 import { MOBILE_BREAKPOINT_QUERY } from '../../shared/constants/breakpoints';
@@ -191,6 +193,53 @@ export class ProjectActionsService {
       `Merged: ${outcome.imported} new, ${outcome.overwritten} overwritten, ${outcome.skipped} skipped.`,
       'OK',
       { duration: 4500 },
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Splitting (export selected entries)
+  // -------------------------------------------------------------------------
+
+  /**
+   * "Export Selected Entries as Lorebook": opens the picker dialog and
+   * downloads the selection as a standalone lorebook file. `preselectedIds`
+   * seeds the dialog from the sidebar's batch selection.
+   */
+  async exportSelectedEntries(preselectedIds: number[] = []): Promise<void> {
+    if (!this.workspace.activeProject()) {
+      this.snackBar.open('Create or open a project before exporting.', 'OK', { duration: 4000 });
+      return;
+    }
+    const { ExportSelectedDialog } = await import('../merge-resolver/export-selected-dialog');
+    const selection = (await firstValueFrom(
+      this.dialog
+        .open(ExportSelectedDialog, {
+          width: '100%',
+          maxWidth: 'min(96vw, 680px)',
+          // MD3 adaptive behavior: the dialog goes full-screen on compact
+          // screens (see the global .app-compact-fullscreen-dialog rules).
+          panelClass: 'app-compact-fullscreen-dialog',
+          data: { preselectedIds } satisfies ExportSelectedDialogData,
+        })
+        .afterClosed(),
+    )) as ExportSelection | undefined;
+    if (!selection) {
+      return;
+    }
+    const project = this.workspace.activeProject();
+    if (!project) {
+      return;
+    }
+    this.importer.exportSelectedBook(
+      project.activeBook,
+      selection.entryIds,
+      selection.title,
+      selection.format,
+    );
+    this.snackBar.open(
+      `Exported ${selection.entryIds.length} entries as “${selection.title}”.`,
+      'OK',
+      { duration: 4000 },
     );
   }
 }

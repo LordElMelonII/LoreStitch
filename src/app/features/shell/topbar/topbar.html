@@ -47,6 +47,8 @@
   <span class="spacer"></span>
 
   @if (workspace.activeProject(); as project) {
+    <app-token-meter />
+
     <button
       matIconButton
       type="button"
@@ -129,6 +131,16 @@
         <span class="menu-desc"
           >Full backup with version history — export regularly, reopen in LoreStitch</span
         >
+      </span>
+    </button>
+
+    <mat-divider></mat-divider>
+    <div class="menu-section">Split a modular lorebook</div>
+    <button mat-menu-item (click)="actions.exportSelectedEntries()">
+      <mat-icon>call_split</mat-icon>
+      <span class="menu-text">
+        <span class="menu-title">Export selected entries…</span>
+        <span class="menu-desc">Write a subset of entries as a standalone lorebook</span>
       </span>
     </button>
 

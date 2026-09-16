@@ -1,0 +1,150 @@
+h2[mat-dialog-title] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  mat-icon {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-row {
+  display: flex;
+  gap: 12px;
+  // Outline fields float their labels ~7px above the field's top border and
+  // Material zeroes the dialog content's top padding when it follows the
+  // title (`.mat-mdc-dialog-title + .mat-mdc-dialog-content`), so without
+  // this clearance the "Lorebook name" / "Format" labels render cut off.
+  padding-top: 10px;
+
+  .name-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .format-field {
+    width: 270px;
+    flex: none;
+  }
+}
+
+.warnings {
+  border: 1px solid color-mix(in srgb, var(--mat-sys-error) 45%, transparent);
+  background: color-mix(in srgb, var(--mat-sys-error-container) 40%, transparent);
+  border-radius: var(--mat-sys-corner-medium);
+  padding: 10px 14px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface);
+
+  .warnings-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-error);
+    margin-bottom: 4px;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    code {
+      font-family: inherit;
+      background: var(--mat-sys-surface-container-highest);
+      border-radius: var(--mat-sys-corner-extra-small);
+      padding: 0 4px;
+    }
+  }
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .counts {
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+
+    .dot {
+      margin: 0 4px;
+    }
+  }
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+// Sized so settings + selection bar + list stay under the 65vh centered
+// dialog content cap on typical windows — the content then never scrolls,
+// which is what clipped the field labels against the top edge.
+.rows-viewport {
+  height: min(38vh, 360px);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-medium);
+}
+
+.entry-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+
+  .row-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: var(--mat-sys-body-medium);
+  }
+  .tag-chip {
+    font: var(--mat-sys-label-small);
+    color: var(--mat-sys-on-tertiary-container);
+    background: var(--mat-sys-tertiary-container);
+    border-radius: var(--mat-sys-corner-full);
+    padding: 0 8px;
+    flex: none;
+  }
+
+  .row-tokens {
+    font: var(--mat-sys-label-small);
+    color: var(--mat-sys-outline);
+    flex: none;
+    min-width: 48px;
+    text-align: right;
+  }
+}
+
+// Compact screens: the name + format fields stack at full width so neither
+// label truncates, and the tag chips yield their space to the titles.
+@media (max-width: 599px) {
+  .settings-row {
+    flex-direction: column;
+    gap: 8px;
+
+    .format-field {
+      width: 100%;
+    }
+  }
+
+  .entry-row .tag-chip {
+    display: none;
+  }
+}

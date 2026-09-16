@@ -14,16 +14,10 @@ import {
   type MergeOutcome,
   type MergePendingCounts,
   type MergeRow,
+  findMergeMatch,
+  mergeEntriesIdentical,
 } from './merge-resolver.model';
 import { DiffViewer } from '../../shared/components/diff-viewer/diff-viewer';
-
-function normalizeKey(key: string): string {
-  return key.trim().toLowerCase();
-}
-
-function keySet(entry: CharacterBookEntry): Set<string> {
-  return new Set((entry.keys ?? []).map(normalizeKey).filter((k) => k.length > 0));
-}
 
 /** Cherry-picker for merging a second lorebook into the current one. */
 @Component({
@@ -52,12 +46,10 @@ export class MergeResolverDialog {
   protected readonly expanded = signal<number | null>(null);
 
   protected readonly rows = computed<MergeRow[]>(() => {
+    const current = this.workspace.entries();
     return this.data.incoming.entries.map((incoming) => {
-      const local = this.findLocalMatch(incoming);
-      const identical =
-        local !== null &&
-        local.content === incoming.content &&
-        JSON.stringify(local.keys) === JSON.stringify(incoming.keys);
+      const local = findMergeMatch(incoming, current);
+      const identical = local !== null && mergeEntriesIdentical(local, incoming);
       return { incoming, local, identical };
     });
   });
@@ -155,31 +147,5 @@ export class MergeResolverDialog {
 
   protected title(entry: CharacterBookEntry): string {
     return entryTitle(entry);
-  }
-
-  /** Finds a clashing local entry by id, then by overlapping primary keys. */
-  private findLocalMatch(incoming: CharacterBookEntry): CharacterBookEntry | null {
-    const current = this.workspace.entries();
-    if (incoming.id !== undefined) {
-      const byId = current.find((e) => e.id === incoming.id);
-      if (byId) {
-        return byId;
-      }
-    }
-    const incomingKeys = keySet(incoming);
-    if (!incomingKeys.size) {
-      return null;
-    }
-    return (
-      current.find((local) => {
-        const localKeys = keySet(local);
-        for (const key of incomingKeys) {
-          if (localKeys.has(key)) {
-            return true;
-          }
-        }
-        return false;
-      }) ?? null
-    );
   }
 }
