@@ -13,6 +13,35 @@ function toHex(digest: ArrayBuffer): string {
     .join('');
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  // Only reorder plain objects; class instances, Dates, Maps etc. keep the
+  // JSON.stringify semantics of the raw value.
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Rebuilds plain objects with lexicographically sorted keys so JSON output
+ * never depends on key insertion order; array order is preserved. Unknown
+ * vendor values pass through untouched.
+ */
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalJson);
+  }
+  if (isPlainRecord(value)) {
+    const canonical: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) {
+      canonical[key] = canonicalJson(value[key]);
+    }
+    return canonical;
+  }
+  return value;
+}
+
 /**
  * Commit engine for lorebooks. Commits are content-addressed: the id is the
  * SHA-256 of the parent id plus the serialized book, so identical states
@@ -28,7 +57,7 @@ export class VcsService {
    * digest.
    */
   private async hashBook(book: CharacterBook, parentId: string | null): Promise<string> {
-    const payload = `${parentId ?? 'root'}\u0000${JSON.stringify(book)}`;
+    const payload = `${parentId ?? 'root'}\u0000${JSON.stringify(canonicalJson(book))}`;
     if (hasSubtleCrypto()) {
       const data = new TextEncoder().encode(payload);
       return toHex(await crypto.subtle.digest('SHA-256', data));
@@ -87,11 +116,12 @@ export class VcsService {
   }
 
   /**
-   * Serializes any model value to a stable string for dirty comparisons. Key
-   * order is normalized so the same logical state always compares equal.
+   * Serializes any model value to a stable string for dirty comparisons. Keys
+   * are recursively sorted (array order preserved) so the same logical state
+   * always compares equal, regardless of insertion order.
    */
   serialize(value: unknown): string {
-    return JSON.stringify(value);
+    return JSON.stringify(canonicalJson(value));
   }
 
   serializeBook(book: CharacterBook): string {
