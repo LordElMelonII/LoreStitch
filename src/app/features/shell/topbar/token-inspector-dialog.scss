@@ -1,0 +1,145 @@
+.title-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  mat-icon {
+    color: var(--mat-sys-tertiary);
+  }
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-surface-container);
+
+  .total-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .total {
+      font: var(--mat-sys-headline-medium);
+      color: var(--mat-sys-on-surface);
+    }
+
+    .total-caption {
+      font: var(--mat-sys-body-small);
+      color: var(--mat-sys-on-surface-variant);
+      line-height: 1.3;
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .budget-field {
+      width: 160px;
+      font: var(--mat-sys-body-medium);
+    }
+  }
+
+  .budget-bar {
+    border-radius: var(--mat-sys-corner-small);
+    // Component tokens, not selector overrides: tint the bar red once the
+    // constant footprint exceeds the configured budget.
+    &.over-budget {
+      --mat-progress-bar-active-indicator-color: var(--mat-sys-error);
+      --mat-progress-bar-track-color: var(--mat-sys-error-container);
+    }
+  }
+
+  .budget-caption {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+
+    &.muted {
+      font-style: italic;
+    }
+
+    .warn-icon {
+      color: var(--mat-sys-error);
+      flex: none;
+    }
+  }
+
+  &.over-budget .total {
+    color: var(--mat-sys-error);
+  }
+}
+
+.entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  // Long constant lists scroll here — inside the list — instead of the whole
+  // dialog content growing a scrollbar (see the .app-token-inspector-dialog
+  // global rule).
+  max-height: min(40vh, 420px);
+  overflow-y: auto;
+  padding: 2px;
+
+  .entry-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 4px 12px;
+    justify-content: flex-start;
+    text-align: left;
+    border-radius: var(--mat-sys-corner-small);
+    font: var(--mat-sys-body-medium);
+
+    mat-icon {
+      color: var(--mat-sys-outline);
+      flex: none;
+    }
+
+    .entry-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .entry-tokens {
+      font: var(--mat-sys-label-large);
+      color: var(--mat-sys-tertiary);
+      flex: none;
+    }
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 24px;
+    color: var(--mat-sys-on-surface-variant);
+    text-align: center;
+
+    mat-icon {
+      opacity: 0.5;
+    }
+
+    p {
+      margin: 0;
+      font: var(--mat-sys-body-medium);
+    }
+  }
+}

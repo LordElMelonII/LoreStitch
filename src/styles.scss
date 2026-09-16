@@ -10,8 +10,8 @@
 // Material Symbols Outlined (self-hosted, pre-subsetted)
 // ---------------------------------------------------------------------------
 // The full variable icon font from Google Fonts weighs ~3.9 MB. This copy was
-// subsetted via the Google Fonts API `icon_names` parameter to the ~39 icons
-// LoreStitch actually uses (~33 KB). When adding a new `<mat-icon>name`,
+// subsetted via the Google Fonts API `icon_names` parameter to the 47 icons
+// LoreStitch actually uses (~40 KB). When adding a new `<mat-icon>name`,
 // re-request a subset including it:
 // https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=<comma,separated,names>&display=block
 // and replace public/fonts/material-symbols-outlined.woff2 with the served font.
@@ -80,6 +80,7 @@ html {
       density: 0,
     )
   );
+  @include mat.system-classes();
 }
 
 html.theme-dark {
@@ -164,6 +165,29 @@ body {
     .mat-mdc-dialog-content {
       max-height: none;
     }
+  }
+}
+
+// Token inspector: the whole content area never scrolls (the 65vh centered
+// cap showed a pointless scrollbar once content crossed it by a few pixels).
+// The pane sizes to its content with a generous safety cap; long constant
+// lists scroll inside the entry list instead.
+.app-token-inspector-dialog .mat-mdc-dialog-content {
+  max-height: 80vh;
+}
+
+// Dialog headlines: LoreStitch titles are flex rows (icon + text + actions).
+// The flex context collapses MDC's ::before headline spacer into a zero-width
+// flex item, which left headlines ~6px from the border (the token's top
+// padding). Apply the M3 24dp-ish inset explicitly and remove the spacer so
+// every dialog titles consistently.
+.mat-mdc-dialog-title {
+  --mat-dialog-headline-padding: 20px 24px 12px;
+
+  // MDC's own selector outranks a bare `.mat-mdc-dialog-title::before`, so
+  // scope through the surface to reliably drop the legacy spacer.
+  .mat-mdc-dialog-surface &::before {
+    display: none;
   }
 }
 
@@ -373,13 +397,22 @@ app-entry-content-field .content-field .mat-mdc-form-field-infix {
   flex-direction: column;
 }
 
-// --- Entry list: pin the virtual-scroll content wrapper to the viewport ---
+// --- Entry list: fit-content virtual-scroll wrapper (horizontal scroll) ---
 
 // The CDK's absolutely-positioned content wrapper defaults to shrink-to-fit
-// sizing, so rows with long nowrap titles and key chips inflate it beyond
-// the drawer and clip the row actions off-canvas. Pin it to the viewport
-// width; the rows then truncate their own content internally.
+// sizing, which used to clip row actions off-canvas on narrow drawers. The
+// sidebar is now deliberately horizontally scrollable for long titles and
+// key chips: the wrapper hugs its widest row (never narrower than the
+// viewport) and the viewport scrolls the overflow instead of the page.
 app-entry-list .list-viewport .cdk-virtual-scroll-content-wrapper {
+  width: max-content;
+  min-width: 100%;
+}
+
+// Same CDK shrink-to-fit guard for the export-selected dialog's picker: the
+// absolutely-positioned wrapper would otherwise inflate to the widest
+// entry title and push the per-entry token column past narrow viewports.
+app-export-selected-dialog .rows-viewport .cdk-virtual-scroll-content-wrapper {
   width: 100%;
 }
 

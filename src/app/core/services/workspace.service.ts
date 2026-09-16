@@ -10,6 +10,7 @@ import {
 import { randomUuid } from './sha256';
 import { LAST_PROJECT_KEY, StorageService } from './storage.service';
 import { VcsService } from './vcs.service';
+import { type TokenFootprint, computeTokenFootprint } from './token-estimator';
 
 /**
  * Reactive state hub. Owns the active `ProjectWorkspace` in signals, the open
@@ -45,6 +46,16 @@ export class WorkspaceService {
   readonly dirtyEntryIds = computed<Set<number>>(() => {
     const project = this.activeProject();
     return project ? this.vcs.dirtyEntryIds(project) : new Set<number>();
+  });
+
+  /**
+   * Always-active token footprint of the working book: the aggregate content
+   * estimate of every enabled + constant entry (the minimum context cost of
+   * any generation) against the book's `token_budget`, when set.
+   */
+  readonly tokenFootprint = computed<TokenFootprint | null>(() => {
+    const project = this.activeProject();
+    return project ? computeTokenFootprint(project.activeBook) : null;
   });
 
   /**
@@ -264,6 +275,37 @@ export class WorkspaceService {
     this.openEntry(newId);
   }
 
+  /**
+   * Batch counterpart of `duplicateEntry`: clones every selected entry in
+   * one project update, inserting each copy directly after its source.
+   */
+  duplicateEntries(entryIds: readonly number[]): void {
+    const ids = new Set(entryIds);
+    this.mutateProject((p) => {
+      const entries = [...p.activeBook.entries];
+      let nextId = entries.reduce((max, e) => Math.max(max, e.id ?? 0), -1) + 1;
+      let duplicated = 0;
+      for (const source of p.activeBook.entries) {
+        if (source.id === undefined || !ids.has(source.id)) {
+          continue;
+        }
+        const copy: CharacterBookEntry = {
+          ...structuredClone(source),
+          id: nextId++,
+          comment: `${entryTitle(source)} (copy)`,
+          extensions: {
+            ...structuredClone(source.extensions ?? {}),
+            display_index: entries.length,
+          },
+        };
+        const at = entries.findIndex((e) => e.id === source.id);
+        entries.splice(at + 1, 0, copy);
+        duplicated++;
+      }
+      return duplicated ? this.withBook(p, { ...p.activeBook, entries }) : p;
+    });
+  }
+
   deleteEntry(entryId: number): void {
     this.mutateProject((p) =>
       this.withBook(p, {
@@ -272,6 +314,23 @@ export class WorkspaceService {
       }),
     );
     this.closeTab(entryId);
+  }
+
+  /** Batch counterpart of `deleteEntry`: removes many entries in one update. */
+  deleteEntries(entryIds: readonly number[]): void {
+    const ids = new Set(entryIds);
+    this.mutateProject((p) =>
+      this.withBook(p, {
+        ...p.activeBook,
+        entries: p.activeBook.entries.filter((e) => e.id === undefined || !ids.has(e.id)),
+      }),
+    );
+    const remaining = this.openTabEntryIds().filter((id) => !ids.has(id));
+    this.openTabEntryIds.set(remaining);
+    const active = this.activeTabId();
+    if (active !== null && ids.has(active)) {
+      this.activeTabId.set(remaining.at(-1) ?? null);
+    }
   }
 
   /** Reorders entries after a drag & drop in the sidebar. */
@@ -298,6 +357,11 @@ export class WorkspaceService {
   /** Applies the merge result of the cherry-picker: replaces the whole book. */
   replaceBook(book: CharacterBook): void {
     this.mutateProject((p) => this.withBook(p, book));
+  }
+
+  /** Patches book-level settings (e.g. `token_budget`) on the working tree. */
+  updateBook(patch: Partial<CharacterBook>): void {
+    this.mutateProject((p) => this.withBook(p, { ...p.activeBook, ...patch }));
   }
 
   private nextEntryId(project: ProjectWorkspace): number {

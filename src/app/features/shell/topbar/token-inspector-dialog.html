@@ -1,0 +1,89 @@
+<h2 mat-dialog-title>
+  <span class="title-text">
+    <mat-icon>bolt</mat-icon>
+    Always Active Token Footprint
+  </span>
+</h2>
+
+<mat-dialog-content class="dialog-body">
+  @if (footprint(); as fp) {
+    <div class="summary" [class.over-budget]="fp.overBudget">
+      <div class="total-row">
+        <span class="total">~{{ fp.totalTokens.toLocaleString() }}</span>
+        <span class="total-caption">
+          tokens always active<br />
+          across {{ fp.constantCount }} constant entr{{ fp.constantCount === 1 ? 'y' : 'ies' }}
+        </span>
+        <span class="spacer"></span>
+        <mat-form-field subscriptSizing="dynamic" appearance="outline" class="budget-field">
+          <mat-label>Token budget</mat-label>
+          <input
+            matInput
+            type="number"
+            min="1"
+            step="1"
+            placeholder="None"
+            [value]="budgetDraft()"
+            (input)="onBudgetInput($event)"
+            aria-label="Token budget for this lorebook"
+          />
+        </mat-form-field>
+      </div>
+
+      @if (fp.budget) {
+        <mat-progress-bar
+          class="budget-bar"
+          [class.over-budget]="fp.overBudget"
+          mode="determinate"
+          [value]="meterValue()"
+          [attr.aria-label]="'Budget usage ' + usagePercent() + '%'"
+        />
+        <div class="budget-caption" role="status">
+          @if (fp.overBudget) {
+            <mat-icon class="warn-icon" aria-hidden="true">warning</mat-icon>
+            Over budget by ~{{ overBy().toLocaleString() }} tokens — SillyTavern will drop entries
+            to fit.
+          } @else {
+            {{ usagePercent() }}% of the {{ fp.budget.toLocaleString() }}
+            token budget used by constant entries.
+          }
+        </div>
+      } @else {
+        <div class="budget-caption muted">
+          No budget set. SillyTavern reserves a share of the context for world info — set a token
+          budget to track how much the constant entries consume.
+        </div>
+      }
+    </div>
+
+    <div class="entry-list" role="list">
+      @for (item of fp.items; track item.entryId) {
+        <div class="entry-list-item" role="listitem">
+          <button
+            matButton
+            type="button"
+            class="entry-row"
+            (click)="openEntry(item.entryId)"
+            [matTooltip]="'Open ' + item.title"
+          >
+            <mat-icon aria-hidden="true">description</mat-icon>
+            <span class="entry-title">{{ item.title }}</span>
+            <span class="entry-tokens">~{{ item.tokens.toLocaleString() }}</span>
+          </button>
+        </div>
+      } @empty {
+        <div class="empty-state">
+          <mat-icon>toggle_off</mat-icon>
+          <p>
+            No constant entries — nothing is injected unconditionally, so this book has no
+            always-active cost.
+          </p>
+        </div>
+      }
+    </div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button matButton="filled" type="button" (click)="close()">Done</button>
+</mat-dialog-actions>
