@@ -1,3 +1,4 @@
+import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { devices, expect, type Download, type Page, test } from '@playwright/test';
@@ -34,6 +35,10 @@ async function importLorebook(page: Page, path: string): Promise<void> {
   const importChooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Import .json / .stproj' }).click();
   await (await importChooser).setFiles(path);
+  // Assert the project-open top bar, not merely an attached sidenav: the
+  // welcome state also renders a sidenav, so a silently failed import would
+  // otherwise slip through and every later editor interaction would time out.
+  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
   await expect(page.locator('.entries-sidenav')).toBeAttached();
 }
 
@@ -128,15 +133,18 @@ test.describe('native lorebook round trip', () => {
     // 3. Exactly one entry carries the UI edits.
     const edited = Object.values(out.entries).filter(isEdited);
     expect(edited).toHaveLength(1);
-    expect(edited[0]['groupOverride']).toBe(true);
-    expect(edited[0]['useGroupScoring']).toBe(true);
-    expect(edited[0]['ignoreBudget']).toBe(true);
+    const editedEntry = edited[0];
+    assert(editedEntry, 'expected the UI-edited entry in the export');
+    expect(editedEntry['groupOverride']).toBe(true);
+    expect(editedEntry['useGroupScoring']).toBe(true);
+    expect(editedEntry['ignoreBudget']).toBe(true);
 
     // 4. The export re-imports through the UI and the edits are still there.
     const reimportChooser = page.waitForEvent('filechooser');
     await page.locator('[aria-label="Projects menu"]').click();
     await page.getByText('Open .json / .stproj').click();
     await (await reimportChooser).setFiles(await exported.download.path());
+    await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
     await expect(page.locator('.entries-sidenav')).toBeAttached();
 
     await openFirstEntryOptions(page);

@@ -32,6 +32,7 @@ module.exports = defineConfig([
           style: 'kebab-case',
         },
       ],
+      '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {

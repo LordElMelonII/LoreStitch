@@ -1,6 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { DomSanitizer } from '@angular/platform-browser';
+import { MatIconRegistry } from '@angular/material/icon';
 import { App } from './app';
+import { GITHUB_ICON } from './shared/constants/github';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -24,6 +27,13 @@ describe('App', () => {
       imports: [App],
       providers: [provideAnimationsAsync()],
     }).compileComponents();
+    // The top bar renders the inlined GitHub mark. Its registration lives in
+    // the app initializer (app.config), which unit tests bypass — replicate
+    // it here so the icon registry does not log retrieval errors.
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'github',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
+    );
   });
 
   it('should create the app', () => {

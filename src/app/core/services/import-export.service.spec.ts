@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { ImportExportService } from './import-export.service';
 import { CharacterBook, characterBookToStNative } from '../models/lorebook.model';
-// Real SillyTavern world-info export used as import fixture.
+// Real SillyTavern world-info exports used as import fixtures.
 import fuyukiCard from '../../../../example_card/Fate Stay Night - Fuyuki Lorebook(1).json';
+import exampleCard from '../../../../example_card/Example test lorebook.json';
 
 /**
  * Import/export round-trip tests against a real SillyTavern world-info export
@@ -19,46 +20,56 @@ describe('ImportExportService', () => {
   it('detects and parses the Fuyuki card as native SillyTavern world info', () => {
     const parsed = service.parseImport(fuyukiCard, 'Fuyuki');
 
-    expect(parsed).not.toBeNull();
-    expect(parsed!.format).toBe('sillytavern_native');
+    assert(parsed);
+    expect(parsed.format).toBe('sillytavern_native');
     const entryCount = Object.keys((fuyukiCard as { entries: object }).entries).length;
-    expect(parsed!.book.entries).toHaveLength(entryCount);
-    expect(parsed!.suggestedTitle).toBe('Fuyuki');
+    expect(parsed.book.entries).toHaveLength(entryCount);
+    expect(parsed.suggestedTitle).toBe('Fuyuki');
   });
 
   it('maps native fields onto the CharacterBook model without loss', () => {
-    const book = service.parseImport(fuyukiCard, 'Fuyuki')!.book;
+    const parsed = service.parseImport(fuyukiCard, 'Fuyuki');
+    assert(parsed);
+    const book = parsed.book;
     const first = book.entries.find((e) => e.keys.includes('apartment'));
 
-    expect(first).toBeDefined();
-    expect(first!.content).toContain('{{user}}');
-    expect(first!.enabled).toBe(true);
+    assert(first);
+    expect(first.content).toContain('{{user}}');
+    expect(first.enabled).toBe(true);
     // `constant: true` imports as a constant (empty trigger keys).
-    expect(first!.constant).toBe(true);
+    expect(first.constant).toBe(true);
   });
 
   it('round-trips the card back to native format with stable entry count', () => {
-    const book = service.parseImport(fuyukiCard, 'Fuyuki')!.book;
+    const parsed = service.parseImport(fuyukiCard, 'Fuyuki');
+    assert(parsed);
+    const book = parsed.book;
     const native = characterBookToStNative(book);
 
     expect(Object.keys(native.entries)).toHaveLength(book.entries.length);
     // Re-importing the export must yield the same book size.
     const reparsed = service.parseImport(native, 'Fuyuki');
-    expect(reparsed!.format).toBe('sillytavern_native');
-    expect(reparsed!.book.entries).toHaveLength(book.entries.length);
+    assert(reparsed);
+    expect(reparsed.format).toBe('sillytavern_native');
+    expect(reparsed.book.entries).toHaveLength(book.entries.length);
   });
 
   it('preserves secondary keys across a native round-trip', () => {
-    const book = service.parseImport(fuyukiCard, 'Fuyuki')!.book;
+    const parsed = service.parseImport(fuyukiCard, 'Fuyuki');
+    assert(parsed);
+    const book = parsed.book;
     const withSecondary = book.entries.find((e) => (e.secondary_keys ?? []).length > 0);
     if (!withSecondary) {
       throw new Error('fixture card has no secondary keys — pick a richer fixture');
     }
     const native = characterBookToStNative(book);
-    const reparsed = service.parseImport(native, 'Fuyuki')!.book;
+    const reparsedParsed = service.parseImport(native, 'Fuyuki');
+    assert(reparsedParsed);
+    const reparsed = reparsedParsed.book;
     const again = reparsed.entries.find((e) => e.id === withSecondary.id);
 
-    expect(again!.secondary_keys).toEqual(withSecondary.secondary_keys);
+    assert(again);
+    expect(again.secondary_keys).toEqual(withSecondary.secondary_keys);
   });
 
   it('rejects payloads that match no known format', () => {
@@ -66,6 +77,86 @@ describe('ImportExportService', () => {
     expect(service.parseImport('just a string')).toBeNull();
     expect(service.parseImport({ unrelated: true })).toBeNull();
     expect(service.parseImport([])).toBeNull();
+  });
+
+  it('accepts both bundled real-world fixtures', () => {
+    const fuyuki = service.parseImport(fuyukiCard, 'Fuyuki');
+    assert(fuyuki);
+    expect(fuyuki.format).toBe('sillytavern_native');
+
+    const example = service.parseImport(exampleCard, 'Example');
+    assert(example);
+    expect(example.format).toBe('sillytavern_native');
+    expect(example.book.entries.length).toBeGreaterThan(0);
+  });
+
+  it('rejects native files whose entries are not objects', () => {
+    expect(service.parseImport({ entries: { '0': 'garbage' } })).toBeNull();
+    expect(service.parseImport({ entries: [null] })).toBeNull();
+  });
+
+  it('rejects bare books whose entries miss critical fields', () => {
+    // The crash repro: entryTitle reads entry.keys.length.
+    expect(service.parseImport({ entries: [{ content: 'x' }] })).toBeNull();
+    expect(service.parseImport({ entries: [{ keys: 'a', content: 'x' }] })).toBeNull();
+    expect(service.parseImport({ entries: [{ keys: [], content: 5 }] })).toBeNull();
+  });
+
+  it('rejects a .stproj archive with an empty workspace', () => {
+    expect(
+      service.parseImport({ format: 'lorestitch-project', version: 1, workspace: {} }),
+    ).toBeNull();
+  });
+
+  it('rejects .stproj archives from a future version', () => {
+    const workspace = {
+      id: 'p1',
+      title: 'From the future',
+      createdAt: 1,
+      updatedAt: 1,
+      activeBook: { entries: [] },
+      headCommitId: null,
+      commits: [],
+    };
+    expect(
+      service.parseImport({ format: 'lorestitch-project', version: 2, workspace }),
+    ).toBeNull();
+  });
+
+  it('accepts a .stproj archive with a missing version field', () => {
+    const archive = {
+      format: 'lorestitch-project',
+      workspace: {
+        id: 'p1',
+        title: 'Legacy',
+        createdAt: 1,
+        updatedAt: 1,
+        activeBook: { entries: [] },
+        headCommitId: null,
+        commits: [],
+      },
+    };
+    const parsed = service.parseImport(archive);
+    assert(parsed);
+    assert(parsed.workspace);
+    expect(parsed.workspace.title).toBe('Legacy');
+  });
+
+  it('rejects a .stproj archive with a malformed commit history', () => {
+    const archive = {
+      format: 'lorestitch-project',
+      version: 1,
+      workspace: {
+        id: 'p1',
+        title: 'Broken history',
+        createdAt: 1,
+        updatedAt: 1,
+        activeBook: { entries: [] },
+        headCommitId: 'c1',
+        commits: [{ id: 'c1', message: 'no timestamp or snapshot' }],
+      },
+    };
+    expect(service.parseImport(archive)).toBeNull();
   });
 
   it('accepts a bare CharacterBook and normalizes positions', () => {
@@ -86,9 +177,11 @@ describe('ImportExportService', () => {
     };
 
     const parsed = service.parseImport(structuredClone(book), 'Bare');
-    expect(parsed!.format).toBe('character_book');
+    assert(parsed);
+    expect(parsed.format).toBe('character_book');
     // normalizeBookPositions lifts extensions.position into the spec field.
-    expect(parsed!.book.entries[0].position).toBe('at_depth');
+    assert(parsed.book.entries[0]);
+    expect(parsed.book.entries[0].position).toBe('at_depth');
   });
 
   it('parses a .stproj archive and unwraps its workspace', () => {
@@ -107,15 +200,18 @@ describe('ImportExportService', () => {
       },
     };
 
-    const parsed = service.parseImport(archive)!;
+    const parsed = service.parseImport(archive);
+    assert(parsed);
     expect(parsed.format).toBe('stproj');
-    expect(parsed.workspace!.title).toBe('Archived');
+    assert(parsed.workspace);
+    expect(parsed.workspace.title).toBe('Archived');
     expect(parsed.book.name).toBe('Archived');
   });
 
   it('handles empty native lorebooks gracefully', () => {
     const parsed = service.parseImport({ entries: {} }, 'Empty');
-    expect(parsed!.book.entries).toEqual([]);
-    expect(parsed!.suggestedTitle).toBe('Empty');
+    assert(parsed);
+    expect(parsed.book.entries).toEqual([]);
+    expect(parsed.suggestedTitle).toBe('Empty');
   });
 });

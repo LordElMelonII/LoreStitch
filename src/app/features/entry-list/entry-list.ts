@@ -137,10 +137,13 @@ export class EntryList {
     } else {
       // Translate viewport indexes back to working-tree indexes.
       const all = this.items();
-      const movedId = view[previousIndex].id;
-      const targetId = view[currentIndex].id;
-      const from = all.findIndex((i) => i.id === movedId);
-      const to = all.findIndex((i) => i.id === targetId);
+      const moved = view[previousIndex];
+      const target = view[currentIndex];
+      if (!moved || !target) {
+        return;
+      }
+      const from = all.findIndex((i) => i.id === moved.id);
+      const to = all.findIndex((i) => i.id === target.id);
       if (from >= 0 && to >= 0) {
         this.workspace.moveEntry(from, to);
       }

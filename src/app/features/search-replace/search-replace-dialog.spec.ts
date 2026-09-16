@@ -81,6 +81,7 @@ describe('SearchReplaceDialog', () => {
 
     const rows = dialog['rows']();
     expect(rows).toHaveLength(1);
+    assert(rows[0]);
     expect(rows[0].hits.content).toBe(1);
     // One primary + one secondary key hit are both counted.
     expect(rows[0].hits.keys).toBe(2);
@@ -92,7 +93,8 @@ describe('SearchReplaceDialog', () => {
     typeIn(dialog, 'saber', 'artoria pendragon');
     await dialog['apply']();
 
-    const updated = workspace.entries().find((e) => e.id === 0)!;
+    const updated = workspace.entries().find((e) => e.id === 0);
+    assert(updated);
     expect(updated.keys).toEqual(['artoria pendragon']);
     expect(updated.secondary_keys).toEqual(['artoria', 'artoria pendragon']);
   });
@@ -102,7 +104,8 @@ describe('SearchReplaceDialog', () => {
     typeIn(dialog, 'Saber', 'Saber$&');
     await dialog['apply']();
 
-    const updated = workspace.entries().find((e) => e.id === 0)!;
+    const updated = workspace.entries().find((e) => e.id === 0);
+    assert(updated);
     // Regression: String.replace used to expand $& into the match itself.
     expect(updated.content).toBe('Saber$& is silent about the Grail.');
   });
@@ -113,7 +116,8 @@ describe('SearchReplaceDialog', () => {
     typeIn(dialog, '(Rin)', '$1 Tohsaka');
     await dialog['apply']();
 
-    const updated = workspace.entries().find((e) => e.id === 1)!;
+    const updated = workspace.entries().find((e) => e.id === 1);
+    assert(updated);
     expect(updated.content).toBe('Rin Tohsaka studies magecraft. Rin Tohsaka is busy.');
   });
 
@@ -132,9 +136,9 @@ describe('SearchReplaceDialog', () => {
     dialog['toggleExcluded'](1, false);
     await dialog['apply']();
 
-    expect(workspace.entries().find((e) => e.id === 1)!.content).toBe(
-      'Rin studies magecraft. Rin is busy.',
-    );
+    const updated = workspace.entries().find((e) => e.id === 1);
+    assert(updated);
+    expect(updated.content).toBe('Rin studies magecraft. Rin is busy.');
   });
 
   it('reports an invalid regex instead of crashing', async () => {

@@ -1,5 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { ProjectWorkspace, createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
+import {
+  CharacterBook,
+  ProjectWorkspace,
+  createEmptyBook,
+  createEmptyEntry,
+} from '../models/lorebook.model';
 import { VcsService } from './vcs.service';
 
 function makeProject(): ProjectWorkspace {
@@ -33,6 +38,7 @@ describe('VcsService', () => {
 
       expect(committed.commits).toHaveLength(1);
       const commit = committed.commits[0];
+      assert(commit);
       expect(commit.id).toMatch(/^[0-9a-f]{64}$/);
       expect(commit.parentId).toBeNull();
       expect(commit.message).toBe('first');
@@ -56,6 +62,7 @@ describe('VcsService', () => {
       };
       const second = await vcs.createCommit(changed, 'second');
 
+      assert(second.commits[1]);
       expect(second.commits[1].parentId).toBe(first.headCommitId);
       expect(second.commits[1].id).not.toBe(first.headCommitId);
 
@@ -87,12 +94,14 @@ describe('VcsService', () => {
       project = await vcs.createCommit(modified, 'deleted everything');
 
       // Roll back to the first commit, whose snapshot still has one entry.
+      assert(project.commits[0]);
       const originalId = project.commits[0].id;
       const { project: rolled } = await vcs.rollbackToCommit(project, originalId);
 
       expect(rolled.activeBook.entries).toHaveLength(1);
       expect(rolled.commits).toHaveLength(3);
       const revert = rolled.commits[2];
+      assert(revert);
       expect(revert.message).toContain('Revert to');
       // The revert message names the commit being restored.
       expect(revert.message).toContain('original state');
@@ -136,6 +145,68 @@ describe('VcsService', () => {
       expect(dirty.has(1)).toBe(true);
       expect(dirty.has(0)).toBe(false);
       expect(vcs.isDirty(edited)).toBe(true);
+    });
+  });
+
+  describe('serialize determinism', () => {
+    /** Rebuilds every plain object with reversed key insertion order. */
+    function reverseKeyOrder(value: unknown): unknown {
+      if (Array.isArray(value)) {
+        return value.map(reverseKeyOrder);
+      }
+      if (value !== null && typeof value === 'object') {
+        const source = value as Record<string, unknown>;
+        const reversed: Record<string, unknown> = {};
+        for (const key of Object.keys(source).reverse()) {
+          reversed[key] = reverseKeyOrder(source[key]);
+        }
+        return reversed;
+      }
+      return value;
+    }
+
+    /** A book whose vendor extension keys are inserted in a fixed order. */
+    function bookWithExtensions(): CharacterBook {
+      const book = createEmptyBook('Ordered');
+      book.entries = [
+        {
+          ...createEmptyEntry(0),
+          extensions: {
+            vendor_tag: 'keep-me',
+            display_index: 0,
+            randomExtension: { zebra: 1, apple: 2 },
+          },
+        },
+      ];
+      return book;
+    }
+
+    it('serializes structurally identical books identically regardless of key order', () => {
+      const a = bookWithExtensions();
+      const b = reverseKeyOrder(bookWithExtensions()) as CharacterBook;
+
+      // The fixture really does stringify differently before normalization.
+      expect(JSON.stringify(a)).not.toBe(JSON.stringify(b));
+      expect(vcs.serialize(a)).toBe(vcs.serialize(b));
+    });
+
+    it('hashes key-order variants of the same book to the same commit id', async () => {
+      const base = makeProject();
+      const first = await vcs.createCommit({ ...base, activeBook: bookWithExtensions() }, 'same');
+      const second = await vcs.createCommit(
+        { ...base, activeBook: (reverseKeyOrder(bookWithExtensions()) as CharacterBook) },
+        'same',
+      );
+      expect(second.headCommitId).toBe(first.headCommitId);
+    });
+
+    it('treats key-order-only differences as clean', async () => {
+      const committed = await vcs.createCommit(
+        { ...makeProject(), activeBook: bookWithExtensions() },
+        'baseline',
+      );
+      const reordered = reverseKeyOrder(committed.activeBook) as CharacterBook;
+      expect(vcs.isDirty({ ...committed, activeBook: reordered })).toBe(false);
     });
   });
 });

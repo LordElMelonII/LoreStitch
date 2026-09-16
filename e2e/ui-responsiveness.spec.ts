@@ -1,4 +1,5 @@
 import { devices, expect, type Page, test } from '@playwright/test';
+import { strict as assert } from 'node:assert';
 import { join } from 'node:path';
 
 /**
@@ -14,14 +15,14 @@ import { join } from 'node:path';
  *   editor scrolls independently of its header and 48px touch targets.
  */
 
-type Viewport = {
+interface Viewport {
   name: string;
   width: number;
   height: number;
   kind: 'desktop' | 'tablet' | 'mobile';
   /** Real device descriptor (touch, mobile media, UA) for phone viewports. */
   device?: keyof typeof devices;
-};
+}
 
 const VIEWPORTS: Viewport[] = [
   { name: 'desktop-1920x1080', width: 1920, height: 1080, kind: 'desktop' },
@@ -51,6 +52,10 @@ async function createProject(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'New project' }).first().click();
   await page.getByLabel('Project title').fill('E2E Lorebook');
   await page.getByRole('button', { name: 'Create Project' }).click();
+  // Assert the project-open top bar, not merely an attached sidenav: the
+  // welcome state also renders a sidenav, so a silently failed creation
+  // would otherwise slip through and poison later top-bar measurements.
+  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
   await expect(page.locator('.entries-sidenav')).toBeAttached();
 }
 
@@ -89,7 +94,9 @@ test.describe('responsive studio shell', () => {
       // The device preset's `defaultBrowserType` would force a new worker;
       // the suite is already pinned to Chromium in the config's project.
       if (vp.device) {
-        const { defaultBrowserType: _browser, ...device } = devices[vp.device];
+        const descriptor = devices[vp.device];
+        assert(descriptor, `unknown device preset: ${vp.device}`);
+        const { defaultBrowserType: _browser, ...device } = descriptor;
         test.use(device);
       } else {
         test.use({ viewport: { width: vp.width, height: vp.height } });
@@ -99,13 +106,17 @@ test.describe('responsive studio shell', () => {
         await createProject(page);
         await addEntry(page, vp.kind);
 
-        const overflow = await page.evaluate(() => ({
-          document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-          body: document.body.scrollWidth - document.body.clientWidth,
-          topbar:
-            document.querySelector('.topbar')!.scrollWidth -
-            document.querySelector('.topbar')!.clientWidth,
-        }));
+        const overflow = await page.evaluate(() => {
+          const topbar = document.querySelector('.topbar');
+          if (!topbar) {
+            throw new Error('.topbar not rendered');
+          }
+          return {
+            document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            body: document.body.scrollWidth - document.body.clientWidth,
+            topbar: topbar.scrollWidth - topbar.clientWidth,
+          };
+        });
         expect(overflow.document, 'document must not scroll horizontally').toBeLessThanOrEqual(0);
         expect(overflow.body, 'body must not scroll horizontally').toBeLessThanOrEqual(0);
         expect(overflow.topbar, 'top bar content must not clip sideways').toBeLessThanOrEqual(0);
@@ -123,9 +134,12 @@ test.describe('responsive studio shell', () => {
           await expect(entries).toHaveClass(/mat-drawer-side/);
           await expect(history).toHaveClass(/mat-drawer-side/);
 
-          const entriesBox = (await entries.boundingBox())!;
-          const editorBox = (await page.locator('.editor-content').boundingBox())!;
-          const historyBox = (await history.boundingBox())!;
+          const entriesBox = await entries.boundingBox();
+          assert(entriesBox, 'entries panel has no bounding box');
+          const editorBox = await page.locator('.editor-content').boundingBox();
+          assert(editorBox, 'editor has no bounding box');
+          const historyBox = await history.boundingBox();
+          assert(historyBox, 'history panel has no bounding box');
           expect(entriesBox.x + entriesBox.width).toBeLessThanOrEqual(editorBox.x + 1);
           expect(editorBox.x + editorBox.width).toBeLessThanOrEqual(historyBox.x + 1);
 
@@ -151,7 +165,8 @@ test.describe('responsive studio shell', () => {
 
           // Wide windows actually see the pane shrink to that measure.
           if (vp.width >= 1920) {
-            const box = (await page.locator('app-entry-editor').boundingBox())!;
+            const box = await page.locator('app-entry-editor').boundingBox();
+            assert(box, 'editor has no bounding box');
             expect(box.width).toBeLessThanOrEqual(781);
           }
 
@@ -188,10 +203,11 @@ test.describe('responsive studio shell', () => {
           await expect(history).not.toBeInViewport();
           await openHistory(page);
           // The overlay drawer covers the canvas without pushing it.
-          const editorBox = (await page.locator('.editor-content').boundingBox())!;
-          expect(editorBox.x).toBeGreaterThanOrEqual(
-            (await page.locator('.entries-sidenav').boundingBox())!.x,
-          );
+          const editorBox = await page.locator('.editor-content').boundingBox();
+          assert(editorBox, 'editor has no bounding box');
+          const entriesBox = await page.locator('.entries-sidenav').boundingBox();
+          assert(entriesBox, 'entries panel has no bounding box');
+          expect(editorBox.x).toBeGreaterThanOrEqual(entriesBox.x);
         });
       }
 
@@ -219,20 +235,37 @@ test.describe('responsive studio shell', () => {
         test('icon buttons meet the 48px minimum touch target', async ({ page }) => {
           await createProject(page);
 
-          const sizes = await page.evaluate(() => {
+          // The 48dp contract covers only buttons a finger can actually tap.
+          // Desktop-only actions are display:none at this width (they measure
+          // 0x0), so they are asserted hidden below, never measured here.
+          const { measured, visibleDesktopOnly } = await page.evaluate(() => {
             const buttons = [
               ...document.querySelectorAll<HTMLElement>('.topbar .mat-mdc-icon-button'),
             ];
-            return buttons.map((b) => {
-              const box = b.getBoundingClientRect();
-              return { width: box.width, height: box.height };
-            });
+            return {
+              measured: buttons
+                .filter((b) => b.checkVisibility())
+                .map((b) => {
+                  const box = b.getBoundingClientRect();
+                  return { width: box.width, height: box.height };
+                }),
+              visibleDesktopOnly: buttons.filter(
+                (b) => b.classList.contains('desktop-only') && b.checkVisibility(),
+              ).length,
+            };
           });
-          expect(sizes.length).toBeGreaterThan(0);
-          for (const size of sizes) {
+          expect(
+            measured.length,
+            'at least one top-bar icon button must be tappable',
+          ).toBeGreaterThan(0);
+          for (const size of measured) {
             expect(size.width).toBeGreaterThanOrEqual(48);
             expect(size.height).toBeGreaterThanOrEqual(48);
           }
+          // Regression guard for the hiding behavior itself: the compact bar
+          // drops the desktop-only actions instead of shrinking them, so a
+          // CSS change that keeps them rendered must fail here.
+          expect(visibleDesktopOnly, 'desktop-only buttons visible at phone width').toBe(0);
         });
 
         test('content delimiters dialog is full-screen with a readable diff', async ({ page }) => {
@@ -250,8 +283,10 @@ test.describe('responsive studio shell', () => {
           await expect(pane).toBeVisible();
 
           // MD3 compact screens get the full-screen dialog, edge to edge.
-          const box = (await pane.boundingBox())!;
-          const viewport = page.viewportSize()!;
+          const box = await pane.boundingBox();
+          assert(box, 'dialog pane has no bounding box');
+          const viewport = page.viewportSize();
+          assert(viewport, 'page has no viewport size');
           expect(box.width).toBeGreaterThanOrEqual(viewport.width - 1);
           expect(box.height).toBeGreaterThanOrEqual(viewport.height - 1);
 
@@ -259,7 +294,9 @@ test.describe('responsive studio shell', () => {
           // to its toolbar by the dialog's flex column.
           const diffBody = pane.locator('app-diff-viewer .diff-body');
           await expect(diffBody).toBeVisible();
-          expect((await diffBody.boundingBox())!.height).toBeGreaterThan(50);
+          const diffBox = await diffBody.boundingBox();
+          assert(diffBox, 'diff body has no bounding box');
+          expect(diffBox.height).toBeGreaterThan(50);
 
           // Long content overflows into the dialog content scroll, with the
           // actions still pinned in view.
@@ -282,8 +319,10 @@ test.describe('responsive studio shell', () => {
           const duplicate = page.locator('app-entry-list [aria-label="Duplicate entry"]').first();
           await expect(duplicate).toBeVisible();
           await expect(duplicate).toHaveCSS('opacity', '1');
-          const dupBox = (await duplicate.boundingBox())!;
-          const rowBox = (await page.locator('app-entry-list .entry-item').first().boundingBox())!;
+          const dupBox = await duplicate.boundingBox();
+          assert(dupBox, 'duplicate action has no bounding box');
+          const rowBox = await page.locator('app-entry-list .entry-item').first().boundingBox();
+          assert(rowBox, 'entry row has no bounding box');
           expect(dupBox.x + dupBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
           const docOverflow = await page.evaluate(
             () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -303,31 +342,47 @@ test.describe('responsive studio shell', () => {
           await chooser.setFiles(EXAMPLE_LOREBOOK);
           await expect(page.locator('.entries-sidenav')).toBeAttached();
           await expect(page.locator('.project-badge', { hasText: 'Fuyuki' })).toBeVisible();
-          await page.waitForTimeout(1000);
 
           await page.locator('[aria-label="Toggle entries panel"]').click();
           await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
           await expect(page.locator('app-entry-list .entry-item').first()).toBeVisible();
 
           // Rendered rows must reach the bottom of the scrollport, not stop
-          // after the first few items with dead space below.
+          // after the first few items with dead space below. The CDK viewport
+          // re-measures once the drawer becomes visible (entry-list.ts), so
+          // poll the fill instead of sleeping out a fixed settle time.
+          await expect
+            .poll(
+              () =>
+                page.evaluate(() => {
+                  const viewport = document.querySelector('.list-viewport');
+                  if (!viewport) {
+                    throw new Error('.list-viewport not rendered');
+                  }
+                  const viewportBox = viewport.getBoundingClientRect();
+                  const items = [...document.querySelectorAll('app-entry-list .entry-item')];
+                  const lastBottom = Math.max(
+                    -Infinity,
+                    ...items.map((item) => item.getBoundingClientRect().bottom),
+                  );
+                  return viewportBox.height - (lastBottom - viewportBox.top);
+                }),
+              { timeout: 5_000, message: 'virtual list must fill the drawer viewport' },
+            )
+            .toBeLessThanOrEqual(8);
+
           const fill = await page.evaluate(() => {
-            const viewport = document.querySelector('.list-viewport')!;
-            const viewportBox = viewport.getBoundingClientRect();
-            const items = [...document.querySelectorAll('app-entry-list .entry-item')];
-            const lastBottom = Math.max(
-              -Infinity,
-              ...items.map((item) => item.getBoundingClientRect().bottom),
-            );
+            const viewport = document.querySelector('.list-viewport');
+            if (!viewport) {
+              throw new Error('.list-viewport not rendered');
+            }
             return {
-              rendered: items.length,
-              covered: lastBottom - viewportBox.top,
-              available: viewportBox.height,
+              rendered: document.querySelectorAll('app-entry-list .entry-item').length,
+              available: viewport.getBoundingClientRect().height,
             };
           });
           expect(fill.rendered).toBeGreaterThan(4);
           expect(fill.available).toBeGreaterThan(200);
-          expect(fill.covered).toBeGreaterThanOrEqual(fill.available - 8);
         });
       }
 
@@ -342,7 +397,8 @@ test.describe('responsive studio shell', () => {
         // strip above it must stay in place while it scrolls.
         if (vp.kind === 'mobile') {
           const well = await content.boundingBox();
-          expect(well!.height).toBeGreaterThanOrEqual(220);
+          assert(well, 'entry content has no bounding box');
+          expect(well.height).toBeGreaterThanOrEqual(220);
         }
         const scrollable = await content.evaluate((el) => el.scrollHeight > el.clientHeight);
         expect(scrollable, 'content should overflow into its own scroll').toBe(true);
@@ -372,26 +428,40 @@ test.describe('responsive studio shell', () => {
         if (vp.kind === 'mobile') {
           await page.locator('[aria-label="Toggle entries panel"]').click();
           await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
-          // Let the slide-in transition finish before measuring boxes.
-          await page.waitForTimeout(600);
         }
 
         // The virtual-scroll content wrapper must never exceed the panel, or
-        // the duplicate/delete actions end up clipped off-canvas.
-        const scroll = await page.locator('.list-viewport').evaluate((el) => ({
-          scrollWidth: el.scrollWidth,
-          clientWidth: el.clientWidth,
-        }));
-        expect(scroll.scrollWidth).toBeLessThanOrEqual(scroll.clientWidth + 1);
-
-        const panelBox = (await page.locator('.entries-sidenav').boundingBox())!;
-        const rowBox = (await page.locator('app-entry-list .entry-item').first().boundingBox())!;
-        expect(rowBox.x).toBeGreaterThanOrEqual(panelBox.x);
-        expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 1);
-
-        const duplicate = page.locator('app-entry-list [aria-label="Duplicate entry"]').first();
-        const dupBox = (await duplicate.boundingBox())!;
-        expect(dupBox.x + dupBox.width).toBeLessThanOrEqual(panelBox.x + panelBox.width + 1);
+        // the duplicate/delete actions end up clipped off-canvas. Poll the
+        // containment instead of sleeping out the drawer's slide-in
+        // transition: intermediate animation frames can transiently measure
+        // past the panel edge, but the layout must settle inside it.
+        await expect
+          .poll(
+            () =>
+              page.evaluate(() => {
+                const query = (selector: string): Element => {
+                  const el = document.querySelector(selector);
+                  if (!el) {
+                    throw new Error(`${selector} not rendered`);
+                  }
+                  return el;
+                };
+                const panel = query('.entries-sidenav').getBoundingClientRect();
+                const viewport = query('.list-viewport');
+                const row = query('app-entry-list .entry-item').getBoundingClientRect();
+                const duplicate = query(
+                  'app-entry-list [aria-label="Duplicate entry"]',
+                ).getBoundingClientRect();
+                return Math.max(
+                  viewport.scrollWidth - viewport.clientWidth,
+                  row.right - panel.right,
+                  duplicate.right - panel.right,
+                  panel.left - row.left,
+                );
+              }),
+            { timeout: 5_000, message: 'entry rows must stay inside the entries panel' },
+          )
+          .toBeLessThanOrEqual(1);
       });
 
       test('no element overflows the viewport width', async ({ page }) => {

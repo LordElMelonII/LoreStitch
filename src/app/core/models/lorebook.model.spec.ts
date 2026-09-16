@@ -2,16 +2,22 @@ import {
   CharacterBook,
   CharacterBookEntry,
   ST_POSITION,
+  WI_POSITION_TO_ST,
   createEmptyBook,
   createEmptyEntry,
   detectLoreFileFormat,
   characterBookToStNative,
   entryCharacterFilter,
+  entryStPosition,
   entryTitle,
   entryTriggerState,
   entryTriggers,
   estimateTokens,
+  isCharacterBook,
+  isProjectWorkspace,
+  isSillyTavernWorldInfo,
   normalizeBookPositions,
+  normalizeImportedBook,
   stNativeToCharacterBook,
   stNumberToPosition,
   toSpecCompliantBook,
@@ -104,6 +110,7 @@ describe('lorebook model', () => {
       expect(book.name).toBe('Fuyuki');
       expect(book.entries).toHaveLength(1);
       const entry = book.entries[0];
+      assert(entry);
       expect(entry.id).toBe(3);
       expect(entry.keys).toEqual(['Greater Grail', 'leyline']);
       expect(entry.secondary_keys).toEqual(['ritual']);
@@ -118,6 +125,7 @@ describe('lorebook model', () => {
 
     it('preserves ST-only values inside extensions', () => {
       const entry = stNativeToCharacterBook({ entries: { 3: nativeEntry() } }).entries[0];
+      assert(entry);
       expect(entry.extensions?.['position']).toBe(1);
       expect(entry.extensions?.['exclude_recursion']).toBe(true);
       expect(entry.extensions?.['prevent_recursion']).toBe(true);
@@ -144,6 +152,7 @@ describe('lorebook model', () => {
           }),
         },
       }).entries[0];
+      assert(entry);
 
       expect(entry.extensions?.['match_character_description']).toBe(true);
       expect(entry.extensions?.['match_persona_description']).toBe(false);
@@ -192,6 +201,7 @@ describe('lorebook model', () => {
       };
       const book = stNativeToCharacterBook(data);
       expect(book.entries.map((e) => e.id)).toEqual([0, 1]);
+      assert(book.entries[1]);
       expect(book.entries[1].enabled).toBe(false);
     });
 
@@ -209,6 +219,7 @@ describe('lorebook model', () => {
       const atDepth = stNativeToCharacterBook({
         entries: { 5: nativeEntry({ uid: 5, position: ST_POSITION.atDepth, depth: 2, role: 1 }) },
       }).entries[0];
+      assert(atDepth);
       expect(atDepth.position).toBe('at_depth');
       expect(atDepth.extensions?.['position']).toBe(ST_POSITION.atDepth);
       expect(atDepth.extensions?.['depth']).toBe(2);
@@ -222,6 +233,7 @@ describe('lorebook model', () => {
       const book = stNativeToCharacterBook({ entries: { 3: original } });
       const native = characterBookToStNative(book);
       const restored = native.entries['3'];
+      assert(restored);
 
       expect(restored.uid).toBe(3);
       expect(restored.key).toEqual(original.key);
@@ -250,6 +262,7 @@ describe('lorebook model', () => {
           entries: { 4: nativeEntry({ uid: 4, matchCharacterDepthPrompt: true }) },
         }),
       ).entries['4'];
+      assert(flagged);
       expect(flagged.matchCharacterDepthPrompt).toBe(true);
       expect(flagged.matchCharacterDescription).toBe(false);
     });
@@ -259,6 +272,7 @@ describe('lorebook model', () => {
       entry.position = 'at_depth';
       delete (entry.extensions ?? {})['position'];
       const native = characterBookToStNative({ extensions: {}, entries: [entry] });
+      assert(native.entries['1']);
       expect(native.entries['1'].position).toBe(ST_POSITION.atDepth);
     });
   });
@@ -266,14 +280,19 @@ describe('lorebook model', () => {
   describe('spec compliance & re-import normalization', () => {
     it('toSpecCompliantBook clamps position to the spec but keeps the numeric value', () => {
       const entry = createEmptyEntry(1);
+      // Mirror the app's edit flow (EntryUpdatesService.setPosition): the spec
+      // string and the numeric extensions mirror change together.
       entry.position = 'at_depth';
+      entry.extensions = { ...entry.extensions, position: ST_POSITION.atDepth };
       const book: CharacterBook = { extensions: {}, entries: [entry] };
       const spec = toSpecCompliantBook(book);
-
+      assert(spec.entries[0]);
       expect(spec.entries[0].position).toBe('after_char');
       expect(spec.entries[0].extensions?.['position']).toBe(ST_POSITION.atDepth);
       // Re-importing the spec-clamped book restores the real position.
-      expect(normalizeBookPositions(spec).entries[0].position).toBe('at_depth');
+      const reimported = normalizeBookPositions(spec);
+      assert(reimported.entries[0]);
+      expect(reimported.entries[0].position).toBe('at_depth');
     });
 
     it('normalizeBookPositions restores the real position from extensions', () => {
@@ -285,8 +304,242 @@ describe('lorebook model', () => {
         ],
       };
       const normalized = normalizeBookPositions(book);
+      assert(normalized.entries[0]);
+      assert(normalized.entries[1]);
       expect(normalized.entries[0].position).toBe('outlet');
       expect(normalized.entries[1].position).toBe('after_char');
+    });
+  });
+
+  describe('numeric position fidelity', () => {
+    /** Applies a position edit the way `EntryUpdatesService.setPosition` does. */
+    function setPosition(entry: CharacterBookEntry, value: keyof typeof WI_POSITION_TO_ST): void {
+      entry.position = value;
+      entry.extensions = { ...entry.extensions, position: WI_POSITION_TO_ST[value] };
+    }
+
+    it('round-trips an out-of-enum numeric position (99) untouched', () => {
+      const book = stNativeToCharacterBook({
+        entries: { 9: nativeEntry({ uid: 9, position: 99 }) },
+      });
+      const entry = book.entries[0];
+      assert(entry);
+      // The unmapped number falls back to the spec string but stays parked raw.
+      expect(entry.position).toBe('before_char');
+      expect(entry.extensions?.['position']).toBe(99);
+
+      const native = characterBookToStNative(book);
+      assert(native.entries['9']);
+      expect(native.entries['9'].position).toBe(99);
+    });
+
+    it('keeps 99 through a V2 export and a re-import', () => {
+      const book = stNativeToCharacterBook({
+        entries: { 9: nativeEntry({ uid: 9, position: 99 }) },
+      });
+      const spec = toSpecCompliantBook(book);
+      assert(spec.entries[0]);
+      const reimported = normalizeBookPositions(spec);
+      assert(reimported.entries[0]);
+      const exported = characterBookToStNative(reimported);
+      assert(exported.entries['9']);
+      expect(spec.entries[0].extensions?.['position']).toBe(99);
+      expect(reimported.entries[0].extensions?.['position']).toBe(99);
+      expect(exported.entries['9'].position).toBe(99);
+    });
+
+    it('a synced in-app position edit is authoritative on export', () => {
+      const book = stNativeToCharacterBook({
+        entries: { 9: nativeEntry({ uid: 9, position: 99 }) },
+      });
+      const entry = book.entries[0];
+      assert(entry);
+      setPosition(entry, 'at_depth');
+      expect(entryStPosition(entry)).toBe(ST_POSITION.atDepth);
+      const native = characterBookToStNative(book);
+      assert(native.entries['9']);
+      expect(native.entries['9'].position).toBe(ST_POSITION.atDepth);
+    });
+
+    it('in-enum positions keep their existing mapping', () => {
+      const book = stNativeToCharacterBook({
+        entries: { 9: nativeEntry({ uid: 9, position: 1 }) },
+      });
+      assert(book.entries[0]);
+      expect(book.entries[0].position).toBe('after_char');
+      expect(entryStPosition(book.entries[0])).toBe(1);
+      const native = characterBookToStNative(book);
+      assert(native.entries['9']);
+      expect(native.entries['9'].position).toBe(1);
+    });
+
+    it('the numeric mirror outranks a stale spec string on legacy books', () => {
+      const entry = createEmptyEntry(1);
+      entry.position = 'at_depth'; // stale — the mirror still says before_char (0)
+      expect(entryStPosition(entry)).toBe(ST_POSITION.before);
+    });
+  });
+
+  describe('addMemo fidelity', () => {
+    it('captures the original addMemo flag at import', () => {
+      const entry = stNativeToCharacterBook({
+        entries: { 3: nativeEntry({ addMemo: false }) },
+      }).entries[0];
+      assert(entry);
+      expect(entry.extensions?.['native_add_memo']).toBe(false);
+    });
+
+    it('addMemo:false with a non-empty comment stays false on export', () => {
+      const book = stNativeToCharacterBook({
+        entries: { 3: nativeEntry({ addMemo: false }) },
+      });
+      assert(book.entries[0]);
+      expect(book.entries[0].comment).toContain('Holy Grail');
+      const native = characterBookToStNative(book);
+      assert(native.entries['3']);
+      expect(native.entries['3'].addMemo).toBe(false);
+    });
+
+    it('addMemo:true with an empty comment stays true on export', () => {
+      const book = stNativeToCharacterBook({
+        entries: { 3: nativeEntry({ addMemo: true, comment: '' }) },
+      });
+      const native = characterBookToStNative(book);
+      assert(native.entries['3']);
+      expect(native.entries['3'].addMemo).toBe(true);
+    });
+
+    it('fresh in-app entries still derive addMemo from comment presence', () => {
+      const plain = createEmptyEntry(0);
+      const commented = { ...createEmptyEntry(1), comment: 'A memo' };
+      const native = characterBookToStNative({ extensions: {}, entries: [plain, commented] });
+      assert(native.entries['0']);
+      assert(native.entries['1']);
+      expect(plain.extensions?.['native_add_memo']).toBeUndefined();
+      expect(native.entries['0'].addMemo).toBe(false);
+      expect(native.entries['1'].addMemo).toBe(true);
+    });
+
+    it('native_add_memo never leaks as a loose native key', () => {
+      const native = characterBookToStNative(
+        stNativeToCharacterBook({ entries: { 3: nativeEntry() } }),
+      );
+      assert(native.entries['3']);
+      expect(Object.keys(native.entries['3'])).not.toContain('native_add_memo');
+    });
+  });
+
+  describe('import validation guards', () => {
+    it('isCharacterBook enforces string content and string[] keys per entry', () => {
+      // Raw JSON: the guard must accept books that miss normalizable scalars.
+      const valid: unknown = {
+        extensions: {},
+        entries: [{ keys: ['a'], content: 'x', extensions: {} }],
+      };
+      expect(isCharacterBook(valid)).toBe(true);
+      // The entryTitle crash: keys missing or wrong-typed.
+      expect(
+        isCharacterBook({ extensions: {}, entries: [{ content: 'x' }] }),
+      ).toBe(false);
+      expect(
+        isCharacterBook({ extensions: {}, entries: [{ keys: 'a', content: 'x' }] }),
+      ).toBe(false);
+      expect(
+        isCharacterBook({ extensions: {}, entries: [{ keys: [1], content: 'x' }] }),
+      ).toBe(false);
+      // Wrong-typed critical scalar.
+      expect(
+        isCharacterBook({ extensions: {}, entries: [{ keys: [], content: 5 }] }),
+      ).toBe(false);
+      expect(isCharacterBook({ entries: 'nope' })).toBe(false);
+      expect(isCharacterBook(null)).toBe(false);
+    });
+
+    it('isProjectWorkspace accepts the structure the workspace/VCS code indexes', () => {
+      const workspace = {
+        id: 'p1',
+        title: 'Project',
+        createdAt: 1,
+        updatedAt: 2,
+        targetType: 'standalone_lorebook',
+        activeBook: { name: 'Book', entries: [{ keys: ['a'], content: 'x' }] },
+        headCommitId: 'c1',
+        commits: [
+          {
+            id: 'c1',
+            parentId: null,
+            timestamp: 3,
+            message: 'Initial commit',
+            snapshot: { entries: [{ keys: ['a'], content: 'x' }] },
+          },
+        ],
+      };
+      expect(isProjectWorkspace(workspace)).toBe(true);
+    });
+
+    it('isProjectWorkspace rejects malformed archives', () => {
+      expect(isProjectWorkspace({})).toBe(false);
+      // Missing commits (the VCS spreads and searches the array).
+      expect(
+        isProjectWorkspace({
+          id: 'p1',
+          title: 'Project',
+          createdAt: 1,
+          updatedAt: 2,
+          activeBook: { entries: [] },
+          headCommitId: null,
+        }),
+      ).toBe(false);
+      // Commit timestamp wrong-typed (rendered by the history list).
+      expect(
+        isProjectWorkspace({
+          id: 'p1',
+          title: 'Project',
+          createdAt: 1,
+          updatedAt: 2,
+          activeBook: { entries: [] },
+          headCommitId: null,
+          commits: [
+            { id: 'c1', parentId: null, timestamp: 'x', message: 'm', snapshot: { entries: [] } },
+          ],
+        }),
+      ).toBe(false);
+      // activeBook entry without keys (the entryTitle crash).
+      expect(
+        isProjectWorkspace({
+          id: 'p1',
+          title: 'Project',
+          createdAt: 1,
+          updatedAt: 2,
+          activeBook: { entries: [{ content: 'x' }] },
+          headCommitId: null,
+          commits: [],
+        }),
+      ).toBe(false);
+    });
+
+    it('isSillyTavernWorldInfo requires object entries', () => {
+      expect(isSillyTavernWorldInfo({ entries: { '0': { uid: 0 } } })).toBe(true);
+      expect(isSillyTavernWorldInfo({ entries: [{ uid: 0 }] })).toBe(true);
+      expect(isSillyTavernWorldInfo({ entries: { '0': 'nope' } })).toBe(false);
+      expect(isSillyTavernWorldInfo({ entries: [null] })).toBe(false);
+      expect(isSillyTavernWorldInfo({})).toBe(false);
+    });
+
+    it('normalizeImportedBook fills defaults without dropping keys', () => {
+      const book = {
+        entries: [{ keys: ['a'], content: 'x', vendor_color: '#0f0' }],
+      } as unknown as CharacterBook;
+      const normalized = normalizeImportedBook(book);
+      assert(normalized.entries[0]);
+      expect(normalized.extensions).toEqual({});
+      expect(normalized.entries[0].enabled).toBe(true);
+      expect(normalized.entries[0].insertion_order).toBe(100);
+      expect(normalized.entries[0].extensions).toEqual({});
+      // Unknown vendor keys ride along untouched.
+      expect(
+        (normalized.entries[0] as unknown as Record<string, unknown>)['vendor_color'],
+      ).toBe('#0f0');
     });
   });
 
@@ -357,8 +610,10 @@ describe('lorebook model', () => {
       const book = stNativeToCharacterBook({
         entries: { 3: nativeEntry({ vectorized: true }) },
       });
+      assert(book.entries[0]);
       expect(entryTriggerState(book.entries[0])).toBe('vectorized');
       const native = characterBookToStNative(book).entries['3'];
+      assert(native);
       expect(native.vectorized).toBe(true);
       expect(native.constant).toBe(false);
     });

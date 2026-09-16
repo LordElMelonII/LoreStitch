@@ -108,10 +108,16 @@ export class EntryKeys {
     }
     const entry = this.entry();
     const list: string[] = [...(entry[editing.field] ?? [])];
+    const current = list[editing.index];
+    if (current === undefined) {
+      // The list shrank since the edit started; there is no key left to change.
+      this.editingKey.set(null);
+      return;
+    }
     const value = this.editValue().trim();
     if (!value) {
       list.splice(editing.index, 1);
-    } else if (list[editing.index] !== value) {
+    } else if (current !== value) {
       // Keep keys unique, mirroring addKey(): if the new value already
       // exists elsewhere the edit collapses into that duplicate.
       if (list.some((k, i) => i !== editing.index && k === value)) {

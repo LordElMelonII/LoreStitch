@@ -1,0 +1,11 @@
+/* Type-checking for the Playwright suite: plain TypeScript with DOM plus the
+   Node built-ins the specs and playwright.config.ts import. Not referenced
+   from the solution tsconfig — it is built standalone via `typecheck:e2e`. */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "include": ["e2e/**/*.ts", "playwright.config.ts"]
+}

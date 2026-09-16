@@ -130,9 +130,10 @@ export class MergeResolverDialog {
         case 'overwrite': {
           const target = row.local;
           const indexInBook = target ? current.findIndex((e) => e.id === target.id) : -1;
-          if (indexInBook >= 0) {
+          const local = indexInBook >= 0 ? current[indexInBook] : undefined;
+          if (local) {
             const clone = structuredClone(row.incoming);
-            clone.id = current[indexInBook].id;
+            clone.id = local.id;
             current[indexInBook] = clone;
             overwritten++;
           } else {

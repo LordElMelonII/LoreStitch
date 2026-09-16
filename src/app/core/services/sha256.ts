@@ -22,10 +22,10 @@ const K = new Uint32Array([
 const rotr = (x: number, n: number): number => ((x >>> n) | (x << (32 - n))) >>> 0;
 
 /** Computes the eight SHA-256 state words for `bytes` without WebCrypto. */
-function sha256Words(bytes: Uint8Array): Uint32Array {
-  const H = new Uint32Array([
+function sha256Words(bytes: Uint8Array): number[] {
+  const H: [number, number, number, number, number, number, number, number] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-  ]);
+  ];
   const len = bytes.length;
   // Message + 0x80 + padding + 8-byte big-endian bit length, padded to 64.
   const padded = new Uint8Array((((len + 8) >> 6) << 6) + 64);
@@ -40,10 +40,15 @@ function sha256Words(bytes: Uint8Array): Uint32Array {
     for (let i = 0; i < 16; i++) {
       w[i] = view.getUint32(offset + i * 4);
     }
+    // K and w hold exactly 64 words each and every read below is bounded by
+    // the loop, so the `?? 0` fallbacks are unreachable; they only satisfy
+    // noUncheckedIndexedAccess.
     for (let i = 16; i < 64; i++) {
-      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
-      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
-      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+      const w15 = w[i - 15] ?? 0;
+      const w2 = w[i - 2] ?? 0;
+      const s0 = rotr(w15, 7) ^ rotr(w15, 18) ^ (w15 >>> 3);
+      const s1 = rotr(w2, 17) ^ rotr(w2, 19) ^ (w2 >>> 10);
+      w[i] = ((w[i - 16] ?? 0) + s0 + (w[i - 7] ?? 0) + s1) >>> 0;
     }
 
     let a = H[0],
@@ -57,7 +62,7 @@ function sha256Words(bytes: Uint8Array): Uint32Array {
     for (let i = 0; i < 64; i++) {
       const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
       const ch = (e & f) ^ (~e & g);
-      const t1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+      const t1 = (h + S1 + ch + (K[i] ?? 0) + (w[i] ?? 0)) >>> 0;
       const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
       const maj = (a & b) ^ (a & c) ^ (b & c);
       const t2 = (S0 + maj) >>> 0;
@@ -107,8 +112,8 @@ export function randomUuid(): string {
   }
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     const bytes = crypto.getRandomValues(new Uint8Array(16));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10xx
+    bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40; // version 4
+    bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80; // variant 10xx
     const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }

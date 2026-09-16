@@ -31,11 +31,14 @@ function toLines(value: string, type: DiffLine['type']): DiffLine[] {
  */
 function hunkStartMap<T>(rows: T[], isChange: (row: T) => boolean): Map<number, number> {
   const starts = new Map<number, number>();
-  for (let i = 0; i < rows.length; i++) {
-    if (isChange(rows[i]) && (i === 0 || !isChange(rows[i - 1]))) {
+  let previousWasChange = false;
+  rows.forEach((row, i) => {
+    const change = isChange(row);
+    if (change && !previousWasChange) {
       starts.set(i, starts.size);
     }
-  }
+    previousWasChange = change;
+  });
   return starts;
 }
 

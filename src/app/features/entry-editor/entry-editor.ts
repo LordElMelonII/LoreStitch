@@ -181,7 +181,7 @@ export class EntryEditor {
       const tabs = this.tabs();
       const id = this.workspace.activeTabId();
       if (tabs.length && !tabs.some((tab) => tab.id === id)) {
-        this.workspace.activeTabId.set(tabs[0].id);
+        this.workspace.activeTabId.set(tabs[0]?.id ?? null);
       }
     });
 

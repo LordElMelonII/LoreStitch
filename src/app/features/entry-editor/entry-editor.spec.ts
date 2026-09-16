@@ -308,8 +308,10 @@ describe('EntryEditor fields composition', () => {
     const fixture = TestBed.createComponent(EntryEditor);
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
-    const accordion = el.querySelector('app-entry-options-accordion')!;
-    const toggle = accordion.querySelector<HTMLButtonElement>('.expand-toggle')!;
+    const accordion = el.querySelector('app-entry-options-accordion');
+    assert(accordion);
+    const toggle = accordion.querySelector<HTMLButtonElement>('.expand-toggle');
+    assert(toggle);
 
     expect(accordion.classList.contains('expanded')).toBe(false);
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
@@ -330,7 +332,8 @@ describe('EntryEditor fields composition', () => {
 
     const nameInput = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
       'app-entry-name input',
-    )!;
+    );
+    assert(nameInput);
     nameInput.value = 'Rin Tohsaka';
     nameInput.dispatchEvent(new Event('input'));
     await fixture.whenStable();
