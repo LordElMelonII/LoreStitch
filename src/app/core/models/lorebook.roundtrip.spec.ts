@@ -60,18 +60,21 @@ describe('Fate/Stay Night Fuyuki lorebook round trip', () => {
 
   it('keeps edits and unedited entries intact in the same export', () => {
     const target = book.entries[0];
-    workspace_edit(book, target.id!, {
+    assert(target);
+    const targetId = target.id;
+    assert(targetId !== undefined);
+    workspace_edit(book, targetId, {
       content: '<edited>Modified content</edited>',
       'extensions.group': 'sword, students',
     });
 
     const exported = exportEntries(characterBookToStNative(book));
-    expect(exported[String(target.id)]?.content).toBe('<edited>Modified content</edited>');
-    expect(exported[String(target.id)]?.group).toBe('sword, students');
+    expect(exported[String(targetId)]?.content).toBe('<edited>Modified content</edited>');
+    expect(exported[String(targetId)]?.group).toBe('sword, students');
 
     // Every other entry is untouched by the edit.
     const losses = Object.entries(original['entries'] as NativeEntryBag)
-      .filter(([uid]) => uid !== String(target.id))
+      .filter(([uid]) => uid !== String(targetId))
       .flatMap(([uid, entry]) =>
         lostAttributes(entry as NativeEntryBag, exported[uid] ?? {}).map(
           (diff) => `uid ${uid} ${diff}`,
@@ -106,6 +109,67 @@ describe('Example test lorebook round trip', () => {
       ),
     );
     expect(losses).toEqual([]);
+  });
+});
+
+describe('addMemo fidelity round trip', () => {
+  // world-info.js stores `addMemo` independently of the comment text; the
+  // export must replay the captured flag, not re-derive it from the comment.
+  function roundTripAddMemo(overrides: Record<string, unknown>): unknown {
+    const book = stNativeToCharacterBook({ entries: { 3: { ...baseEntry, ...overrides } } });
+    return characterBookToStNative(book).entries['3']?.addMemo;
+  }
+
+  const baseEntry = {
+    uid: 3,
+    key: ['memos'],
+    content: 'Content with or without a memo.',
+    comment: 'A non-empty comment',
+  };
+
+  it('addMemo:false with a non-empty comment stays false', () => {
+    expect(roundTripAddMemo({ addMemo: false })).toBe(false);
+  });
+
+  it('addMemo:true with an empty comment stays true', () => {
+    expect(roundTripAddMemo({ addMemo: true, comment: '' })).toBe(true);
+  });
+
+  it('a missing addMemo falls back to comment presence', () => {
+    expect(roundTripAddMemo({ addMemo: undefined })).toBe(true);
+    expect(roundTripAddMemo({ addMemo: undefined, comment: '' })).toBe(false);
+  });
+});
+
+describe('out-of-enum numeric position round trip', () => {
+  // An unmapped `world_info_position` (plugin values like 99) must survive
+  // import -> export untouched instead of collapsing to 0 (before_char).
+  const source: SillyTavernWorldInfo = {
+    entries: {
+      '5': {
+        uid: 5,
+        key: ['portal'],
+        content: 'A shimmering portal.',
+        comment: 'Portal',
+        position: 99,
+        order: 100,
+      } as SillyTavernEntry,
+    },
+  };
+
+  it('keeps 99 across import, native export, and re-import', () => {
+    const book = stNativeToCharacterBook(source, 'Portals');
+    assert(book.entries[0]);
+    expect(book.entries[0].position).toBe('before_char'); // spec fallback only
+    expect(book.entries[0].extensions['position']).toBe(99);
+
+    const native = characterBookToStNative(book);
+    expect(native.entries['5']?.position).toBe(99);
+
+    const reimported = stNativeToCharacterBook(native, 'Portals');
+    assert(reimported.entries[0]);
+    expect(reimported.entries[0].extensions['position']).toBe(99);
+    expect(characterBookToStNative(reimported).entries['5']?.position).toBe(99);
   });
 });
 
@@ -183,6 +247,7 @@ describe('unmanaged extension data preservation', () => {
     };
 
     const book = stNativeToCharacterBook(source, 'Colored');
+    assert(book.entries[0]);
     expect(book.entries[0].extensions['color']).toBe('#ff00ff');
     // Unknown keys inside the native mirror ride along inside the parked copy.
     const parked = book.entries[0].extensions['native_extensions'] as NativeEntryBag;

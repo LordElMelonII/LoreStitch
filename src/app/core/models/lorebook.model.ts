@@ -192,7 +192,10 @@ export const ST_LOGIC = {
 export type StLogic = (typeof ST_LOGIC)[keyof typeof ST_LOGIC];
 
 /** UI options for the secondary-keys logic selector, ordered like the ST docs. */
-export const ST_LOGIC_OPTIONS: readonly { value: StLogic; label: string }[] = [
+export const ST_LOGIC_OPTIONS: readonly [
+  { value: StLogic; label: string },
+  ...{ value: StLogic; label: string }[],
+] = [
   { value: ST_LOGIC.AND_ANY, label: 'AND Any' },
   { value: ST_LOGIC.NOT_ALL, label: 'NOT All' },
   { value: ST_LOGIC.NOT_ANY, label: 'NOT Any' },
@@ -279,14 +282,23 @@ export function stNumberToPosition(
   return match ?? fallback;
 }
 
-/** Current effective SillyTavern numeric position of an entry. */
+/**
+ * Current effective SillyTavern numeric position of an entry. The numeric
+ * `extensions.position` mirror is authoritative when present — imports park
+ * the raw value there and in-app position edits keep it in sync
+ * (`EntryUpdatesService.setPosition`) — while the spec string is the fallback
+ * for books that only carry it.
+ */
 export function entryStPosition(entry: CharacterBookEntry): number {
+  const ext = (entry.extensions ?? {}) as Record<string, unknown>;
+  if (typeof ext['position'] === 'number') {
+    return ext['position'] as number;
+  }
   const position = entry.position;
   if (position && position in WI_POSITION_TO_ST) {
     return WI_POSITION_TO_ST[position as WiPosition];
   }
-  const ext = (entry.extensions ?? {}) as Record<string, unknown>;
-  return typeof ext['position'] === 'number' ? (ext['position'] as number) : ST_POSITION.before;
+  return ST_POSITION.before;
 }
 
 /**
@@ -564,6 +576,7 @@ const ST_ENTRY_NATIVE_KEYS: ReadonlySet<string> = new Set([
  */
 const ST_ENTRY_EXTENSION_KEYS: ReadonlySet<string> = new Set<string>([
   'position',
+  'native_add_memo',
   'exclude_recursion',
   'prevent_recursion',
   'delay_until_recursion',
@@ -623,6 +636,11 @@ function unknownEntryExtensionKeys(ext: StNativeExtensions): [string, unknown][]
  * "unset" and SillyTavern edits keep the camelCase key authoritative. The
  * normalized `extensions` mirror is only the fallback for books that carry a
  * value exclusively there.
+ *
+ * Hardened for untrusted imports: a stored value that fails the field's
+ * `is` guard never reaches the typed mirror — the caller receives the
+ * fallback (or a valid mirror value) while the raw value stays parked under
+ * the extension key via `misTyped`, so exports restore it verbatim.
  */
 function stEntryField<T>(
   st: SillyTavernEntry,
@@ -630,16 +648,162 @@ function stEntryField<T>(
   camelKey: string,
   extKey: string,
   fallback: T,
+  is: (value: unknown) => value is T,
+  misTyped?: Record<string, unknown>,
 ): T {
   const camel = st[camelKey];
-  if (camel !== undefined) {
-    return camel as T;
+  if (is(camel)) {
+    return camel;
   }
   const mirrored = nativeExtensions[extKey];
-  if (mirrored !== undefined && mirrored !== null) {
-    return mirrored as T;
+  if (mirrored !== undefined && mirrored !== null && is(mirrored)) {
+    return mirrored;
+  }
+  if (camel !== undefined && misTyped && !(extKey in misTyped)) {
+    misTyped[extKey] = camel;
   }
   return fallback;
+}
+
+/** Runtime guards for the normalized entry mirrors (see `stEntryField`). */
+function isStNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isStBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
+function isStString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isStNumberOrNull(value: unknown): value is number | null {
+  return value === null || isStNumber(value);
+}
+
+function isStBooleanOrNull(value: unknown): value is boolean | null {
+  return value === null || isStBoolean(value);
+}
+
+function isStBooleanOrNumber(value: unknown): value is boolean | number {
+  return isStBoolean(value) || isStNumber(value);
+}
+
+function isStBooleanOrNumberOrNull(value: unknown): value is boolean | number | null {
+  return value === null || isStBooleanOrNumber(value);
+}
+
+function isStStringArray(value: unknown): value is string[] {
+  return isStringArray(value);
+}
+
+function isStCharacterFilterOrNull(value: unknown): value is StCharacterFilter | null {
+  return value === null || (typeof value === 'object' && value !== null);
+}
+
+// ============================================================================
+// Import validation guards
+// ============================================================================
+
+/** Archive format version written by `exportProject`; import rejects newer ones. */
+export const LORESTITCH_ARCHIVE_VERSION = 1;
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+/**
+ * Structural guard for imported `CharacterBook` payloads. Only the critical
+ * fields the editor indexes are enforced — every entry must be an object with
+ * a string `content` and a string-array `keys` (a wrong-typed `keys` crashed
+ * `entryTitle`); missing optional scalars are tolerated and filled by
+ * `normalizeImportedBook` (normalization, not data loss).
+ */
+export function isCharacterBook(json: unknown): json is CharacterBook {
+  if (!isJsonObject(json) || !Array.isArray(json['entries'])) {
+    return false;
+  }
+  return json['entries'].every(
+    (entry: unknown) =>
+      isJsonObject(entry) &&
+      typeof entry['content'] === 'string' &&
+      isStringArray(entry['keys']),
+  );
+}
+
+/** Structural guard for a commit: the fields the VCS / history code indexes. */
+function isProjectCommit(value: unknown): value is ProjectCommit {
+  return (
+    isJsonObject(value) &&
+    typeof value['id'] === 'string' &&
+    (typeof value['parentId'] === 'string' || value['parentId'] === null) &&
+    typeof value['timestamp'] === 'number' &&
+    typeof value['message'] === 'string' &&
+    isCharacterBook(value['snapshot'])
+  );
+}
+
+/**
+ * Structural guard for `ProjectWorkspace` at depth 1–2: the fields the
+ * workspace, storage (the `by-updatedAt` index) and commit-history code index
+ * must carry their declared types, `activeBook` and every commit snapshot
+ * must pass `isCharacterBook`. Unknown extra keys are irrelevant here — they
+ * round-trip untouched.
+ */
+export function isProjectWorkspace(json: unknown): json is ProjectWorkspace {
+  return (
+    isJsonObject(json) &&
+    typeof json['id'] === 'string' &&
+    typeof json['title'] === 'string' &&
+    typeof json['createdAt'] === 'number' &&
+    typeof json['updatedAt'] === 'number' &&
+    (typeof json['headCommitId'] === 'string' || json['headCommitId'] === null) &&
+    isCharacterBook(json['activeBook']) &&
+    Array.isArray(json['commits']) &&
+    json['commits'].every((commit: unknown) => isProjectCommit(commit))
+  );
+}
+
+/**
+ * Structural guard for native world-info imports: `entries` must be a
+ * uid-keyed bag or bare array of plain objects. Per-entry fields are hardened
+ * during conversion (`stEntryField`), so no deeper shape is required here.
+ */
+export function isSillyTavernWorldInfo(json: unknown): json is SillyTavernWorldInfo {
+  if (!isJsonObject(json)) {
+    return false;
+  }
+  const entries: unknown = json['entries'];
+  if (Array.isArray(entries)) {
+    return entries.every((entry: unknown) => isJsonObject(entry));
+  }
+  return isJsonObject(entries) && Object.values(entries).every((entry: unknown) => isJsonObject(entry));
+}
+
+/**
+ * Fills the normalizable scalars `isCharacterBook` tolerates missing on
+ * imported bare books (defaults, not data loss: every original key — known or
+ * unknown — rides along untouched).
+ */
+export function normalizeImportedBook(book: CharacterBook): CharacterBook {
+  return {
+    ...book,
+    extensions: isJsonObject(book.extensions) ? book.extensions : {},
+    entries: book.entries.map((entry) => {
+      const raw = entry as unknown as Record<string, unknown>;
+      return {
+        ...entry,
+        extensions: isJsonObject(entry.extensions) ? entry.extensions : {},
+        enabled: typeof raw['enabled'] === 'boolean' ? raw['enabled'] : true,
+        insertion_order: typeof raw['insertion_order'] === 'number' ? raw['insertion_order'] : 100,
+      };
+    }),
+  };
 }
 
 // ============================================================================
@@ -831,77 +995,114 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
   const entries = sorted.map((st, index): CharacterBookEntry => {
     const nativeExtensions =
       st.extensions && typeof st.extensions === 'object' ? st.extensions : {};
-    const read = <T>(camelKey: string, extKey: string, fallback: T): T =>
-      stEntryField(st, nativeExtensions, camelKey, extKey, fallback);
+    // Raw values whose stored type failed a field guard, parked under their
+    // extension keys so exports restore them verbatim (spread last below).
+    const misTyped: Record<string, unknown> = {};
+    const read = <T>(
+      camelKey: string,
+      extKey: string,
+      fallback: T,
+      is: (value: unknown) => value is T,
+    ): T => stEntryField(st, nativeExtensions, camelKey, extKey, fallback, is, misTyped);
 
-    const position = read('position', 'position', ST_POSITION.before as number);
+    const position = read('position', 'position', ST_POSITION.before as number, isStNumber);
     const extensions: Record<string, unknown> = {
       ...stUnknownEntryExtensions(st),
       // The native entry's own normalized mirror (world-info.js persists one
       // per entry) rides along verbatim so exports stay byte-identical.
       ...(Object.keys(nativeExtensions).length ? { native_extensions: { ...nativeExtensions } } : {}),
       position,
-      exclude_recursion: read('excludeRecursion', 'exclude_recursion', false),
-      prevent_recursion: read('preventRecursion', 'prevent_recursion', false),
-      delay_until_recursion: read('delayUntilRecursion', 'delay_until_recursion', false),
-      display_index: read('displayIndex', 'display_index', index),
-      probability: read('probability', 'probability', 100),
-      useProbability: read('useProbability', 'useProbability', true),
-      depth: read('depth', 'depth', 4),
-      selectiveLogic: read('selectiveLogic', 'selectiveLogic', ST_LOGIC.AND_ANY),
-      outlet_name: read('outletName', 'outlet_name', ''),
-      group: read('group', 'group', ''),
-      group_override: read('groupOverride', 'group_override', false),
-      group_weight: read('groupWeight', 'group_weight', 100),
-      scan_depth: read('scanDepth', 'scan_depth', null),
-      case_sensitive: read('caseSensitive', 'case_sensitive', null),
-      match_whole_words: read('matchWholeWords', 'match_whole_words', null),
-      use_group_scoring: read('useGroupScoring', 'use_group_scoring', null),
-      automation_id: read('automationId', 'automation_id', ''),
-      role: read('role', 'role', ST_ROLE.system),
-      vectorized: read('vectorized', 'vectorized', false),
-      sticky: read('sticky', 'sticky', null),
-      cooldown: read('cooldown', 'cooldown', null),
-      delay: read('delay', 'delay', null),
-      triggers: read('triggers', 'triggers', [] as string[]),
-      ignore_budget: read('ignoreBudget', 'ignore_budget', false),
-      match_persona_description: read('matchPersonaDescription', 'match_persona_description', false),
+      exclude_recursion: read('excludeRecursion', 'exclude_recursion', false, isStBoolean),
+      prevent_recursion: read('preventRecursion', 'prevent_recursion', false, isStBoolean),
+      delay_until_recursion: read(
+        'delayUntilRecursion',
+        'delay_until_recursion',
+        false,
+        isStBooleanOrNumber,
+      ),
+      display_index: read('displayIndex', 'display_index', index, isStNumber),
+      probability: read('probability', 'probability', 100, isStNumber),
+      useProbability: read('useProbability', 'useProbability', true, isStBoolean),
+      depth: read('depth', 'depth', 4, isStNumber),
+      selectiveLogic: read('selectiveLogic', 'selectiveLogic', ST_LOGIC.AND_ANY, isStNumber),
+      outlet_name: read('outletName', 'outlet_name', '', isStString),
+      group: read('group', 'group', '', isStString),
+      group_override: read('groupOverride', 'group_override', false, isStBoolean),
+      group_weight: read('groupWeight', 'group_weight', 100, isStNumber),
+      scan_depth: read('scanDepth', 'scan_depth', null, isStNumberOrNull),
+      case_sensitive: read('caseSensitive', 'case_sensitive', null, isStBooleanOrNull),
+      match_whole_words: read('matchWholeWords', 'match_whole_words', null, isStBooleanOrNull),
+      use_group_scoring: read(
+        'useGroupScoring',
+        'use_group_scoring',
+        null,
+        isStBooleanOrNumberOrNull,
+      ),
+      automation_id: read('automationId', 'automation_id', '', isStString),
+      role: read('role', 'role', ST_ROLE.system, isStNumberOrNull),
+      vectorized: read('vectorized', 'vectorized', false, isStBoolean),
+      sticky: read('sticky', 'sticky', null, isStNumberOrNull),
+      cooldown: read('cooldown', 'cooldown', null, isStNumberOrNull),
+      delay: read('delay', 'delay', null, isStNumberOrNull),
+      triggers: read('triggers', 'triggers', [] as string[], isStStringArray),
+      ignore_budget: read('ignoreBudget', 'ignore_budget', false, isStBoolean),
+      match_persona_description: read(
+        'matchPersonaDescription',
+        'match_persona_description',
+        false,
+        isStBoolean,
+      ),
       match_character_description: read(
         'matchCharacterDescription',
         'match_character_description',
         false,
+        isStBoolean,
       ),
       match_character_personality: read(
         'matchCharacterPersonality',
         'match_character_personality',
         false,
+        isStBoolean,
       ),
       match_character_depth_prompt: read(
         'matchCharacterDepthPrompt',
         'match_character_depth_prompt',
         false,
+        isStBoolean,
       ),
-      match_scenario: read('matchScenario', 'match_scenario', false),
-      match_creator_notes: read('matchCreatorNotes', 'match_creator_notes', false),
+      match_scenario: read('matchScenario', 'match_scenario', false, isStBoolean),
+      match_creator_notes: read('matchCreatorNotes', 'match_creator_notes', false, isStBoolean),
       character_filter: stNativeToCharacterFilter(
-        read('characterFilter', 'character_filter', null as StCharacterFilter | null),
+        read(
+          'characterFilter',
+          'character_filter',
+          null as StCharacterFilter | null,
+          isStCharacterFilterOrNull,
+        ),
       ),
+      // Original addMemo flag, captured verbatim at import; the exported value
+      // prefers it over the comment-derived synthesis (see
+      // `characterBookToStNative`). Absent on fresh in-app entries.
+      ...(typeof st.addMemo === 'boolean' ? { native_add_memo: st.addMemo } : {}),
+      // Wrong-typed stored values keep their raw bytes under the extension
+      // keys; the typed mirrors above hold the safe defaults.
+      ...misTyped,
     };
 
     return {
-      id: st.uid,
-      name: st.comment || '',
-      keys: st.key ?? [],
-      secondary_keys: st.keysecondary ?? [],
-      content: st.content ?? '',
-      comment: st.comment ?? '',
-      enabled: !(st.disable ?? false),
-      insertion_order: st.order ?? 100,
+      id: typeof st.uid === 'number' ? st.uid : undefined,
+      name: typeof st.comment === 'string' ? st.comment || '' : '',
+      keys: isStringArray(st.key) ? [...st.key] : [],
+      secondary_keys: isStringArray(st.keysecondary) ? [...st.keysecondary] : [],
+      content: typeof st.content === 'string' ? st.content : '',
+      comment: typeof st.comment === 'string' ? st.comment : '',
+      enabled: !(typeof st.disable === 'boolean' ? st.disable : false),
+      insertion_order: typeof st.order === 'number' ? st.order : 100,
       priority: undefined,
       position: stNumberToPosition(position),
-      case_sensitive: st.caseSensitive ?? undefined,
-      selective: st.selective ?? false,
-      constant: st.constant ?? false,
+      case_sensitive: typeof st.caseSensitive === 'boolean' ? st.caseSensitive : undefined,
+      selective: st.selective === true,
+      constant: st.constant === true,
       extensions,
     };
   });
@@ -926,6 +1127,8 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
  */
 export interface EntryExtensions {
   position?: number;
+  /** Original native `addMemo` flag captured at import (exported verbatim). */
+  native_add_memo?: boolean;
   vectorized?: boolean;
   selectiveLogic?: number;
   exclude_recursion?: boolean;
@@ -985,17 +1188,22 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
   book.entries.forEach((entry, index) => {
     const ext = (entry.extensions ?? {}) as StNativeExtensions;
     const uid = entry.id ?? index;
-    // The spec-level string is canonical; extensions.position is the ST-native
-    // numeric mirror (also the fallback for unknown/legacy values).
+    // The numeric `extensions.position` mirror is authoritative — imports park
+    // the raw value there (including out-of-enum numbers like 99) and in-app
+    // position edits keep it in sync — while the spec string is the fallback
+    // for books that only carry it.
     const position =
-      entry.position && entry.position in WI_POSITION_TO_ST
-        ? WI_POSITION_TO_ST[entry.position as WiPosition]
-        : typeof ext.position === 'number'
-          ? ext.position
+      typeof ext.position === 'number'
+        ? ext.position
+        : entry.position && entry.position in WI_POSITION_TO_ST
+          ? WI_POSITION_TO_ST[entry.position as WiPosition]
           : ST_POSITION.before;
 
     // Written only when the filter was configured, like SillyTavern itself.
     const characterFilter = toNativeCharacterFilter(ext.character_filter ?? ext['characterFilter']);
+    // Entries imported from SillyTavern keep their original addMemo flag
+    // verbatim; fresh in-app entries derive it from comment presence.
+    const capturedAddMemo = ext['native_add_memo'];
 
     entries[String(uid)] = {
       // Extension-derived attributes round-trip at the native top level;
@@ -1010,7 +1218,10 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
       vectorized: ext.vectorized ?? false,
       selective: entry.selective ?? false,
       selectiveLogic: ext.selectiveLogic ?? ST_LOGIC.AND_ANY,
-      addMemo: !!(entry.comment ?? '').trim(),
+      addMemo:
+        typeof capturedAddMemo === 'boolean'
+          ? capturedAddMemo
+          : !!(entry.comment ?? '').trim(),
       order: entry.insertion_order ?? 100,
       position,
       disable: !entry.enabled,

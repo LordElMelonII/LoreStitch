@@ -1,14 +1,19 @@
-import { Service } from '@angular/core';
+import { DOCUMENT, Service, inject } from '@angular/core';
 import {
   CharacterBook,
   LoreFileFormat,
+  LORESTITCH_ARCHIVE_VERSION,
   ProjectWorkspace,
   SillyTavernWorldInfo,
   characterBookToStNative,
   detectLoreFileFormat,
   entryTitle,
   estimateTokens,
+  isCharacterBook,
+  isProjectWorkspace,
+  isSillyTavernWorldInfo,
   normalizeBookPositions,
+  normalizeImportedBook,
   stNativeToCharacterBook,
   toSpecCompliantBook,
 } from '../models/lorebook.model';
@@ -31,6 +36,8 @@ export interface MarkdownDigestOptions {
  */
 @Service()
 export class ImportExportService {
+  private readonly document = inject(DOCUMENT);
+
   /** Reads a `File` as text (imports are JSON only). */
   async readFileText(file: File): Promise<string> {
     return file.text();
@@ -39,7 +46,10 @@ export class ImportExportService {
   /**
    * Parses imported JSON and auto-detects its format: a bare
    * `CharacterBook`, a LoreStitch `.stproj` archive, or a native SillyTavern
-   * world-info export.
+   * world-info export. Every branch is validated by a type guard first —
+   * malformed payloads return `null` so the caller shows its
+   * unsupported-format error instead of persisting a book that would crash
+   * on render.
    */
   parseImport(json: unknown, fallbackTitle = 'Imported Lorebook'): ParsedImport | null {
     const format = detectLoreFileFormat(json);
@@ -49,6 +59,9 @@ export class ImportExportService {
 
     switch (format) {
       case 'sillytavern_native': {
+        if (!isSillyTavernWorldInfo(json)) {
+          return null;
+        }
         const book = stNativeToCharacterBook(json as SillyTavernWorldInfo, fallbackTitle);
         return {
           format,
@@ -57,16 +70,33 @@ export class ImportExportService {
         };
       }
       case 'stproj': {
-        const wrapper = json as { workspace: ProjectWorkspace };
+        const archive = json as Record<string, unknown>;
+        // Future archive versions may carry a workspace shape this build
+        // cannot understand — reject instead of importing a corrupt project.
+        if (
+          archive['version'] !== undefined &&
+          archive['version'] !== LORESTITCH_ARCHIVE_VERSION
+        ) {
+          return null;
+        }
+        if (!isProjectWorkspace(archive['workspace'])) {
+          return null;
+        }
+        const workspace: ProjectWorkspace = archive['workspace'];
         return {
           format,
-          workspace: wrapper.workspace,
-          book: wrapper.workspace.activeBook,
-          suggestedTitle: wrapper.workspace.title || fallbackTitle,
+          workspace,
+          book: workspace.activeBook,
+          suggestedTitle: workspace.title || fallbackTitle,
         };
       }
       default: {
-        const book = normalizeBookPositions(structuredClone(json as CharacterBook));
+        if (!isCharacterBook(json)) {
+          return null;
+        }
+        const book = normalizeBookPositions(
+          normalizeImportedBook(structuredClone(json as CharacterBook)),
+        );
         return {
           format: 'character_book',
           book,
@@ -94,7 +124,7 @@ export class ImportExportService {
   exportProject(project: ProjectWorkspace): void {
     const archive = {
       format: 'lorestitch-project' as const,
-      version: 1,
+      version: LORESTITCH_ARCHIVE_VERSION,
       exportedAt: new Date().toISOString(),
       workspace: structuredClone(project),
     };
@@ -149,7 +179,7 @@ export class ImportExportService {
   download(content: string, fileName: string, mime: string): void {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
+    const anchor = this.document.createElement('a');
     anchor.href = url;
     anchor.download = fileName;
     anchor.click();

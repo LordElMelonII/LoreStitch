@@ -28,11 +28,11 @@ export function detectDelimiter(content: string): DetectedDelimiter {
   const text = content ?? '';
   const tag = TAG_RE.exec(text);
   if (tag) {
-    return { style: 'tag', name: tag[1].trim() };
+    return { style: 'tag', name: tag[1]?.trim() ?? '' };
   }
   const bracket = BRACKET_RE.exec(text);
   if (bracket) {
-    return { style: 'bracket', name: bracket[1].trim() };
+    return { style: 'bracket', name: bracket[1]?.trim() ?? '' };
   }
   if (SEPARATOR_RE.test(text)) {
     return { style: 'separator', name: '' };
