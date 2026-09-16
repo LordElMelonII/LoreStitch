@@ -620,9 +620,7 @@ const ST_ENTRY_EXTENSION_KEYS: ReadonlySet<string> = new Set<string>([
  * are never written twice.)
  */
 function stUnknownEntryExtensions(st: SillyTavernEntry): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(st).filter(([key]) => !ST_ENTRY_NATIVE_KEYS.has(key)),
-  );
+  return Object.fromEntries(Object.entries(st).filter(([key]) => !ST_ENTRY_NATIVE_KEYS.has(key)));
 }
 
 /** Inverse of `stUnknownEntryExtensions` for the export direction. */
@@ -730,9 +728,7 @@ export function isCharacterBook(json: unknown): json is CharacterBook {
   }
   return json['entries'].every(
     (entry: unknown) =>
-      isJsonObject(entry) &&
-      typeof entry['content'] === 'string' &&
-      isStringArray(entry['keys']),
+      isJsonObject(entry) && typeof entry['content'] === 'string' && isStringArray(entry['keys']),
   );
 }
 
@@ -782,22 +778,29 @@ export function isSillyTavernWorldInfo(json: unknown): json is SillyTavernWorldI
   if (Array.isArray(entries)) {
     return entries.every((entry: unknown) => isJsonObject(entry));
   }
-  return isJsonObject(entries) && Object.values(entries).every((entry: unknown) => isJsonObject(entry));
+  return (
+    isJsonObject(entries) && Object.values(entries).every((entry: unknown) => isJsonObject(entry))
+  );
 }
 
 /**
  * Fills the normalizable scalars `isCharacterBook` tolerates missing on
  * imported bare books (defaults, not data loss: every original key — known or
- * unknown — rides along untouched).
+ * unknown — rides along untouched). Entries without an `id` receive a fresh
+ * sequential one: the editor, batch selection and split export all key on
+ * ids, so an id-less entry would otherwise be unaddressable.
  */
 export function normalizeImportedBook(book: CharacterBook): CharacterBook {
+  let nextId = book.entries.reduce((max, e) => Math.max(max, e.id ?? 0), -1) + 1;
   return {
     ...book,
     extensions: isJsonObject(book.extensions) ? book.extensions : {},
     entries: book.entries.map((entry) => {
       const raw = entry as unknown as Record<string, unknown>;
+      const id = entry.id ?? nextId++;
       return {
         ...entry,
+        id,
         extensions: isJsonObject(entry.extensions) ? entry.extensions : {},
         enabled: typeof raw['enabled'] === 'boolean' ? raw['enabled'] : true,
         insertion_order: typeof raw['insertion_order'] === 'number' ? raw['insertion_order'] : 100,
@@ -863,9 +866,82 @@ export function entryTitle(entry: CharacterBookEntry): string {
   return `Entry ${entry.id ?? '?'}`;
 }
 
-/** Rough token estimate used across the UI (same heuristic as the editor). */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 3.5);
+// ============================================================================
+// LoreStitch entry tags (curation metadata for batch tooling & filtering)
+// ============================================================================
+
+/**
+ * Author-assigned category tags live in `extensions.lorestitch_tags` — a
+ * LoreStitch-namespaced extension field, so native SillyTavern files are
+ * never polluted and the values round-trip losslessly through the unknown
+ * extension-key path of the converters.
+ */
+export const LORESTITCH_TAGS_EXTENSION_KEY = 'lorestitch_tags';
+
+/** The entry's author-assigned tags (trimmed, de-duplicated, in order). */
+export function entryTags(entry: CharacterBookEntry): string[] {
+  const raw = (entry.extensions ?? {})[LORESTITCH_TAGS_EXTENSION_KEY];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return [
+    ...new Set(
+      raw
+        .filter((tag): tag is string => typeof tag === 'string')
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/** Produces the extension patch replacing an entry's tag list. */
+export function withEntryTags(
+  entry: CharacterBookEntry,
+  tags: string[],
+): Partial<CharacterBookEntry> {
+  const cleaned = [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))];
+  return {
+    extensions: { ...entry.extensions, [LORESTITCH_TAGS_EXTENSION_KEY]: cleaned },
+  };
+}
+
+// ============================================================================
+// Lorebook splitting (export a selection as a standalone book)
+// ============================================================================
+
+/**
+ * Derives a standalone `CharacterBook` from a selection of the book's
+ * entries, for "export selected entries as lorebook" workflows.
+ *
+ * Entries are deep-cloned with their full extension bags (vendor fields
+ * included) and re-numbered `display_index`es; ids/uids are kept so merging
+ * the split back later resolves collisions against the original uids.
+ * Book-level extensions are intentionally NOT copied: parked vendor data
+ * (`stlo`, …) belongs to the source file, while the split-off book is a new
+ * artifact starting from a clean root.
+ */
+export function extractSubBook(
+  book: CharacterBook,
+  entryIds: readonly number[],
+  name: string,
+): CharacterBook {
+  const ids = new Set(entryIds);
+  const entries = book.entries
+    .filter((entry) => entry.id !== undefined && ids.has(entry.id))
+    .map((entry, index) => {
+      const clone = structuredClone(entry);
+      clone.extensions = { ...clone.extensions, display_index: index };
+      return clone;
+    });
+  return {
+    name,
+    description: '',
+    scan_depth: book.scan_depth,
+    token_budget: book.token_budget,
+    recursive_scanning: book.recursive_scanning,
+    extensions: {},
+    entries,
+  };
 }
 
 /** Default extension payload carried on every new entry. */
@@ -1010,7 +1086,9 @@ export function stNativeToCharacterBook(data: SillyTavernWorldInfo, name?: strin
       ...stUnknownEntryExtensions(st),
       // The native entry's own normalized mirror (world-info.js persists one
       // per entry) rides along verbatim so exports stay byte-identical.
-      ...(Object.keys(nativeExtensions).length ? { native_extensions: { ...nativeExtensions } } : {}),
+      ...(Object.keys(nativeExtensions).length
+        ? { native_extensions: { ...nativeExtensions } }
+        : {}),
       position,
       exclude_recursion: read('excludeRecursion', 'exclude_recursion', false, isStBoolean),
       prevent_recursion: read('preventRecursion', 'prevent_recursion', false, isStBoolean),
@@ -1219,9 +1297,7 @@ export function characterBookToStNative(book: CharacterBook): SillyTavernWorldIn
       selective: entry.selective ?? false,
       selectiveLogic: ext.selectiveLogic ?? ST_LOGIC.AND_ANY,
       addMemo:
-        typeof capturedAddMemo === 'boolean'
-          ? capturedAddMemo
-          : !!(entry.comment ?? '').trim(),
+        typeof capturedAddMemo === 'boolean' ? capturedAddMemo : !!(entry.comment ?? '').trim(),
       order: entry.insertion_order ?? 100,
       position,
       disable: !entry.enabled,

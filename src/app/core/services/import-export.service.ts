@@ -8,7 +8,7 @@ import {
   characterBookToStNative,
   detectLoreFileFormat,
   entryTitle,
-  estimateTokens,
+  extractSubBook,
   isCharacterBook,
   isProjectWorkspace,
   isSillyTavernWorldInfo,
@@ -17,6 +17,7 @@ import {
   stNativeToCharacterBook,
   toSpecCompliantBook,
 } from '../models/lorebook.model';
+import { estimateTokens } from './token-estimator';
 
 /** Result of parsing an imported JSON document. */
 export interface ParsedImport {
@@ -118,6 +119,24 @@ export class ImportExportService {
   /** Native SillyTavern world-info JSON, directly importable into ST. */
   exportStNative(book: CharacterBook, title: string): void {
     this.downloadJson(characterBookToStNative(book), `${this.fileName(title)}-world-info.json`);
+  }
+
+  /**
+   * Modular split export: writes only the selected entries as a standalone
+   * lorebook file (see `extractSubBook` for how the sub-book is derived).
+   */
+  exportSelectedBook(
+    book: CharacterBook,
+    entryIds: readonly number[],
+    title: string,
+    format: 'st_native' | 'character_book',
+  ): void {
+    const subBook = extractSubBook(book, entryIds, title);
+    if (format === 'character_book') {
+      this.exportCharacterBook(subBook, title);
+    } else {
+      this.exportStNative(subBook, title);
+    }
   }
 
   /** Full project archive including the commit history. */

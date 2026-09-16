@@ -6,9 +6,17 @@ import {
   characterBookToStNative,
   createEmptyEntry,
   detectLoreFileFormat,
+  entryTags,
+  entryTriggerState,
+  extractSubBook,
   stNativeToCharacterBook,
   toSpecCompliantBook,
+  withEntryTags,
 } from './lorebook.model';
+import {
+  type BatchOperations,
+  buildBatchPatch,
+} from '../../features/entry-list/batch-operations.model';
 
 type NativeEntryBag = Record<string, unknown>;
 
@@ -28,9 +36,7 @@ function lostAttributes(source: NativeEntryBag, exported: NativeEntryBag): strin
   return lost;
 }
 
-function exportEntries(
-  exported: SillyTavernWorldInfo,
-): Record<string, SillyTavernEntry> {
+function exportEntries(exported: SillyTavernWorldInfo): Record<string, SillyTavernEntry> {
   return exported.entries;
 }
 
@@ -294,6 +300,94 @@ describe('unmanaged extension data preservation', () => {
     const book = stNativeToCharacterBook(roadMapExample, 'Roadmap');
     const specBook = toSpecCompliantBook(book);
     expect(specBook.extensions['stlo']).toEqual(roadMapExample['stlo']);
+  });
+});
+
+describe('high-priority feature data paths (tags, batch edits, splits)', () => {
+  const original = fateLorebook as unknown as SillyTavernWorldInfo;
+  const book = stNativeToCharacterBook(original, 'Fuyuki');
+
+  it('round-trips LoreStitch tags through a native export and re-import', () => {
+    const entry = book.entries[0];
+    assert(entry && entry.id !== undefined);
+    Object.assign(entry, withEntryTags(entry, ['Fate', 'Servant']));
+
+    const exportedWorld = characterBookToStNative(book);
+    const nativeEntry = exportEntries(exportedWorld)[String(entry.id)] as NativeEntryBag;
+    expect(nativeEntry['lorestitch_tags']).toEqual(['Fate', 'Servant']);
+
+    const reimported = stNativeToCharacterBook(exportedWorld, 'Fuyuki');
+    const restored = reimported.entries.find((e) => e.id === entry.id);
+    assert(restored);
+    expect(entryTags(restored)).toEqual(['Fate', 'Servant']);
+  });
+
+  it('round-trips batch edits (strategy, @Depth placement, scan depth) without losing untouched attributes', () => {
+    const target = book.entries[1];
+    assert(target && target.id !== undefined);
+    const originalOrder = target.insertion_order ?? 100;
+    const originalContent = target.content;
+    const originalKeys = [...(target.keys ?? [])];
+
+    const ops: BatchOperations = {
+      triggerState: 'vectorized',
+      position: { position: 'at_depth', depth: 2, role: 1 },
+      scanDepth: { mode: 'set', value: 3 },
+      insertionOrder: { mode: 'shift', amount: 5 },
+    };
+    const patch = buildBatchPatch(target, ops);
+    assert(patch);
+    Object.assign(target, patch);
+
+    const exportedWorld = characterBookToStNative(book);
+    const nativeEntry = exportEntries(exportedWorld)[String(target.id)] as NativeEntryBag;
+    expect(nativeEntry['vectorized']).toBe(true);
+    expect(nativeEntry['constant']).toBe(false);
+    expect(nativeEntry['position']).toBe(4);
+    expect(nativeEntry['depth']).toBe(2);
+    expect(nativeEntry['role']).toBe(1);
+    // The native file carries the camelCase field; scan_depth is the
+    // normalized extension mirror that only exists in the editing model.
+    expect(nativeEntry['scanDepth']).toBe(3);
+    expect(nativeEntry['order']).toBe(originalOrder + 5);
+    // Untouched attributes survive the batch write verbatim.
+    expect(nativeEntry['content']).toBe(originalContent);
+    expect(nativeEntry['key']).toEqual(originalKeys);
+
+    const reimported = stNativeToCharacterBook(exportedWorld, 'Fuyuki');
+    const restored = reimported.entries.find((e) => e.id === target.id);
+    assert(restored);
+    expect(entryTriggerState(restored)).toBe('vectorized');
+    expect(restored.position).toBe('at_depth');
+    expect(restored.extensions['depth']).toBe(2);
+    expect(restored.extensions['role']).toBe(1);
+    expect(restored.extensions['scan_depth']).toBe(3);
+    expect(restored.insertion_order).toBe(originalOrder + 5);
+  });
+
+  it('exports a split selection as a standalone native file with its vendor keys', () => {
+    const first = book.entries[0];
+    const second = book.entries[1];
+    assert(first && second && first.id !== undefined && second.id !== undefined);
+    // One synthetic entry-level vendor attribute must ride along.
+    first.extensions = { ...first.extensions, vendor_color: '#abc' };
+
+    const split = extractSubBook(book, [first.id, second.id], 'Fuyuki Split');
+    expect(split.entries).toHaveLength(2);
+
+    const exported = characterBookToStNative(split);
+    // Only the selection is written, and the source book's own parked
+    // extensions (stlo, …) are not inherited by the new artifact.
+    expect(Object.keys(exported.entries)).toHaveLength(2);
+    expect(exported['stlo']).toBeUndefined();
+
+    const splitFirst = exported.entries[String(first.id)] as NativeEntryBag;
+    expect(splitFirst['vendor_color']).toBe('#abc');
+
+    // The split file imports cleanly on its own.
+    expect(detectLoreFileFormat(exported)).toBe('sillytavern_native');
+    const reimported = stNativeToCharacterBook(exported, 'Fuyuki Split');
+    expect(reimported.entries).toHaveLength(2);
   });
 });
 

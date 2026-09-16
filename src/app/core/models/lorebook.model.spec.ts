@@ -12,7 +12,9 @@ import {
   entryTitle,
   entryTriggerState,
   entryTriggers,
-  estimateTokens,
+  entryTags,
+  extractSubBook,
+  withEntryTags,
   isCharacterBook,
   isProjectWorkspace,
   isSillyTavernWorldInfo,
@@ -550,11 +552,6 @@ describe('lorebook model', () => {
       expect(entryTitle(createEmptyEntry(4))).toBe('Entry 4');
     });
 
-    it('estimateTokens uses the length/3.5 heuristic', () => {
-      expect(estimateTokens('')).toBe(0);
-      expect(estimateTokens('a'.repeat(35))).toBe(10);
-    });
-
     it('createEmptyBook and createEmptyEntry produce sane defaults', () => {
       const book = createEmptyBook('Test');
       expect(book.name).toBe('Test');
@@ -563,6 +560,67 @@ describe('lorebook model', () => {
       expect(entry.enabled).toBe(true);
       expect(entry.insertion_order).toBe(100);
       expect(entry.extensions?.['probability']).toBe(100);
+    });
+  });
+
+  describe('entry tags (lorestitch_tags extension)', () => {
+    it('reads, trims and de-duplicates tags from the extension bag', () => {
+      const entry = createEmptyEntry(0);
+      expect(entryTags(entry)).toEqual([]);
+      entry.extensions = {
+        ...entry.extensions,
+        lorestitch_tags: ['Fate', ' Servant ', 'Fate', 42, null],
+      };
+      expect(entryTags(entry)).toEqual(['Fate', 'Servant']);
+    });
+
+    it('produces an extension patch that preserves sibling keys', () => {
+      const entry = createEmptyEntry(0);
+      entry.extensions = { ...entry.extensions, vendor_color: '#f0f' };
+      const patch = withEntryTags(entry, ['Fate']);
+      expect(patch.extensions?.['lorestitch_tags']).toEqual(['Fate']);
+      expect(patch.extensions?.['vendor_color']).toBe('#f0f');
+    });
+  });
+
+  describe('extractSubBook (modular splitting)', () => {
+    it('copies only the selected entries with fresh display indexes', () => {
+      const book = createEmptyBook('Fuyuki');
+      book.entries = [createEmptyEntry(0), createEmptyEntry(1), createEmptyEntry(2)];
+      book.entries.forEach((entry, index) => {
+        entry.extensions = { ...entry.extensions, display_index: index, vendor_color: '#abc' };
+      });
+
+      const sub = extractSubBook(book, [0, 2], 'Servants');
+      expect(sub.name).toBe('Servants');
+      expect(sub.entries.map((e) => e.id)).toEqual([0, 2]);
+      expect(sub.entries.map((e) => e.extensions?.['display_index'])).toEqual([0, 1]);
+      // Entry-level vendor keys ride along untouched.
+      expect(sub.entries[0]?.extensions?.['vendor_color']).toBe('#abc');
+    });
+
+    it('carries book-level settings but starts from a clean extension root', () => {
+      const book = createEmptyBook('Fuyuki');
+      book.scan_depth = 4;
+      book.token_budget = 2048;
+      book.recursive_scanning = true;
+      book.extensions = { stlo: { vendor: true } };
+
+      const sub = extractSubBook(book, [0], 'Split');
+      expect(sub.scan_depth).toBe(4);
+      expect(sub.token_budget).toBe(2048);
+      expect(sub.recursive_scanning).toBe(true);
+      expect(sub.extensions).toEqual({});
+    });
+
+    it('deep-clones entries so mutating the split never touches the source', () => {
+      const book = createEmptyBook('Fuyuki');
+      book.entries = [createEmptyEntry(0)];
+      const sub = extractSubBook(book, [0], 'Split');
+      const splitEntry = sub.entries[0];
+      assert(splitEntry);
+      splitEntry.content = 'mutated';
+      expect(book.entries[0]?.content).not.toBe('mutated');
     });
   });
 
