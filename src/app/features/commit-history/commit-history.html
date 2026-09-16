@@ -82,9 +82,9 @@
           </div>
         </div>
       </div>
-      @if (expanded() === row.commit.id) {
+      @if (expanded() === row.commit.id && expandedDiff(); as diff) {
         <div class="commit-diff">
-          <app-diff-viewer [oldText]="parentText(row)" [newText]="snapshotText(row)" />
+          <app-diff-viewer [oldText]="diff.oldText" [newText]="diff.newText" />
         </div>
       }
     } @empty {

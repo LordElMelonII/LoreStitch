@@ -17,6 +17,12 @@ interface CommitMessageModel {
   message: string;
 }
 
+/** Serialized diff texts fed to the expanded row's DiffViewer. */
+interface DiffTexts {
+  oldText: string;
+  newText: string;
+}
+
 /** Longest commit message the UI accepts. */
 const MAX_COMMIT_MESSAGE = 200;
 
@@ -111,13 +117,22 @@ export class CommitHistory {
     this.expanded.update((current) => (current === id ? null : id));
   }
 
-  protected snapshotText(row: CommitRow): string {
-    return JSON.stringify(row.commit.snapshot, null, 2);
-  }
-
-  protected parentText(row: CommitRow): string {
-    return row.parent ? JSON.stringify(row.parent.snapshot, null, 2) : '';
-  }
+  /**
+   * Snapshot texts of the expanded row, stringified here instead of in the
+   * template so typing in the commit box never re-serializes full snapshots
+   * (nor re-runs DiffViewer's diff on fresh strings). Recomputes only when
+   * the commit history or the expanded commit changes.
+   */
+  protected readonly expandedDiff = computed<DiffTexts | null>(() => {
+    const row = this.rows().find((r) => r.commit.id === this.expanded());
+    if (!row) {
+      return null;
+    }
+    return {
+      oldText: row.parent ? JSON.stringify(row.parent.snapshot, null, 2) : '',
+      newText: JSON.stringify(row.commit.snapshot, null, 2),
+    };
+  });
 
   protected hash(id: string): string {
     return shortHash(id);
