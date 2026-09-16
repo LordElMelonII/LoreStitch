@@ -13,6 +13,7 @@
       <mat-icon>add</mat-icon>
     </button>
   </div>
+
   <mat-form-field subscriptSizing="dynamic" appearance="fill" class="filter-field">
     <mat-icon matPrefix>search</mat-icon>
     <input
@@ -34,7 +35,92 @@
       </button>
     }
   </mat-form-field>
+
+  @if (allTags().length) {
+    <div class="tag-filter" role="group" aria-label="Filter by tag">
+      @for (tag of allTags(); track tag) {
+        <button
+          type="button"
+          class="tag-chip"
+          [class.active]="isTagActive(tag)"
+          (click)="toggleTagFilter(tag)"
+          [attr.aria-pressed]="isTagActive(tag)"
+        >
+          {{ tag }}
+        </button>
+      }
+    </div>
+  }
+
+  @if (selectionCount() > 0) {
+    <div class="batch-bar" role="toolbar" aria-label="Batch actions">
+      <mat-checkbox
+        class="select-all"
+        [checked]="allFilteredSelected()"
+        [indeterminate]="someFilteredSelected()"
+        (change)="toggleSelectAll($event.checked)"
+        matTooltip="Select / deselect shown entries"
+        [attr.aria-label]="'Select all shown entries'"
+      />
+      <span class="batch-count">{{ selectionCount() }} selected</span>
+      <button
+        matIconButton
+        type="button"
+        (click)="openBatchOperations()"
+        matTooltip="Batch edit selection"
+        aria-label="Batch edit selection"
+      >
+        <mat-icon>tune</mat-icon>
+      </button>
+      <button
+        matIconButton
+        type="button"
+        (click)="exportSelection()"
+        matTooltip="Export selection as lorebook"
+        aria-label="Export selection as lorebook"
+      >
+        <mat-icon>call_split</mat-icon>
+      </button>
+      <button
+        matIconButton
+        type="button"
+        [matMenuTriggerFor]="batchMenu"
+        matTooltip="More batch actions"
+        aria-label="More batch actions"
+      >
+        <mat-icon>more_vert</mat-icon>
+      </button>
+      <button
+        matIconButton
+        type="button"
+        (click)="clearSelection()"
+        matTooltip="Clear selection"
+        aria-label="Clear selection"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  }
 </div>
+
+<mat-menu #batchMenu="matMenu">
+  <button mat-menu-item (click)="duplicateSelection()">
+    <mat-icon>content_copy</mat-icon>
+    <span>Duplicate selected</span>
+  </button>
+  <button mat-menu-item (click)="setSelectionEnabled(true)">
+    <mat-icon>visibility</mat-icon>
+    <span>Enable selected</span>
+  </button>
+  <button mat-menu-item (click)="setSelectionEnabled(false)">
+    <mat-icon>visibility_off</mat-icon>
+    <span>Disable selected</span>
+  </button>
+  <button mat-menu-item (click)="deleteSelection()">
+    <mat-icon class="menu-danger-icon">delete</mat-icon>
+    <span>Delete selected…</span>
+  </button>
+</mat-menu>
 
 <cdk-virtual-scroll-viewport
   class="list-viewport"
@@ -48,13 +134,22 @@
     cdkDrag
     class="entry-item"
     [class.active]="item.id === activeId()"
+    [class.selected]="selection().has(item.id)"
     [class.disabled-entry]="!item.enabled"
     (click)="open(item)"
     (keydown.enter)="open(item)"
+    (keydown.space)="$event.preventDefault(); open(item)"
     tabindex="0"
     role="button"
     [attr.aria-label]="'Open entry ' + item.title"
   >
+    <mat-checkbox
+      class="row-select"
+      [checked]="selection().has(item.id)"
+      (change)="toggleRow(item, $event.checked)"
+      (click)="$event.stopPropagation()"
+      [attr.aria-label]="'Select ' + item.title"
+    />
     <mat-icon class="drag-handle" cdkDragHandle>drag_indicator</mat-icon>
     <div class="item-main">
       <div class="item-title" [matTooltip]="item.title">
@@ -93,6 +188,9 @@
       </div>
     </div>
     <div class="item-actions">
+      <span class="token-count" matTooltip="Estimated tokens when activated">
+        ~{{ formatTokens(item.tokens) }}
+      </span>
       @if (!item.enabled) {
         <mat-icon class="state-icon" matTooltip="Disabled">visibility_off</mat-icon>
       }

@@ -1,0 +1,132 @@
+h2[mat-dialog-title] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  mat-icon {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hint {
+  margin: 0 0 8px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.op-section {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  h3 {
+    margin: 0 0 8px;
+    font: var(--mat-sys-label-large);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--mat-sys-primary);
+  }
+}
+
+.op-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  flex-wrap: wrap;
+
+  .op-label {
+    width: 110px;
+    flex: none;
+    font: var(--mat-sys-body-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .op-toggles {
+    flex: none;
+  }
+
+  .number-field {
+    width: 110px;
+
+    &.narrow {
+      width: 84px;
+    }
+  }
+
+  .select-field {
+    width: 180px;
+  }
+
+  .outlet-field {
+    width: 220px;
+  }
+
+  &.tags-row {
+    .tags-field {
+      flex: 1;
+      min-width: 220px;
+    }
+  }
+
+  &.remove-row {
+    align-items: flex-start;
+
+    .op-label {
+      padding-top: 10px;
+    }
+
+    mat-chip-option mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+
+    // Marked-for-removal chips get the error palette; the projected
+    // matChipAction keeps them focusable and Enter / Space-activatable.
+    mat-chip-option.marked-remove {
+      text-decoration: line-through;
+      --mat-chip-elevated-container-color: var(--mat-sys-error-container);
+      background: var(--mat-sys-error-container);
+      color: var(--mat-sys-on-error-container);
+    }
+  }
+}
+
+mat-dialog-actions {
+  .affected {
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-on-surface-variant);
+    margin-right: auto;
+  }
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+// Compact screens: labels move above the toggles so rows never overflow.
+@media (max-width: 599px) {
+  .op-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+
+    .op-label {
+      width: auto;
+    }
+
+    .op-toggles {
+      align-self: flex-start;
+    }
+  }
+}

@@ -9,4 +9,8 @@ export interface EntryListItem {
   state: WiTriggerState;
   dirty: boolean;
   content: string;
+  /** Estimated tokens the entry contributes when activated. */
+  tokens: number;
+  /** Author-assigned LoreStitch tags (see `entryTags`). */
+  tags: string[];
 }

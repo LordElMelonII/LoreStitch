@@ -1,0 +1,278 @@
+<h2 mat-dialog-title>
+  <mat-icon>checklist</mat-icon>
+  Batch Edit {{ data.entryIds.length }} Entries
+</h2>
+
+<mat-dialog-content class="dialog-body">
+  <p class="hint">Only the fields you change below are written to the selected entries.</p>
+
+  <!-- Status -->
+  <section class="op-section">
+    <h3>Status</h3>
+    <div class="op-row">
+      <span class="op-label">Enabled</span>
+      <mat-button-toggle-group
+        class="op-toggles"
+        [value]="enabledMode()"
+        (change)="enabledMode.set($event.value)"
+        aria-label="Bulk enabled state"
+      >
+        <mat-button-toggle value="unchanged">Leave</mat-button-toggle>
+        <mat-button-toggle value="enable">Enable</mat-button-toggle>
+        <mat-button-toggle value="disable">Disable</mat-button-toggle>
+      </mat-button-toggle-group>
+    </div>
+    <div class="op-row">
+      <span class="op-label">Trigger</span>
+      <mat-button-toggle-group
+        class="op-toggles"
+        [value]="triggerStateMode()"
+        (change)="triggerStateMode.set($event.value)"
+        aria-label="Bulk trigger strategy"
+      >
+        <mat-button-toggle value="unchanged">Leave</mat-button-toggle>
+        <mat-button-toggle value="normal" matTooltip="🟢 Triggered only in the presence of a key">
+          🟢 Normal
+        </mat-button-toggle>
+        <mat-button-toggle
+          value="constant"
+          matTooltip="🔵 Does not need any keywords, and will trigger regardless of content"
+        >
+          🔵 Constant
+        </mat-button-toggle>
+        <mat-button-toggle
+          value="vectorized"
+          matTooltip="🔗 Allowed to be inserted by embedding similarity (Vector Storage)"
+        >
+          🔗 Vector
+        </mat-button-toggle>
+      </mat-button-toggle-group>
+    </div>
+  </section>
+
+  <!-- Insertion order -->
+  <section class="op-section">
+    <h3>Insertion order</h3>
+    <div class="op-row">
+      <mat-button-toggle-group
+        class="op-toggles"
+        [value]="orderMode()"
+        (change)="orderMode.set($event.value)"
+        aria-label="Insertion order operation"
+      >
+        <mat-button-toggle value="unchanged">Leave</mat-button-toggle>
+        <mat-button-toggle value="set">Set to</mat-button-toggle>
+        <mat-button-toggle value="shift">Shift by</mat-button-toggle>
+      </mat-button-toggle-group>
+      @if (orderMode() !== 'unchanged') {
+        <mat-form-field subscriptSizing="dynamic" appearance="outline" class="number-field">
+          <input
+            matInput
+            type="number"
+            step="1"
+            [ngModel]="orderAmount()"
+            (ngModelChange)="orderAmount.set($event)"
+            [attr.aria-label]="orderMode() === 'set' ? 'Order value' : 'Order shift amount'"
+          />
+        </mat-form-field>
+      }
+    </div>
+  </section>
+
+  <!-- Evaluation strategy -->
+  <section class="op-section">
+    <h3>Evaluation strategy</h3>
+    <div class="op-row">
+      <span class="op-label">Scan depth</span>
+      <mat-button-toggle-group
+        class="op-toggles"
+        [value]="scanDepthMode()"
+        (change)="scanDepthMode.set($event.value)"
+        aria-label="Scan depth operation"
+      >
+        <mat-button-toggle value="unchanged">Leave</mat-button-toggle>
+        <mat-button-toggle value="set">Set</mat-button-toggle>
+        <mat-button-toggle value="clear">Default</mat-button-toggle>
+      </mat-button-toggle-group>
+      @if (scanDepthMode() === 'set') {
+        <mat-form-field subscriptSizing="dynamic" appearance="outline" class="number-field narrow">
+          <input
+            matInput
+            type="number"
+            min="0"
+            step="1"
+            [ngModel]="scanDepthValue()"
+            (ngModelChange)="scanDepthValue.set($event)"
+            aria-label="Scan depth value"
+          />
+        </mat-form-field>
+      }
+    </div>
+    <div class="op-row">
+      <span class="op-label">Case sensitive</span>
+      <mat-button-toggle-group
+        class="op-toggles"
+        [value]="caseMode()"
+        (change)="caseMode.set($event.value)"
+        aria-label="Case sensitivity operation"
+      >
+        <mat-button-toggle value="unchanged">Leave</mat-button-toggle>
+        <mat-button-toggle value="on">On</mat-button-toggle>
+        <mat-button-toggle value="off">Off</mat-button-toggle>
+        <mat-button-toggle value="default" matTooltip="Clear the per-entry override"
+          >Default</mat-button-toggle
+        >
+      </mat-button-toggle-group>
+    </div>
+    <div class="op-row">
+      <span class="op-label">Selective logic</span>
+      <mat-button-toggle-group
+        class="op-toggles"
+        [value]="logicMode()"
+        (change)="logicMode.set($event.value)"
+        aria-label="Selective logic operation"
+      >
+        <mat-button-toggle value="unchanged">Leave</mat-button-toggle>
+        <mat-button-toggle value="set">Set</mat-button-toggle>
+      </mat-button-toggle-group>
+      @if (logicMode() === 'set') {
+        <mat-form-field subscriptSizing="dynamic" appearance="outline" class="select-field">
+          <mat-select
+            [value]="logicValue()"
+            (selectionChange)="logicValue.set($event.value)"
+            aria-label="Secondary key logic"
+          >
+            @for (option of logicOptions; track option.value) {
+              <mat-option [value]="option.value">{{ option.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+    </div>
+    <div class="op-row">
+      <span class="op-label">Position</span>
+      <mat-button-toggle-group
+        class="op-toggles"
+        [value]="positionMode()"
+        (change)="positionMode.set($event.value)"
+        aria-label="Position operation"
+      >
+        <mat-button-toggle value="unchanged">Leave</mat-button-toggle>
+        <mat-button-toggle value="set">Set</mat-button-toggle>
+      </mat-button-toggle-group>
+      @if (positionMode() === 'set') {
+        <mat-form-field subscriptSizing="dynamic" appearance="outline" class="select-field">
+          <mat-label>Insertion position</mat-label>
+          <mat-select
+            [value]="positionValue()"
+            (selectionChange)="positionValue.set($event.value)"
+            aria-label="Insertion position"
+          >
+            @for (option of positionOptions; track option.value) {
+              <mat-option [value]="option.value">{{ option.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+    </div>
+    @if (positionMode() === 'set' && positionValue() === 'at_depth') {
+      <div class="op-row">
+        <span class="op-label">At depth</span>
+        <mat-form-field subscriptSizing="dynamic" appearance="outline" class="number-field">
+          <mat-label>Depth</mat-label>
+          <input
+            matInput
+            type="number"
+            min="0"
+            step="1"
+            [ngModel]="depthValue()"
+            (ngModelChange)="depthValue.set($event)"
+            aria-label="Insertion depth"
+          />
+        </mat-form-field>
+        <mat-button-toggle-group
+          class="op-toggles"
+          [value]="roleValue()"
+          (change)="roleValue.set($event.value)"
+          aria-label="Message role"
+        >
+          @for (option of roleOptions; track option.value) {
+            <mat-button-toggle [value]="option.value" [matTooltip]="option.label">
+              {{ option.icon }} {{ option.label }}
+            </mat-button-toggle>
+          }
+        </mat-button-toggle-group>
+      </div>
+    }
+    @if (positionMode() === 'set' && positionValue() === 'outlet') {
+      <div class="op-row">
+        <span class="op-label">Outlet</span>
+        <mat-form-field subscriptSizing="dynamic" appearance="outline" class="outlet-field">
+          <mat-label>Outlet name</mat-label>
+          <input
+            matInput
+            type="text"
+            placeholder="e.g. world_state"
+            [ngModel]="outletName()"
+            (ngModelChange)="outletName.set($event)"
+            aria-label="Outlet name"
+          />
+        </mat-form-field>
+      </div>
+    }
+  </section>
+
+  <!-- Tags -->
+  <section class="op-section">
+    <h3>Tags</h3>
+    <div class="op-row tags-row">
+      <mat-form-field subscriptSizing="dynamic" appearance="outline" class="tags-field">
+        <mat-label>Add tags</mat-label>
+        <mat-icon matPrefix>sell</mat-icon>
+        <input
+          matInput
+          type="text"
+          placeholder="comma, separated, tags"
+          [ngModel]="addTagsDraft()"
+          (ngModelChange)="addTagsDraft.set($event)"
+          aria-label="Tags to add to the selected entries"
+        />
+      </mat-form-field>
+    </div>
+    @if (existingTags().length) {
+      <div class="op-row remove-row">
+        <span class="op-label">Remove</span>
+        <mat-chip-listbox multiple aria-label="Tags to remove from the selected entries">
+          @for (chip of removalChips(); track chip.tag) {
+            <mat-chip-option
+              [selected]="chip.marked"
+              (selectionChange)="toggleRemoveTag(chip.tag)"
+              [class.marked-remove]="chip.marked"
+              [matTooltip]="chip.marked ? 'Keep this tag' : 'Mark this tag for removal'"
+            >
+              {{ chip.tag }}
+              <mat-icon matChipTrailingIcon aria-hidden="true">
+                {{ chip.marked ? 'undo' : 'close' }}
+              </mat-icon>
+            </mat-chip-option>
+          }
+        </mat-chip-listbox>
+      </div>
+    }
+  </section>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <span class="affected" role="status">
+    @if (affectedCount() === 0) {
+      No changes to apply
+    } @else {
+      Will update {{ affectedCount() }} of {{ data.entryIds.length }} entries
+    }
+  </span>
+  <span class="spacer"></span>
+  <button matButton type="button" (click)="cancel()">Cancel</button>
+  <button matButton="filled" type="button" (click)="apply()" [disabled]="affectedCount() === 0">
+    Apply to {{ affectedCount() }} {{ affectedCount() === 1 ? 'entry' : 'entries' }}
+  </button>
+</mat-dialog-actions>
