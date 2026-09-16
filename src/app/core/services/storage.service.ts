@@ -37,6 +37,11 @@ export class StorageService {
 
   constructor() {
     this.db = this.open();
+    // jsdom (tests) and some private-browsing modes reject the open right
+    // away; every consumer handles the rejection through its own try/catch,
+    // but until the first reader awaits, Node would report an unhandled
+    // rejection. Mark it handled up front — consumers still see the error.
+    this.db.catch(() => undefined);
   }
 
   private async open(): Promise<IDBPDatabase<LoreStitchDb>> {
