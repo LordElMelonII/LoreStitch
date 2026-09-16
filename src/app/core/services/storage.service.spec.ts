@@ -35,28 +35,27 @@ const fakeDb = {
     this.store.clear();
     this.puts = [];
   },
+  async get(_store: string, id: string): Promise<ProjectWorkspace | undefined> {
+    return this.store.get(id);
+  },
+  async put(_store: string, value: ProjectWorkspace): Promise<void> {
+    const deferred = createDeferred<void>();
+    this.puts.push({ value, deferred });
+    // The value only becomes readable once the write commits; rejections
+    // are observed by the service under test.
+    void deferred.promise.then(
+      () => this.store.set(value.id, value),
+      () => undefined,
+    );
+    return deferred.promise;
+  },
+  async delete(_store: string, id: string): Promise<void> {
+    this.store.delete(id);
+  },
+  async getAllFromIndex(): Promise<ProjectWorkspace[]> {
+    return [...this.store.values()];
+  },
 };
-
-vi.mock('idb', () => ({
-  openDB: async () => ({
-    get: async (_store: string, id: string) => fakeDb.store.get(id),
-    put: async (_store: string, value: ProjectWorkspace) => {
-      const deferred = createDeferred<void>();
-      fakeDb.puts.push({ value, deferred });
-      // The value only becomes readable once the write commits; rejections
-      // are observed by the service under test.
-      void deferred.promise.then(
-        () => fakeDb.store.set(value.id, value),
-        () => undefined,
-      );
-      return deferred.promise;
-    },
-    delete: async (_store: string, id: string) => {
-      fakeDb.store.delete(id);
-    },
-    getAllFromIndex: async () => [...fakeDb.store.values()],
-  }),
-}));
 
 function makeProject(title: string): ProjectWorkspace {
   const now = Date.now();
@@ -89,6 +88,11 @@ describe('StorageService', () => {
     fakeDb.reset();
     TestBed.configureTestingModule({});
     storage = TestBed.inject(StorageService);
+    // Swap the private db handle for the fake store directly. Routing the
+    // tests through `vi.mock('idb')` proved racy: the module mock is applied
+    // during test-file transform, and under parallel workers it can miss —
+    // leaving the real openDB to reject against jsdom's missing indexedDB.
+    (storage as unknown as { db: Promise<typeof fakeDb> }).db = Promise.resolve(fakeDb);
   });
 
   afterEach(() => {
