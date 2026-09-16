@@ -1,7 +1,8 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { WorkspaceService } from './workspace.service';
 import { StorageService } from './storage.service';
-import { createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
+import { ProjectWorkspace, createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
 
 /**
  * The WorkspaceService tests run against the in-memory fallback of the
@@ -22,10 +23,11 @@ describe('WorkspaceService', () => {
     await workspace.createProject('Fuyuki', 'standalone_lorebook');
 
     const project = workspace.activeProject();
-    expect(project).not.toBeNull();
-    expect(project!.title).toBe('Fuyuki');
-    expect(project!.commits).toHaveLength(1);
-    expect(project!.headCommitId).toBe(project!.commits[0].id);
+    assert(project);
+    expect(project.title).toBe('Fuyuki');
+    expect(project.commits).toHaveLength(1);
+    assert(project.commits[0]);
+    expect(project.headCommitId).toBe(project.commits[0].id);
     expect(workspace.hasUnsavedChanges()).toBe(false);
   });
 
@@ -40,7 +42,9 @@ describe('WorkspaceService', () => {
     expect(workspace.hasUnsavedChanges()).toBe(true);
 
     workspace.updateEntry(id, { content: 'Sakura lives in the Matou house.' });
-    expect(workspace.entries()[0].content).toContain('Matou');
+    const updated = workspace.entries()[0];
+    assert(updated);
+    expect(updated.content).toContain('Matou');
 
     workspace.closeTab(id);
     expect(workspace.openTabEntryIds()).toEqual([]);
@@ -53,17 +57,23 @@ describe('WorkspaceService', () => {
     const id = workspace.addEntry();
     await workspace.commit('add entry');
     expect(workspace.hasUnsavedChanges()).toBe(false);
-    expect(workspace.activeProject()!.commits).toHaveLength(2);
+    const committed = workspace.activeProject();
+    assert(committed);
+    expect(committed.commits).toHaveLength(2);
 
     workspace.deleteEntry(id);
     expect(workspace.entries()).toHaveLength(0);
     expect(workspace.hasUnsavedChanges()).toBe(true);
 
-    const previousHead = workspace.activeProject()!.commits[1].id;
+    assert(committed.commits[1]);
+    const previousHead = committed.commits[1].id;
     await workspace.rollbackTo(previousHead);
     expect(workspace.entries()).toHaveLength(1);
-    expect(workspace.activeProject()!.commits).toHaveLength(3);
-    expect(workspace.activeProject()!.commits[2].message).toContain('Revert to');
+    const rolled = workspace.activeProject();
+    assert(rolled);
+    expect(rolled.commits).toHaveLength(3);
+    assert(rolled.commits[2]);
+    expect(rolled.commits[2].message).toContain('Revert to');
   });
 
   it('duplicates entries with fresh ids after the current maximum', async () => {
@@ -79,6 +89,8 @@ describe('WorkspaceService', () => {
     const entries = workspace.entries();
     // The copy is inserted right after its source: [5, copy, 9].
     expect(entries).toHaveLength(3);
+    assert(entries[1]);
+    assert(entries[2]);
     expect(entries[1].id).toBe(10);
     expect(entries[1].comment).toContain('(copy)');
     expect(entries[2].id).toBe(9);
@@ -88,7 +100,9 @@ describe('WorkspaceService', () => {
     await workspace.createProject('Persisted', 'standalone_lorebook');
     await workspace.flushPendingSave();
     const storage = TestBed.inject(StorageService);
-    const saved = await storage.getProject(workspace.activeProject()!.id);
+    const project = workspace.activeProject();
+    assert(project);
+    const saved = await storage.getProject(project.id);
     expect(saved?.title).toBe('Persisted');
   });
 
@@ -98,5 +112,73 @@ describe('WorkspaceService', () => {
     book.entries = [createEmptyEntry(0, 0), createEmptyEntry(1, 1)];
     workspace.replaceBook(book);
     expect(workspace.entries()).toHaveLength(2);
+  });
+
+  it('reports a save failure when browser storage rejects writes', async () => {
+    await workspace.createProject('Doomed', 'standalone_lorebook');
+    // jsdom has no IndexedDB, so the initial write fails and must surface.
+    expect(workspace.saveError()).toBe(
+      'Latest changes could not be saved to browser storage. Export your work to avoid data loss.',
+    );
+  });
+});
+
+describe('WorkspaceService save error recovery', () => {
+  /**
+   * Storage double whose `saveError` signal the test controls directly, since
+   * a successful write is the only thing that clears it and jsdom has no
+   * IndexedDB to succeed with. `listProjects`/`getState` are inherited so the
+   * rejected db promise is handled exactly like in production.
+   */
+  class ControlledStorage extends StorageService {
+    private readonly failure = signal<unknown>(null);
+
+    override readonly saveError = this.failure.asReadonly();
+
+    failWith(error: unknown): void {
+      this.failure.set(error);
+    }
+
+    override async getProject(): Promise<ProjectWorkspace | undefined> {
+      return undefined;
+    }
+
+    override async saveProject(): Promise<void> {
+      // Intentionally inert.
+    }
+
+    override async deleteProject(): Promise<void> {
+      // Intentionally inert.
+    }
+
+    override scheduleSave(): void {
+      // Intentionally inert.
+    }
+
+    override async flush(): Promise<void> {
+      // Intentionally inert.
+    }
+
+    override async setState(): Promise<void> {
+      // Intentionally inert.
+    }
+  }
+
+  it('maps a storage failure to the banner message and clears on recovery', () => {
+    const storage = new ControlledStorage();
+    TestBed.configureTestingModule({
+      providers: [{ provide: StorageService, useValue: storage }],
+    });
+    const workspace = TestBed.inject(WorkspaceService);
+
+    expect(workspace.saveError()).toBeNull();
+
+    storage.failWith(new Error('QuotaExceededError'));
+    expect(workspace.saveError()).toBe(
+      'Latest changes could not be saved to browser storage. Export your work to avoid data loss.',
+    );
+
+    storage.failWith(null);
+    expect(workspace.saveError()).toBeNull();
   });
 });

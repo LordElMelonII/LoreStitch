@@ -47,6 +47,16 @@ export class WorkspaceService {
     return project ? this.vcs.dirtyEntryIds(project) : new Set<number>();
   });
 
+  /**
+   * Human-readable persistence failure for the save-state banner, or null
+   * while browser storage is healthy.
+   */
+  readonly saveError = computed<string | null>(() =>
+    this.storage.saveError() !== null
+      ? 'Latest changes could not be saved to browser storage. Export your work to avoid data loss.'
+      : null,
+  );
+
   // -------------------------------------------------------------------------
   // Editor tabs
   // -------------------------------------------------------------------------
@@ -269,6 +279,10 @@ export class WorkspaceService {
     this.mutateProject((p) => {
       const entries = [...p.activeBook.entries];
       const [moved] = entries.splice(previousIndex, 1);
+      if (moved === undefined) {
+        // Source index out of range: nothing to move, keep the book as is.
+        return p;
+      }
       entries.splice(currentIndex, 0, moved);
       // Keep the ST display order in extensions in sync with the visible order.
       return this.withBook(p, {
@@ -306,7 +320,7 @@ export class WorkspaceService {
     this.openTabEntryIds.update((tabs) => tabs.filter((id) => id !== entryId));
     if (this.activeTabId() === entryId) {
       const remaining = this.openTabEntryIds();
-      this.activeTabId.set(remaining.length ? remaining.at(-1)! : null);
+      this.activeTabId.set(remaining.at(-1) ?? null);
     }
   }
 

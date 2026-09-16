@@ -1,4 +1,4 @@
-import { Service } from '@angular/core';
+import { Service, signal } from '@angular/core';
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { ProjectWorkspace } from '../models/lorebook.model';
 
@@ -30,6 +30,10 @@ export class StorageService {
   private readonly db: Promise<IDBPDatabase<LoreStitchDb>>;
   private readonly pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly pendingProjects = new Map<string, ProjectWorkspace>();
+  private readonly lastSaveError = signal<unknown>(null);
+
+  /** The most recent persistence failure, or null after a successful write. */
+  readonly saveError = this.lastSaveError.asReadonly();
 
   constructor() {
     this.db = this.open();
@@ -65,7 +69,8 @@ export class StorageService {
   async getProject(id: string): Promise<ProjectWorkspace | undefined> {
     try {
       const db = await this.db;
-      return (await db.get('projects', id)) ?? this.pendingProjects.get(id);
+      // A debounced save may hold a snapshot newer than the persisted copy.
+      return this.pendingProjects.get(id) ?? (await db.get('projects', id));
     } catch {
       return this.pendingProjects.get(id);
     }
@@ -76,8 +81,15 @@ export class StorageService {
     try {
       const db = await this.db;
       await db.put('projects', project);
-      this.pendingProjects.delete(project.id);
-    } catch {
+      this.lastSaveError.set(null);
+      // IndexedDB serializes overlapping transactions on the same store in
+      // creation order, so a newer put always lands last. Retire the ticket
+      // only if no newer snapshot replaced it while this put was in flight.
+      if (this.pendingProjects.get(project.id) === project) {
+        this.pendingProjects.delete(project.id);
+      }
+    } catch (error) {
+      this.lastSaveError.set(error);
       // Keep the in-memory copy so the session stays usable.
     }
   }

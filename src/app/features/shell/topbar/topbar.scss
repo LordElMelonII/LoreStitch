@@ -78,6 +78,15 @@
     flex: 1;
   }
 
+  // Save-failure marker: fixed-size so the truncating project badge absorbs
+  // any squeeze on narrow bars, never the other way around.
+  .save-error {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    color: var(--mat-sys-error);
+  }
+
   // Two-state toolbar buttons (focus mode): a tonal pill while active, per
   // the M3 "selected icon button" treatment.
   .toggle-active {
@@ -85,9 +94,12 @@
     color: var(--mat-sys-on-secondary-container);
   }
 
-  // Compact phones: primary actions live in the overflow menu and the brand
-  // collapses to its icon so every action stays reachable.
-  @media (max-width: 599px) {
+  // Shell-mobile (< 768px — keep in sync with the queries in
+  // src/app/shared/constants/breakpoints.ts): primary actions live in the
+  // overflow menu and the brand collapses to its icon so every action stays
+  // reachable. (The dialog full-screen rules keep their own 599px — that one
+  // is MD3's 600dp compact window class, not the shell breakpoint.)
+  @media (max-width: 767px) {
     .desktop-only {
       display: none;
     }

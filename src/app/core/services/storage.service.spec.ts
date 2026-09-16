@@ -1,0 +1,166 @@
+import { TestBed } from '@angular/core/testing';
+import { ProjectWorkspace, createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
+import { SAVE_DEBOUNCE_MS, StorageService } from './storage.service';
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (reason?: unknown) => void = () => undefined;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+interface PutRecord {
+  readonly value: ProjectWorkspace;
+  readonly deferred: Deferred<void>;
+}
+
+/**
+ * In-memory stand-in for the IndexedDB store. `put` parks on a deferred so
+ * tests decide when (and whether) a write commits, which is what makes the
+ * overlapping-transaction race reproducible.
+ */
+const fakeDb = {
+  store: new Map<string, ProjectWorkspace>(),
+  puts: new Array<PutRecord>(),
+  reset(): void {
+    this.store.clear();
+    this.puts = [];
+  },
+};
+
+vi.mock('idb', () => ({
+  openDB: async () => ({
+    get: async (_store: string, id: string) => fakeDb.store.get(id),
+    put: async (_store: string, value: ProjectWorkspace) => {
+      const deferred = createDeferred<void>();
+      fakeDb.puts.push({ value, deferred });
+      // The value only becomes readable once the write commits; rejections
+      // are observed by the service under test.
+      void deferred.promise.then(
+        () => fakeDb.store.set(value.id, value),
+        () => undefined,
+      );
+      return deferred.promise;
+    },
+    delete: async (_store: string, id: string) => {
+      fakeDb.store.delete(id);
+    },
+    getAllFromIndex: async () => [...fakeDb.store.values()],
+  }),
+}));
+
+function makeProject(title: string): ProjectWorkspace {
+  const now = Date.now();
+  const book = createEmptyBook(title);
+  book.entries = [createEmptyEntry(0)];
+  return {
+    id: 'project-1',
+    title,
+    createdAt: now,
+    updatedAt: now,
+    targetType: 'standalone_lorebook',
+    activeBook: book,
+    headCommitId: null,
+    commits: [],
+  };
+}
+
+/** Drains pending promise callbacks (fake timers do not flush microtasks). */
+async function flushMicrotasks(): Promise<void> {
+  for (let round = 0; round < 5; round += 1) {
+    await Promise.resolve();
+  }
+}
+
+describe('StorageService', () => {
+  let storage: StorageService;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fakeDb.reset();
+    TestBed.configureTestingModule({});
+    storage = TestBed.inject(StorageService);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps the newer debounced snapshot when an older put settles late', async () => {
+    const first = makeProject('first');
+    const second: ProjectWorkspace = { ...first, title: 'second', updatedAt: first.updatedAt + 1 };
+
+    storage.scheduleSave(first);
+    // The debounce elapses and the first put goes out, stalling in flight.
+    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
+    await flushMicrotasks();
+    expect(fakeDb.puts).toHaveLength(1);
+
+    // A user edit lands while that put is still in flight.
+    storage.scheduleSave(second);
+
+    // The stale put commits; it must not retire the newer ticket.
+    assert(fakeDb.puts[0]);
+    fakeDb.puts[0].deferred.resolve();
+    await flushMicrotasks();
+    await expect(storage.getProject(first.id)).resolves.toBe(second);
+
+    // The newer snapshot is still persisted when its own timer fires.
+    await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
+    await flushMicrotasks();
+    expect(fakeDb.puts.map((put) => put.value.title)).toEqual(['first', 'second']);
+    assert(fakeDb.puts[1]);
+    fakeDb.puts[1].deferred.resolve();
+    await flushMicrotasks();
+    expect(fakeDb.store.get(first.id)?.title).toBe('second');
+  });
+
+  it('publishes a persistence failure and clears it after a successful put', async () => {
+    const project = makeProject('quota victim');
+    const failure = new Error('QuotaExceededError');
+
+    const firstAttempt = storage.saveProject(project);
+    await flushMicrotasks();
+    expect(fakeDb.puts).toHaveLength(1);
+    assert(fakeDb.puts[0]);
+    fakeDb.puts[0].deferred.reject(failure);
+    // The failure is swallowed for the caller (session stays usable)...
+    await expect(firstAttempt).resolves.toBeUndefined();
+    // ...but surfaced on the service.
+    expect(storage.saveError()).toBe(failure);
+
+    const retry = storage.saveProject(project);
+    await flushMicrotasks();
+    assert(fakeDb.puts[1]);
+    fakeDb.puts[1].deferred.resolve();
+    await expect(retry).resolves.toBeUndefined();
+    expect(storage.saveError()).toBeNull();
+  });
+
+  it('serves a pending debounced snapshot before the older persisted copy', async () => {
+    const persisted = makeProject('persisted');
+    const write = storage.saveProject(persisted);
+    await flushMicrotasks();
+    assert(fakeDb.puts[0]);
+    fakeDb.puts[0].deferred.resolve();
+    await write;
+    await flushMicrotasks();
+
+    const newer: ProjectWorkspace = {
+      ...persisted,
+      title: 'newer',
+      updatedAt: persisted.updatedAt + 1,
+    };
+    storage.scheduleSave(newer); // still inside the debounce window
+    await expect(storage.getProject(persisted.id)).resolves.toBe(newer);
+  });
+});

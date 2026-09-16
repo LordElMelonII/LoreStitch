@@ -30,6 +30,20 @@
     <span class="project-badge no-project">No project open</span>
   }
 
+  <!-- Persistence-failure marker: the tooltip carries the full message. It
+       must stay visible on phones (quota errors bite there), so it never
+       joins the desktop-only set. -->
+  @if (workspace.saveError(); as saveError) {
+    <span
+      class="save-error"
+      role="status"
+      [matTooltip]="saveError"
+      [attr.aria-label]="'Save failed: ' + saveError"
+    >
+      <mat-icon aria-hidden="true">error</mat-icon>
+    </span>
+  }
+
   <span class="spacer"></span>
 
   @if (workspace.activeProject(); as project) {
