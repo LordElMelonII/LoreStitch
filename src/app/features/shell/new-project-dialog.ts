@@ -54,8 +54,6 @@ const MAX_PROJECT_TITLE = 80;
       flex-direction: column;
       padding: 20px 24px;
       gap: 24px;
-      // Fits phones: never wider than the viewport minus dialog margins.
-      width: min(420px, calc(100vw - 48px));
     }
 
     .title-field {

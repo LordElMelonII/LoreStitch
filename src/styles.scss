@@ -261,6 +261,129 @@ mat-form-field.keys-field {
 }
 
 // ---------------------------------------------------------------------------
+// Feature-component overrides of Material/CDK internals
+//
+// These rules target Material's or the CDK's internal classes, which
+// component-scoped styles cannot reach, so they live here in the global
+// stylesheet (the charter-sanctioned location). Each selector is anchored to
+// the component's stable host element so nothing leaks app-wide. Rules that
+// only set `--mat-*` custom properties stay in the components — custom
+// properties inherit through view encapsulation without deep selectors.
+// ---------------------------------------------------------------------------
+
+// --- Entry editor: MD3 secondary tab strip (`.entry-tabs` in the template) ---
+
+// Editor pane of an open entry: the writing surface scrolls (or fills) above
+// the option accordion pinned to the bottom edge, so the basic controls stay
+// reachable while the content gets the leftover height. Padding is owned by
+// the pane so the sections themselves need no outer spacing.
+// Material leaves the wrapper content-sized; claim the pane height so the
+// fields column below can actually pin the accordion to the bottom.
+app-entry-editor .entry-tabs .mat-mdc-tab-body-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+// Document-style tabs: hug their labels within a bounded width band so the ink
+// bar matches the active label. When the strip overflows it paginates with
+// edge-anchored chevrons and wheel scrolling (see `scrollTabStripOnWheel`).
+app-entry-editor .entry-tabs .mat-mdc-tab {
+  flex: 0 0 auto;
+  min-width: 120px;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+// Touch swipes scroll the strip (see `TabStripDragScroller`): the browser keeps
+// vertical panning while horizontal gestures reach the component, and labels
+// never start a text selection mid-swipe.
+app-entry-editor .entry-tabs .mat-mdc-tab-header {
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+// While a finger drags the strip, drop the programmatic scroll easing so the
+// tabs track the finger 1:1 instead of trailing behind it. The class is
+// toggled on the component host by entry-editor.ts.
+app-entry-editor.strip-dragging .entry-tabs .mat-mdc-tab-list {
+  transition: none;
+}
+
+// Pagination chevrons anchor to the strip's edges and float over the labels
+// with a tonal scrim; a fully-scrolled side fades out entirely.
+app-entry-editor .entry-tabs .mat-mdc-tab-header-pagination {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 56px;
+  min-width: 56px;
+  box-sizing: border-box;
+  transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+}
+
+app-entry-editor .entry-tabs .mat-mdc-tab-header-pagination-before {
+  left: 0;
+
+  &::before {
+    background: linear-gradient(to right, var(--mat-sys-surface) 30%, transparent);
+  }
+}
+
+app-entry-editor .entry-tabs .mat-mdc-tab-header-pagination-after {
+  right: 0;
+
+  &::before {
+    background: linear-gradient(to left, var(--mat-sys-surface) 30%, transparent);
+  }
+}
+
+app-entry-editor .entry-tabs .mat-mdc-tab-header-pagination-disabled {
+  opacity: 0;
+}
+
+// Fields provide their own padding and the pane scrolls as a whole.
+app-entry-editor .entry-tabs .mat-mdc-tab-body-content {
+  padding: 0;
+}
+
+// --- Entry content field: stretch the filled-field internals ---
+
+// The form-field host is already a column flex box whose wrapper grows
+// (`flex: auto`), but MDC baseline-aligns the contents inside it, so the
+// input never follows the grown well down. Stretch the internals instead;
+// the hints strip keeps its natural height below the wrapper.
+app-entry-content-field .content-field .mat-mdc-text-field-wrapper {
+  align-items: stretch;
+}
+
+// Stretch within the flex row (which keeps its baseline alignment for the
+// suffix button) and become the column the textarea fills. The floating
+// label is absolutely positioned, so the column change doesn't move it.
+app-entry-content-field .content-field .mat-mdc-form-field-infix {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+
+// --- Entry list: pin the virtual-scroll content wrapper to the viewport ---
+
+// The CDK's absolutely-positioned content wrapper defaults to shrink-to-fit
+// sizing, so rows with long nowrap titles and key chips inflate it beyond
+// the drawer and clip the row actions off-canvas. Pin it to the viewport
+// width; the rows then truncate their own content internally.
+app-entry-list .list-viewport .cdk-virtual-scroll-content-wrapper {
+  width: 100%;
+}
+
+// ---------------------------------------------------------------------------
 // Mobile touch targets (M3 accessibility): on compact screens icon buttons,
 // buttons, toggles and chips grow to the 48dp minimum clickable size. Desktop
 // keeps the M3 component defaults.

@@ -66,7 +66,11 @@ export class Topbar {
     // Lazy-loaded: keeps the search/replace UI out of the initial bundle.
     const { SearchReplaceDialog } = await import('../../search-replace/search-replace-dialog');
     this.dialog.open(SearchReplaceDialog, {
-      maxWidth: 'min(96vw, 900px)',
+      // Full-width pane capped to the body's desktop measure; the compact
+      // class turns the pane edge-to-edge full-screen under 600px.
+      width: '100%',
+      maxWidth: 'min(96vw, 640px)',
+      panelClass: 'app-compact-fullscreen-dialog',
       data: { activeEntryId: this.workspace.activeTabId() },
     });
   }

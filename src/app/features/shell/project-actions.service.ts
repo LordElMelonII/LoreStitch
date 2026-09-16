@@ -33,8 +33,18 @@ export class ProjectActionsService {
 
   async newProject(): Promise<void> {
     const { NewProjectDialog } = await import('./new-project-dialog');
-    const result = (await firstValueFrom(this.dialog.open(NewProjectDialog).afterClosed())) as
-      NewProjectResult | undefined;
+    const result = (await firstValueFrom(
+      this.dialog
+        .open(NewProjectDialog, {
+          // Viewport-filling pane capped to the dialog's desktop measure; the
+          // global class takes it full-screen below MD3's 600dp. Sizing here
+          // replaces the component-level content width hack.
+          width: '100%',
+          maxWidth: 'min(96vw, 420px)',
+          panelClass: 'app-compact-fullscreen-dialog',
+        })
+        .afterClosed(),
+    )) as NewProjectResult | undefined;
     if (result) {
       await this.workspace.createProject(result.title);
     }
@@ -53,6 +63,9 @@ export class ProjectActionsService {
     const confirmed = await firstValueFrom(
       this.dialog
         .open(ConfirmDialog, {
+          // MD3 adaptive behavior: the dialog goes full-screen on compact
+          // screens (see the global .app-compact-fullscreen-dialog rules).
+          panelClass: 'app-compact-fullscreen-dialog',
           data: {
             title: 'Delete project',
             message: `“${project.title}” and its commit history will be removed from this device. This cannot be undone.`,
@@ -151,6 +164,9 @@ export class ProjectActionsService {
       this.dialog
         .open(MergeResolverDialog, {
           minWidth: 'min(94vw, 780px)',
+          // MD3 adaptive behavior: the dialog goes full-screen on compact
+          // screens (see the global .app-compact-fullscreen-dialog rules).
+          panelClass: 'app-compact-fullscreen-dialog',
           data: {
             incoming: parsed.book,
             sourceName: fileName,

@@ -2,8 +2,6 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  // Wide on desktop, phone-safe on mobile (no hard floor to overflow against).
-  width: min(90vw, 640px);
 }
 
 .controls {

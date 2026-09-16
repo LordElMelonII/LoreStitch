@@ -13,17 +13,12 @@
   flex: 1;
   height: 100%;
   min-height: 0;
-}
 
-// Editor pane of an open entry: the writing surface scrolls (or fills) above
-// the option accordion pinned to the bottom edge, so the basic controls stay
-// reachable while the content gets the leftover height. Padding is owned by
-// the pane so the sections themselves need no outer spacing.
-:host ::ng-deep .entry-tabs .mat-mdc-tab-body-wrapper {
-  // Material leaves the wrapper content-sized; claim the pane height so the
-  // fields column below can actually pin the accordion to the bottom.
-  flex: 1 1 auto;
-  min-height: 0;
+  // Decorative divider under the strip: M3 divider role, not a harsh border.
+  // Set on the tab group so the token inherits into Material's label
+  // container without piercing encapsulation; the strip's structural
+  // overrides live in src/styles.scss under `app-entry-editor`.
+  --mat-tab-divider-color: var(--mat-sys-outline-variant);
 }
 
 .fields {
@@ -57,80 +52,10 @@
 // ---------------------------------------------------------------------------
 // MD3 secondary tabs
 // ---------------------------------------------------------------------------
-
-// Document-style tabs: hug their labels within a bounded width band so the ink
-// bar matches the active label. When the strip overflows it paginates with
-// edge-anchored chevrons and wheel scrolling (see `scrollTabStripOnWheel`).
-:host ::ng-deep .entry-tabs .mat-mdc-tab {
-  flex: 0 0 auto;
-  min-width: 120px;
-  padding: 0 16px;
-  box-sizing: border-box;
-}
-
-// Decorative divider under the strip: M3 divider role, not a harsh border.
-:host ::ng-deep .entry-tabs .mat-mdc-tab-label-container {
-  --mat-tab-divider-color: var(--mat-sys-outline-variant);
-}
-
-// Touch swipes scroll the strip (see `TabStripDragScroller`): the browser keeps
-// vertical panning while horizontal gestures reach the component, and labels
-// never start a text selection mid-swipe.
-:host ::ng-deep .entry-tabs .mat-mdc-tab-header {
-  touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-// While a finger drags the strip, drop the programmatic scroll easing so the
-// tabs track the finger 1:1 instead of trailing behind it.
-:host(.strip-dragging) ::ng-deep .entry-tabs .mat-mdc-tab-list {
-  transition: none;
-}
-
-// Pagination chevrons anchor to the strip's edges and float over the labels
-// with a tonal scrim; a fully-scrolled side fades out entirely.
-:host ::ng-deep .entry-tabs .mat-mdc-tab-header-pagination {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 56px;
-  min-width: 56px;
-  box-sizing: border-box;
-  transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-}
-
-:host ::ng-deep .entry-tabs .mat-mdc-tab-header-pagination-before {
-  left: 0;
-
-  &::before {
-    background: linear-gradient(to right, var(--mat-sys-surface) 30%, transparent);
-  }
-}
-
-:host ::ng-deep .entry-tabs .mat-mdc-tab-header-pagination-after {
-  right: 0;
-
-  &::before {
-    background: linear-gradient(to left, var(--mat-sys-surface) 30%, transparent);
-  }
-}
-
-:host ::ng-deep .entry-tabs .mat-mdc-tab-header-pagination-disabled {
-  opacity: 0;
-}
-
-// Fields provide their own padding and the pane scrolls as a whole.
-:host ::ng-deep .entry-tabs .mat-mdc-tab-body-content {
-  padding: 0;
-}
+// The tab-strip rules that reach Material's internal DOM (body wrapper flex,
+// tab metrics, header touch behavior, pagination chevrons, body padding) live
+// in src/styles.scss, anchored to the `app-entry-editor` host element. Only
+// the divider token in `.entry-tabs` above stays component-scoped.
 
 // ---------------------------------------------------------------------------
 // Tab labels (dirty indicator + close button)

@@ -44,13 +44,9 @@
   // drawer showed a stray horizontal scrollbar otherwise).
   overflow-x: hidden;
 
-  // The CDK's absolutely-positioned content wrapper defaults to shrink-to-fit
-  // sizing, so rows with long nowrap titles and key chips inflate it beyond
-  // the drawer and clip the row actions off-canvas. Pin it to the viewport
-  // width; the rows then truncate their own content internally.
-  ::ng-deep .cdk-virtual-scroll-content-wrapper {
-    width: 100%;
-  }
+  // The CDK content wrapper inside needs pinning to the viewport width; that
+  // override targets CDK's internal DOM, so it lives in src/styles.scss under
+  // `app-entry-list`.
 }
 
 .entry-item {
