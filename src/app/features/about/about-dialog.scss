@@ -1,0 +1,320 @@
+// Layout only — colors and typography come from --mat-sys-* tokens. Rules
+// that must reach Material's overlay-rendered internals (dialog surface,
+// bottom-sheet container, tab body wrapper) live in src/styles.scss, anchored
+// to the `app-about-dialog` host element.
+
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+// ---------------------------------------------------------------------------
+// Header: app identity + close button
+// ---------------------------------------------------------------------------
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px 6px 24px;
+}
+
+.app-icon {
+  color: var(--mat-sys-primary);
+  font-size: 34px;
+  width: 34px;
+  height: 34px;
+}
+
+.heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-name {
+  margin: 0;
+  padding: 0;
+  font: var(--mat-sys-headline-small);
+
+  // The dialog-title directive's legacy ::before spacer would add stray
+  // height inside this flex column (the global reset is scoped to the dialog
+  // surface, which a bottom sheet does not have).
+  &::before {
+    display: none;
+  }
+}
+
+.tagline {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// ---------------------------------------------------------------------------
+// Tabs: the tab group owns the remaining pane height; each pane scrolls.
+// ---------------------------------------------------------------------------
+
+.about-tabs {
+  flex: 1;
+  min-height: 0;
+  --mat-tab-header-bottom-divider-color: var(--mat-sys-outline-variant);
+}
+
+.tab-pane {
+  padding: 16px 24px 24px;
+}
+
+// ---------------------------------------------------------------------------
+// About tab
+// ---------------------------------------------------------------------------
+
+.about-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 24px;
+  row-gap: 10px;
+  align-items: baseline;
+  max-width: 480px;
+}
+
+// Each row's label/value pair becomes the grid items (display: contents keeps
+// the markup semantic while the outer grid owns the two-column layout).
+.meta-row {
+  display: contents;
+}
+
+.meta-label {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.meta-value {
+  font: var(--mat-sys-body-medium);
+
+  &.mono {
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-variant-ligatures: none;
+    letter-spacing: 0.5px;
+    background: var(--mat-sys-surface-container-high);
+    border-radius: var(--mat-sys-corner-extra-small, 4px);
+    padding: 1px 6px;
+  }
+}
+
+.dev-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font: var(--mat-sys-label-small);
+  color: var(--mat-sys-on-tertiary-container);
+  background: var(--mat-sys-tertiary-container);
+  vertical-align: 1px;
+}
+
+.privacy-note {
+  margin: 18px 0 0;
+  max-width: 480px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+
+  a {
+    min-height: 44px; // Touch-target floor (M3 accessibility).
+  }
+
+  mat-icon {
+    margin-right: 8px;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Changelog tab
+// ---------------------------------------------------------------------------
+
+.changelog-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+
+  p {
+    margin: 0;
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.release {
+  max-width: 560px;
+  padding-bottom: 20px;
+
+  & + .release {
+    border-top: 1px solid var(--mat-sys-outline-variant);
+    padding-top: 20px;
+  }
+}
+
+.release-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.release-version {
+  margin: 0;
+  font: var(--mat-sys-title-medium);
+}
+
+.release-date {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.release-intro {
+  margin: 8px 0 0;
+  font: var(--mat-sys-body-medium);
+}
+
+.release-section {
+  margin-top: 14px;
+}
+
+.section-title {
+  margin: 0 0 6px;
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-primary);
+
+  &.breaking {
+    color: var(--mat-sys-error);
+  }
+}
+
+.section-items {
+  margin: 0;
+  padding-left: 20px;
+
+  li {
+    margin: 4px 0;
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Open Source tab
+// ---------------------------------------------------------------------------
+
+.oss-intro {
+  margin: 0 0 16px;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.oss-group-title {
+  margin: 0 0 8px;
+  font: var(--mat-sys-label-large);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.oss-list {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  max-width: 640px;
+}
+
+.oss-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+
+  & + .oss-item {
+    border-top: 1px solid var(--mat-sys-outline-variant);
+  }
+}
+
+.oss-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.oss-name {
+  font: var(--mat-sys-title-small);
+  color: var(--mat-sys-primary);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.oss-role {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.oss-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.oss-license {
+  font: var(--mat-sys-label-small);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+}
+
+.oss-author {
+  font: var(--mat-sys-label-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// Compact phones: the sheet is nearly full-screen, so trade the two-column
+// metadata rows for a stacked list and tighten the pane padding.
+@media (max-width: 599px) {
+  .tab-pane {
+    padding: 12px 16px 20px;
+  }
+
+  .oss-item {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .oss-meta {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    text-align: left;
+  }
+}

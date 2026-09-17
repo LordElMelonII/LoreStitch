@@ -30,6 +30,11 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "CHANGELOG.md",
+                "input": ".",
+                "output": "/"
               }
             ],
             "styles": [
@@ -38,6 +43,12 @@
           },
           "configurations": {
             "production": {
+              "fileReplacements": [
+                {
+                  "replace": "src/app/core/models/build-info.ts",
+                  "with": "src/app/core/models/build-info.prod.ts"
+                }
+              ],
               "budgets": [
                 {
                   "type": "initial",

@@ -43,6 +43,9 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 
+# Generated release-build metadata (see scripts/generate-build-info.mjs)
+/src/app/core/models/build-info.prod.ts
+
 /.agents
 /.antigravity
 /.claude

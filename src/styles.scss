@@ -177,6 +177,38 @@ body {
   max-height: 80vh;
 }
 
+// --- About dialog & bottom sheet (src/app/features/about) ---
+
+// Centered about pane (tablet/desktop): give the dialog surface a definite
+// height so the tab bodies own the leftover space and scroll internally. The
+// About component renders no <mat-dialog-content> (it is shared with the
+// bottom sheet and paints its own header), so the height must be set on the
+// surface itself — the host below it fills it with height: 100%. Phones get a
+// bottom sheet instead (see Topbar.openAbout).
+.app-about-dialog .mat-mdc-dialog-surface {
+  height: min(78dvh, 640px);
+  max-height: min(78dvh, 640px);
+}
+
+// About bottom sheet (phones): fill most of the screen so the three tabs keep
+// enough room to read; the component header paints its own title bar.
+.app-about-sheet .mat-bottom-sheet-container {
+  height: 88dvh;
+  max-height: 88dvh;
+  padding: 0;
+}
+
+// The about tab group must flex within its pane; Material's body wrapper is
+// not a flex-grow item by default (same treatment as the entry editor tabs).
+app-about-dialog .about-tabs .mat-mdc-tab-body-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+app-about-dialog .about-tabs .mat-mdc-tab-body-content {
+  overflow: auto;
+}
+
 // Dialog headlines: LoreStitch titles are flex rows (icon + text + actions).
 // The flex context collapses MDC's ::before headline spacer into a zero-width
 // flex item, which left headlines ~6px from the border (the token's top

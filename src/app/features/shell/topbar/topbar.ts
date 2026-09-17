@@ -3,6 +3,7 @@ import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
+import { MatBottomSheet, MatBottomSheetModule } from '@angular/material/bottom-sheet';
 import { MatDialog } from '@angular/material/dialog';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatDividerModule } from '@angular/material/divider';
@@ -14,7 +15,10 @@ import { ImportExportService } from '../../../core/services/import-export.servic
 import { ThemeService } from '../../../core/services/theme.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { GITHUB_REPO_URL } from '../../../shared/constants/github';
-import { DESKTOP_BREAKPOINT_QUERY } from '../../../shared/constants/breakpoints';
+import {
+  DESKTOP_BREAKPOINT_QUERY,
+  MOBILE_BREAKPOINT_QUERY,
+} from '../../../shared/constants/breakpoints';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ProjectActionsService } from '../project-actions.service';
 import { TokenMeter } from './token-meter';
@@ -25,6 +29,7 @@ import { TokenMeter } from './token-meter';
   imports: [
     MatBadgeModule,
     MatButtonModule,
+    MatBottomSheetModule,
     MatDividerModule,
     MatIconModule,
     MatMenuModule,
@@ -41,6 +46,7 @@ export class Topbar {
   protected readonly layout = inject(LayoutService);
   protected readonly actions = inject(ProjectActionsService);
   private readonly dialog = inject(MatDialog);
+  private readonly bottomSheet = inject(MatBottomSheet);
   private readonly importer = inject(ImportExportService);
   private readonly breakpoints = inject(BreakpointObserver);
 
@@ -54,6 +60,12 @@ export class Topbar {
    */
   protected readonly isDesktop = toSignal(
     this.breakpoints.observe(DESKTOP_BREAKPOINT_QUERY).pipe(map((r) => r.matches)),
+    { initialValue: false },
+  );
+
+  /** Phones open the About pane as a bottom sheet instead of a dialog. */
+  protected readonly isMobile = toSignal(
+    this.breakpoints.observe(MOBILE_BREAKPOINT_QUERY).pipe(map((r) => r.matches)),
     { initialValue: false },
   );
 
@@ -75,6 +87,25 @@ export class Topbar {
       panelClass: 'app-compact-fullscreen-dialog',
       data: { activeEntryId: this.workspace.activeTabId() },
     });
+  }
+
+  /**
+   * About pane: centered dialog on tablet/desktop, bottom sheet on phones —
+   * same content component, adapted per the mobile ergonomics charter.
+   */
+  protected async openAbout(): Promise<void> {
+    // Lazy-loaded: the About bundle (tabs, changelog, credits) is only paid
+    // for when actually opened.
+    const { AboutDialog } = await import('../../about/about-dialog');
+    if (this.isMobile()) {
+      this.bottomSheet.open(AboutDialog, { panelClass: 'app-about-sheet' });
+    } else {
+      this.dialog.open(AboutDialog, {
+        width: '100%',
+        maxWidth: 'min(94vw, 680px)',
+        panelClass: 'app-about-dialog',
+      });
+    }
   }
 
   // -------------------------------------------------------------------------

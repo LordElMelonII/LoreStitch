@@ -180,6 +180,10 @@
       <mat-icon svgIcon="github"></mat-icon>
       <span>GitHub repository</span>
     </a>
+    <button mat-menu-item (click)="openAbout()">
+      <mat-icon>info</mat-icon>
+      <span>About LoreStitch…</span>
+    </button>
   </mat-menu>
   <mat-menu #themeMenu="matMenu" class="theme-menu">
     <button
@@ -219,6 +223,18 @@
     aria-label="Theme menu"
   >
     <mat-icon>brightness_auto</mat-icon>
+  </button>
+
+  <!-- Always rendered: version/build info must be verifiable on the welcome
+       screen too (e.g. to check a PWA updated to the latest release). -->
+  <button
+    matIconButton
+    type="button"
+    (click)="openAbout()"
+    matTooltip="About LoreStitch"
+    aria-label="About LoreStitch"
+  >
+    <mat-icon>info</mat-icon>
   </button>
 
   <button

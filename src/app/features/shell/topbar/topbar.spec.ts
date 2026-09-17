@@ -1,7 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { DomSanitizer } from '@angular/platform-browser';
+import { By } from '@angular/platform-browser';
+import { MatBottomSheet } from '@angular/material/bottom-sheet';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconRegistry } from '@angular/material/icon';
+import { MatMenuTrigger } from '@angular/material/menu';
 import { of } from 'rxjs';
 import {
   ProjectWorkspace,
@@ -13,36 +16,56 @@ import { ImportExportService } from '../../../core/services/import-export.servic
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { GITHUB_ICON } from '../../../shared/constants/github';
-import { DESKTOP_BREAKPOINT_QUERY } from '../../../shared/constants/breakpoints';
+import {
+  DESKTOP_BREAKPOINT_QUERY,
+  MOBILE_BREAKPOINT_QUERY,
+} from '../../../shared/constants/breakpoints';
+import { AboutDialog } from '../../about/about-dialog';
 import { Topbar } from './topbar';
 import { TokenMeter } from './token-meter';
 
 /**
- * jsdom has no matchMedia; install a stub whose desktop answer can be flipped
- * mid-test (the CDK observer reacts to change events, exactly like a browser).
+ * jsdom has no matchMedia; install a stub whose desktop/mobile answers can be
+ * flipped mid-test (the CDK observer reacts to change events, exactly like a
+ * browser).
  */
-function installMatchMediaStub(): { setDesktop: (matches: boolean) => void } {
-  let desktopMatches = false;
-  const changeListeners = new Set<(event: { matches: boolean }) => void>();
+function installMatchMediaStub(): {
+  setDesktop: (matches: boolean) => void;
+  setMobile: (matches: boolean) => void;
+} {
+  const state = new Map<string, boolean>([
+    [DESKTOP_BREAKPOINT_QUERY, false],
+    [MOBILE_BREAKPOINT_QUERY, false],
+  ]);
+  /** Listeners keyed by the query they observe: flips notify each with its own answer. */
+  const listeners = new Map<string, Set<(event: { matches: boolean }) => void>>();
   const fake = (query: string) => ({
-    matches: query === DESKTOP_BREAKPOINT_QUERY && desktopMatches,
+    get matches() {
+      return state.get(query) ?? false;
+    },
     media: query,
     onchange: null,
-    addListener: (cb: (event: { matches: boolean }) => void) => changeListeners.add(cb),
-    removeListener: (cb: unknown) => changeListeners.delete(cb as never),
+    addListener: (cb: (event: { matches: boolean }) => void) => {
+      const set = listeners.get(query) ?? new Set();
+      set.add(cb);
+      listeners.set(query, set);
+    },
+    removeListener: (cb: unknown) => listeners.get(query)?.delete(cb as never),
     addEventListener: (_: string, cb: (event: { matches: boolean }) => void) =>
-      changeListeners.add(cb),
-    removeEventListener: (_: string, cb: unknown) => changeListeners.delete(cb as never),
+      listeners.get(query)?.add(cb),
+    removeEventListener: (_: string, cb: unknown) => listeners.get(query)?.delete(cb as never),
     dispatchEvent: () => false,
   });
   Object.defineProperty(window, 'matchMedia', { writable: true, value: fake });
+  const setQuery = (query: string, matches: boolean) => {
+    state.set(query, matches);
+    for (const cb of listeners.get(query) ?? []) {
+      cb({ matches });
+    }
+  };
   return {
-    setDesktop(matches: boolean) {
-      desktopMatches = matches;
-      for (const cb of [...changeListeners]) {
-        cb({ matches });
-      }
-    },
+    setDesktop: (matches) => setQuery(DESKTOP_BREAKPOINT_QUERY, matches),
+    setMobile: (matches) => setQuery(MOBILE_BREAKPOINT_QUERY, matches),
   };
 }
 
@@ -50,7 +73,8 @@ describe('Topbar', () => {
   let workspace: WorkspaceService;
   let importer: ImportExportService;
   let dialogOpen: ReturnType<typeof vi.fn>;
-  let desktop: { setDesktop: (matches: boolean) => void };
+  let sheetOpen: ReturnType<typeof vi.fn>;
+  let desktop: { setDesktop: (matches: boolean) => void; setMobile: (matches: boolean) => void };
   let fixture: import('@angular/core/testing').ComponentFixture<Topbar>;
 
   async function createTopbar(): Promise<Topbar> {
@@ -62,10 +86,15 @@ describe('Topbar', () => {
   beforeEach(async () => {
     desktop = installMatchMediaStub();
     dialogOpen = vi.fn().mockReturnValue({ afterClosed: () => of(undefined) });
+    sheetOpen = vi.fn().mockReturnValue({ afterDismissed: () => of(undefined) });
     await TestBed.configureTestingModule({
       imports: [Topbar],
-      providers: [{ provide: MatDialog, useValue: { open: dialogOpen } }],
     }).compileComponents();
+    // overrideProvider (not a module-level providers list): the imported
+    // Material ng-modules provide the real MatDialog/MatBottomSheet closer to
+    // the component, and only overrides win at every injector level.
+    TestBed.overrideProvider(MatDialog, { useValue: { open: dialogOpen } });
+    TestBed.overrideProvider(MatBottomSheet, { useValue: { open: sheetOpen } });
     // The top bar renders the inlined GitHub mark; unit tests bypass the app
     // initializer that registers it (see app.spec.ts).
     TestBed.inject(MatIconRegistry).addSvgIconLiteral(
@@ -213,10 +242,9 @@ describe('Topbar', () => {
       ?.dispatchEvent(new Event('click'));
     // The search dialog is lazy-loaded; the open lands after the import.
     await vi.waitFor(() => expect(dialogOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
-    const [, options] = dialogOpen.mock.calls[0] as unknown as [
-      unknown,
-      { data: { activeEntryId: number | null } },
-    ];
+    const call = dialogOpen.mock.calls.at(-1);
+    assert(call);
+    const options = call[1] as { data: { activeEntryId: number | null } };
     expect(options.data.activeEntryId).toBe(0);
   });
 
@@ -243,6 +271,75 @@ describe('Topbar', () => {
         .querySelector('[aria-label="Toggle focus mode"]')
         ?.getAttribute('aria-pressed'),
     ).toBe('true');
+  });
+
+  it('keeps the About button reachable on the welcome screen and with a project', async () => {
+    await createTopbar();
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[aria-label="About LoreStitch"]'),
+    ).toBeTruthy();
+
+    await workspace.createProject('Fuyuki');
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[aria-label="About LoreStitch"]'),
+    ).toBeTruthy();
+  });
+
+  it('opens the About dialog on desktop viewports', async () => {
+    await createTopbar();
+    desktop.setDesktop(true);
+    // The CDK observer throttles breakpoint emissions (auditTime).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector('[aria-label="About LoreStitch"]')
+      ?.dispatchEvent(new Event('click'));
+    // The about pane is lazy-loaded; the open lands after the import.
+    await vi.waitFor(() => expect(dialogOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
+    const call = dialogOpen.mock.calls.at(-1);
+    assert(call);
+    const options = call[1] as { panelClass: string | string[] };
+    expect(options.panelClass).toContain('app-about-dialog');
+    expect(sheetOpen).not.toHaveBeenCalled();
+  });
+
+  it('opens the About pane as a bottom sheet on phones', async () => {
+    await createTopbar();
+    desktop.setMobile(true);
+    // The CDK observer throttles breakpoint emissions (auditTime).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector('[aria-label="About LoreStitch"]')
+      ?.dispatchEvent(new Event('click'));
+    await vi.waitFor(() => expect(sheetOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
+    const call = sheetOpen.mock.calls.at(-1);
+    assert(call);
+    const [component, options] = call as [object, { panelClass: string | string[] }];
+    // The lazy import resolves to the same class the spec imports statically.
+    expect(component).toBe(AboutDialog);
+    expect(options.panelClass).toBe('app-about-sheet');
+    expect(dialogOpen).not.toHaveBeenCalled();
+  });
+
+  it('lists About in the More actions menu of an open project', async () => {
+    await workspace.createProject('Fuyuki');
+    await createTopbar();
+    fixture.detectChanges();
+
+    const triggerDebug = fixture.debugElement.query(
+      By.css('[aria-label="More actions menu"]'),
+    );
+    assert(triggerDebug);
+    triggerDebug.injector.get(MatMenuTrigger).openMenu();
+    fixture.detectChanges();
+
+    const menuText = document.querySelector('.mat-mdc-menu-panel')?.textContent ?? '';
+    expect(menuText).toContain('About LoreStitch…');
   });
 
   it('surfaces the persistence-failure banner while saving is broken', async () => {
