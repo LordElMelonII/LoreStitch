@@ -160,18 +160,20 @@ export class ImportExportService {
     options: MarkdownDigestOptions = {},
   ): void {
     const includeDisabled = options.includeDisabled ?? true;
-    const lines: string[] = [
-      `# ${book.name ?? title} — Proofread Digest`,
-      '',
-      `${book.entries.length} entries · ~${estimateTokens(
-        book.entries.map((e) => e.content).join('\n'),
-      )} tokens (rough)`,
-      '',
-    ];
-
+    // The header statistics describe exactly the entries listed below —
+    // an includeDisabled filter must apply to the numbers too.
     const entries = [...book.entries]
       .filter((e) => includeDisabled || e.enabled)
       .sort((a, b) => a.insertion_order - b.insertion_order);
+
+    const lines: string[] = [
+      `# ${book.name ?? title} — Proofread Digest`,
+      '',
+      `${entries.length} entries · ~${estimateTokens(
+        entries.map((e) => e.content).join('\n'),
+      )} tokens (rough)`,
+      '',
+    ];
 
     for (const entry of entries) {
       const keys = entry.keys.join(', ') || 'constant';

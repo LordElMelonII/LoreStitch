@@ -112,7 +112,7 @@
           <mat-checkbox
             [checked]="!isExcluded(row.entryId)"
             (change)="toggleExcluded(row.entryId, $event.checked)"
-            [attr.aria-label]="'Include entry ' + row.title"
+            [aria-label]="'Include entry ' + row.title"
           >
             <span class="result-title">{{ row.title }}</span>
           </mat-checkbox>

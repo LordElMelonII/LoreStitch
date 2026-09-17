@@ -126,6 +126,14 @@ export class MergeResolverDialog {
           if (local) {
             const clone = structuredClone(row.incoming);
             clone.id = local.id;
+            // The overwritten entry keeps its local sidebar slot: reconcile
+            // the display index instead of inheriting the source file's.
+            const displayIndex = local.extensions['display_index'] ?? indexInBook;
+            if (clone.extensions) {
+              clone.extensions['display_index'] = displayIndex;
+            } else {
+              clone.extensions = { display_index: displayIndex };
+            }
             current[indexInBook] = clone;
             overwritten++;
           } else {
