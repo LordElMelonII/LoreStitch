@@ -1,4 +1,5 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { SearchReplaceDialog } from './search-replace-dialog';
@@ -40,6 +41,14 @@ describe('SearchReplaceDialog', () => {
   /** Types into the (private) form model and returns the dialog for chaining. */
   function typeIn(dialog: SearchReplaceDialog, query: string, replacement: string): void {
     dialog['model'].set({ query, replacement });
+  }
+
+  /** Mounts the dialog and returns its fixture with the initial render flushed. */
+  async function createDialogDom(): Promise<ComponentFixture<SearchReplaceDialog>> {
+    const fixture = TestBed.createComponent(SearchReplaceDialog);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture;
   }
 
   beforeEach(async () => {
@@ -162,5 +171,246 @@ describe('SearchReplaceDialog', () => {
     const dialog = await createDialog();
     expect(dialog['rows']()).toEqual([]);
     expect(dialog['patternError']()).toBeNull();
+  });
+
+  it('matches only whole words when whole-word mode is on', async () => {
+    workspace.activeProject.set(
+      projectOf([entry(0, { content: 'The rinsing ritual begins. Rin wins.' })]),
+    );
+    const dialog = await createDialog();
+    typeIn(dialog, 'rin', 'LUVIA');
+    // Without the constraint the substring inside "rinsing" matches too.
+    expect(dialog['totalHits']()).toBe(2);
+
+    dialog['wholeWord'].set(true);
+    const rows = dialog['rows']();
+    expect(rows).toHaveLength(1);
+    assert(rows[0]);
+    expect(rows[0].hits.content).toBe(1); // only the standalone "Rin"
+    expect(rows[0].nextContent).toBe('The rinsing ritual begins. LUVIA wins.');
+  });
+
+  it('treats regex metacharacters literally outside regex mode', async () => {
+    workspace.activeProject.set(
+      projectOf([entry(0, { content: 'Costs 5 credits (a.x) and aox too.' })]),
+    );
+    const dialog = await createDialog();
+    typeIn(dialog, 'a.x', 'gold');
+    const rows = dialog['rows']();
+    assert(rows[0]);
+    // The dot must not act as a wildcard in literal mode.
+    expect(rows[0].hits.content).toBe(1);
+    expect(rows[0].nextContent).toBe('Costs 5 credits (gold) and aox too.');
+
+    // The same query as a regex wildcards over the middle character.
+    dialog['regexMode'].set(true);
+    const regexRows = dialog['rows']();
+    assert(regexRows[0]);
+    expect(regexRows[0].hits.content).toBe(2);
+  });
+
+  it('excludes key hits from preview and write when the keys field is off', async () => {
+    const dialog = await createDialog();
+    typeIn(dialog, 'saber', 'artoria');
+    dialog['inKeys'].set(false);
+
+    const rows = dialog['rows']();
+    assert(rows[0]);
+    expect(rows[0].hits.keys).toBe(0);
+    expect(rows[0].hits.content).toBe(1);
+    expect(dialog['totalHits']()).toBe(1);
+
+    await dialog['apply']();
+    const updated = workspace.entries().find((e) => e.id === 0);
+    assert(updated);
+    expect(updated.keys).toEqual(['saber']); // keys untouched
+    expect(updated.content).toBe('artoria is silent about the Grail.');
+  });
+
+  it('searches and rewrites entry names only when the names field is on', async () => {
+    const dialog = await createDialog();
+    typeIn(dialog, 'saber', 'artoria');
+    // Names are opt-in: the comment hit is neither counted nor rewritten.
+    expect(dialog['totalHits']()).toBe(3);
+
+    dialog['inNames'].set(true);
+    expect(dialog['totalHits']()).toBe(4);
+    await dialog['apply']();
+
+    const updated = workspace.entries().find((e) => e.id === 0);
+    assert(updated);
+    expect(updated.comment).toBe('artoria');
+    expect(updated.content).toBe('artoria is silent about the Grail.');
+  });
+
+  it('resolves truthy and reports the tally through the snackbar on success', async () => {
+    const dialog = await createDialog();
+    typeIn(dialog, 'saber', 'artoria pendragon');
+    await dialog['apply']();
+
+    expect(closeSpy).toHaveBeenCalledWith(true);
+    expect(TestBed.inject(MatSnackBar).open).toHaveBeenCalledWith(
+      'Replaced 3 occurrences across 1 entry',
+      'OK',
+      { duration: 4000 },
+    );
+  });
+
+  it('stays inert when apply runs with nothing to replace', async () => {
+    const dialog = await createDialog();
+    // Empty query: no preview rows, nothing eligible anywhere.
+    await dialog['apply']();
+
+    expect(closeSpy).toHaveBeenCalledWith(false);
+    expect(TestBed.inject(MatSnackBar).open).toHaveBeenCalledWith(
+      'Replaced 0 occurrences across 0 entries',
+      'OK',
+      { duration: 4000 },
+    );
+    const untouched = workspace.entries().find((e) => e.id === 0);
+    assert(untouched);
+    expect(untouched.content).toBe('Saber is silent about the Grail.');
+  });
+
+  it('labels the per-row include checkbox for assistive technology', async () => {
+    const fixture = await createDialogDom();
+    typeIn(fixture.componentInstance, 'saber', 'artoria');
+    fixture.detectChanges();
+
+    const input = (fixture.nativeElement as HTMLElement).querySelector(
+      '.result-row mat-checkbox input',
+    );
+    assert(input);
+    // Material nulls [attr.aria-label] on the host: only the component
+    // input reaches the native input element.
+    expect(input.getAttribute('aria-label')).toBe('Include entry Saber');
+  });
+
+  it('narrows the preview through the scope chips', async () => {
+    const fixture = await createDialogDom();
+    const dialog = fixture.componentInstance;
+    typeIn(dialog, 'a', 'e'); // matches both entries
+    fixture.detectChanges();
+    expect(dialog['rows']().map((row) => row.entryId)).toEqual([0, 1]);
+
+    const chips = fixture.debugElement.queryAll(
+      By.css('mat-chip-listbox[aria-label="Search scope"] mat-chip-option'),
+    );
+    expect(chips).toHaveLength(2);
+    chips[1]?.componentInstance.selectViaInteraction();
+    fixture.detectChanges();
+
+    expect(dialog['rows']().map((row) => row.entryId)).toEqual([1]);
+  });
+
+  it('renders preview rows, badges, key chips and live apply-button state', async () => {
+    const fixture = await createDialogDom();
+    const dialog = fixture.componentInstance;
+    typeIn(dialog, 'saber', 'artoria');
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('.result-row')).toHaveLength(1);
+    expect(el.querySelector('.result-title')?.textContent?.trim()).toBe('Saber');
+    expect([...el.querySelectorAll('.hit-badges .badge')].map((b) => b.textContent?.trim())).toEqual(
+      ['content ×1', 'keys ×2'],
+    );
+
+    // Key preview: the old title on the left, one chip per rewritten key.
+    const keyPreview = el.querySelector('.key-preview');
+    expect(keyPreview?.querySelector('.old')?.textContent?.trim()).toBe('Saber');
+    expect([...el.querySelectorAll('.key-chip')].map((c) => c.textContent?.trim())).toEqual([
+      'artoria',
+      'artoria',
+      'artoria',
+    ]);
+
+    const applyButton = el.querySelector<HTMLButtonElement>(
+      'mat-dialog-actions button:last-child',
+    );
+    assert(applyButton);
+    expect(applyButton.textContent).toContain('Replace in 1 entry');
+    expect(applyButton.disabled).toBe(false);
+
+    // Unchecking the row's inclusion drains the button to zero and disables
+    // it. The row header doubles as the checkbox label, so a click on it
+    // toggles the native input.
+    const rowLabel = el.querySelector<HTMLElement>('.result-row label');
+    assert(rowLabel);
+    rowLabel.click();
+    fixture.detectChanges();
+
+    expect(applyButton.textContent).toContain('Replace in 0 entries');
+    expect(applyButton.disabled).toBe(true);
+  });
+
+  it('guides the user through the empty, no-match and broken-pattern states', async () => {
+    const fixture = await createDialogDom();
+    const el = fixture.nativeElement as HTMLElement;
+    const dialog = fixture.componentInstance;
+
+    // No query yet: the result block renders but stays silent.
+    expect(el.querySelector('.no-results')?.textContent?.trim()).toBe('');
+    expect(el.querySelector('.preview-header')?.textContent).toContain(
+      'Type a query to preview matches',
+    );
+
+    // A well-formed query without matches.
+    typeIn(dialog, 'shirou', 'x');
+    fixture.detectChanges();
+    expect(el.querySelector('.no-results')?.textContent).toContain(
+      'No matches found for the current scope.',
+    );
+
+    // A broken regex: the hint names the problem and the empty state defers to it.
+    dialog['regexMode'].set(true);
+    typeIn(dialog, '([unclosed', 'x');
+    fixture.detectChanges();
+    expect(el.querySelector('.pattern-error')?.textContent).toContain(
+      'Invalid regular expression',
+    );
+    expect(el.querySelector('.no-results')?.textContent).toContain(
+      'Fix the pattern to see matches.',
+    );
+  });
+
+  it('highlights preview changes and cycles hunks with the navigator', async () => {
+    workspace.activeProject.set(
+      projectOf([
+        entry(1, {
+          comment: 'Rin',
+          // A context line between the two changes yields two diff hunks.
+          content: 'Rin studies magecraft.\nA middle context line.\nRin is busy.',
+        }),
+      ]),
+    );
+    const fixture = await createDialogDom();
+    const dialog = fixture.componentInstance;
+    typeIn(dialog, 'Rin', 'Luvia');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const diff = el.querySelector('app-diff-viewer');
+    assert(diff);
+    expect(el.querySelectorAll('.diff-line.added')).toHaveLength(2);
+    expect(el.querySelectorAll('.diff-line.removed')).toHaveLength(2);
+
+    const counter = diff.querySelector('.hunk-counter');
+    assert(counter);
+    expect(counter.textContent?.trim()).toBe('1 / 2');
+    expect(diff.querySelector('.hunk-current')?.getAttribute('data-hunk')).toBe('0');
+
+    // Next parks the highlight on the second change hunk.
+    diff.querySelector<HTMLButtonElement>('[aria-label="Next change"]')?.click();
+    fixture.detectChanges();
+    expect(counter.textContent?.trim()).toBe('2 / 2');
+    expect(diff.querySelector('.hunk-current')?.getAttribute('data-hunk')).toBe('1');
+
+    // Previous steps back to the first.
+    diff.querySelector<HTMLButtonElement>('[aria-label="Previous change"]')?.click();
+    fixture.detectChanges();
+    expect(counter.textContent?.trim()).toBe('1 / 2');
+    expect(diff.querySelector('.hunk-current')?.getAttribute('data-hunk')).toBe('0');
   });
 });

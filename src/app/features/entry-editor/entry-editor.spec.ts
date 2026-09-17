@@ -1,5 +1,5 @@
 import { signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TAB_STRIP_DRAG_SLOP_PX } from './entry-editor.constants';
 import { EntryEditor, TabStripDragScroller, scrollTabStripOnWheel } from './entry-editor';
 import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
@@ -337,5 +337,178 @@ describe('EntryEditor fields composition', () => {
     await fixture.whenStable();
 
     expect(updateEntry).toHaveBeenCalledWith(1, { comment: 'Rin Tohsaka' });
+  });
+});
+
+/**
+ * End-to-end wiring of the editor against the real `WorkspaceService`: tab
+ * management and the options-accordion strip controls must land in the
+ * working tree (single source of truth for the export).
+ */
+describe('EntryEditor workspace wiring', () => {
+  let workspace: WorkspaceService;
+  let fixture: ComponentFixture<EntryEditor>;
+
+  function currentEntry(id: number): CharacterBookEntry {
+    const entry = workspace.entries().find((e) => e.id === id);
+    assert(entry);
+    return entry;
+  }
+
+  async function createEditor(): Promise<void> {
+    workspace.activeProject.set({
+      id: 'editor-project',
+      title: 'Editor',
+      createdAt: 1,
+      updatedAt: 1,
+      targetType: 'standalone_lorebook',
+      activeBook: {
+        name: 'Editor',
+        extensions: {},
+        entries: [
+          { ...createEmptyEntry(0), comment: 'Saber' },
+          { ...createEmptyEntry(1), comment: 'Rin' },
+        ],
+      },
+      headCommitId: null,
+      commits: [],
+    });
+    workspace.openEntry(0);
+    workspace.openEntry(1);
+    workspace.activeTabId.set(0);
+    fixture = TestBed.createComponent(EntryEditor);
+    await fixture.whenStable();
+  }
+
+  beforeEach(async () => {
+    // The tab strip pagination tracks size changes; jsdom lacks the API.
+    if (!('ResizeObserver' in globalThis)) {
+      /* eslint-disable @typescript-eslint/no-empty-function -- no-op stub by design */
+      Object.defineProperty(globalThis, 'ResizeObserver', {
+        writable: true,
+        value: class {
+          observe(): void {}
+          unobserve(): void {}
+          disconnect(): void {}
+        },
+      });
+      /* eslint-enable @typescript-eslint/no-empty-function */
+    }
+    TestBed.configureTestingModule({ imports: [EntryEditor] });
+    workspace = TestBed.inject(WorkspaceService);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it('self-heals the selection when the active tab id vanishes', async () => {
+    await createEditor();
+    expect(workspace.activeTabId()).toBe(0);
+
+    workspace.activeTabId.set(99);
+    await fixture.whenStable();
+
+    // The editor falls back to the first open tab instead of blanking out.
+    expect(workspace.activeTabId()).toBe(0);
+  });
+
+  it('closes a tab from its close button without switching the active tab', async () => {
+    await createEditor();
+    const closeRin = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[aria-label="Close tab Rin"]',
+    );
+    assert(closeRin);
+
+    closeRin.click();
+    await fixture.whenStable();
+
+    expect(workspace.openTabEntryIds()).toEqual([0]);
+    expect(workspace.activeTabId()).toBe(0);
+  });
+
+  it('renders the empty state and creates a tab from "New entry"', async () => {
+    workspace.activeProject.set({
+      id: 'empty-project',
+      title: 'Empty',
+      createdAt: 1,
+      updatedAt: 1,
+      targetType: 'standalone_lorebook',
+      activeBook: {
+        name: 'Empty',
+        extensions: {},
+        entries: [{ ...createEmptyEntry(0), comment: 'Saber' }],
+      },
+      headCommitId: null,
+      commits: [],
+    });
+    fixture = TestBed.createComponent(EntryEditor);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelector('.empty-editor')).toBeTruthy();
+    const newButton = el.querySelector<HTMLButtonElement>('.empty-editor button');
+    assert(newButton);
+
+    newButton.click();
+    await fixture.whenStable();
+
+    // addEntry() opened the new entry as the active editor tab.
+    expect(workspace.activeTabId()).toBe(1);
+    expect(el.querySelector('.empty-editor')).toBeNull();
+    expect(el.querySelector('mat-tab-group')).toBeTruthy();
+  });
+
+  it('switches the trigger strategy from the strip and keeps the mirrors exclusive', async () => {
+    await createEditor();
+    const stripButton = (label: string): HTMLButtonElement => {
+      const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        `.strategy-toggle button[aria-label="${label}"]`,
+      );
+      assert(button);
+      return button;
+    };
+
+    stripButton('Constant: always inserted').click();
+    await fixture.whenStable();
+    let entry = currentEntry(0);
+    expect(entry.constant).toBe(true);
+    expect(entry.extensions['vectorized']).toBe(false);
+
+    stripButton('Vectorized: inserted by embedding similarity').click();
+    await fixture.whenStable();
+    entry = currentEntry(0);
+    expect(entry.constant).toBe(false);
+    expect(entry.extensions['vectorized']).toBe(true);
+    // The other entry is untouched by the strip edit.
+    expect(currentEntry(1).constant).toBe(false);
+  });
+
+  it('toggles Enabled from the strip slide toggle', async () => {
+    await createEditor();
+    // Material renders the slide toggle as a switch button, not a checkbox.
+    const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.trigger-card mat-slide-toggle button',
+    );
+    assert(toggle);
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+
+    toggle.click();
+    await fixture.whenStable();
+
+    expect(currentEntry(0).enabled).toBe(false);
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('writes the strip Order field through to insertion_order', async () => {
+    await createEditor();
+    const order = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '.trigger-card .num input',
+    );
+    assert(order);
+    expect(order.value).toBe('100');
+
+    order.value = '42';
+    order.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+
+    expect(currentEntry(0).insertion_order).toBe(42);
   });
 });
