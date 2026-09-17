@@ -100,7 +100,11 @@
   // reachable. (The dialog full-screen rules keep their own 599px — that one
   // is MD3's 600dp compact window class, not the shell breakpoint.)
   @media (max-width: 767px) {
-    .desktop-only {
+    .desktop-only,
+    // App-level buttons (theme, about) collapse into the More actions menu
+    // while a project is open; the welcome screen has no More menu and keeps
+    // them standalone on every viewport.
+    .mobile-hidden {
       display: none;
     }
 
@@ -111,5 +115,15 @@
     .project-badge {
       max-width: 40vw;
     }
+  }
+}
+
+// More-menu entry duplicating a standalone app button on phones (the Theme
+// submenu): hidden wherever the direct button is visible. Declared outside
+// `.topbar` because the menu panel renders in a CDK overlay — the component
+// attribute selector still scopes it to this template's items.
+.mobile-only {
+  @media (min-width: 768px) {
+    display: none;
   }
 }

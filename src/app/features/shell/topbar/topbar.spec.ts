@@ -273,18 +273,26 @@ describe('Topbar', () => {
     ).toBe('true');
   });
 
-  it('keeps the About button reachable on the welcome screen and with a project', async () => {
+  it('collapses the app-level buttons into the More menu on phones with a project', async () => {
     await createTopbar();
     fixture.detectChanges();
-    expect(
-      fixture.nativeElement.querySelector('[aria-label="About LoreStitch"]'),
-    ).toBeTruthy();
+    // Welcome screen: no More menu exists, so both stay standalone on every
+    // viewport.
+    for (const label of ['About LoreStitch', 'Theme menu']) {
+      const button = fixture.nativeElement.querySelector(`[aria-label="${label}"]`);
+      expect(button).toBeTruthy();
+      expect(button?.classList.contains('mobile-hidden')).toBe(false);
+    }
 
     await workspace.createProject('Fuyuki');
     fixture.detectChanges();
-    expect(
-      fixture.nativeElement.querySelector('[aria-label="About LoreStitch"]'),
-    ).toBeTruthy();
+    // With a project the More menu exists: phones reach both through it, so
+    // the standalone buttons carry the phone-hiding class.
+    for (const label of ['About LoreStitch', 'Theme menu']) {
+      const button = fixture.nativeElement.querySelector(`[aria-label="${label}"]`);
+      expect(button).toBeTruthy();
+      expect(button?.classList.contains('mobile-hidden')).toBe(true);
+    }
   });
 
   it('opens the About dialog on desktop viewports', async () => {
@@ -326,7 +334,7 @@ describe('Topbar', () => {
     expect(dialogOpen).not.toHaveBeenCalled();
   });
 
-  it('lists About in the More actions menu of an open project', async () => {
+  it('lists About and a phones-only Theme submenu in the More actions menu', async () => {
     await workspace.createProject('Fuyuki');
     await createTopbar();
     fixture.detectChanges();
@@ -340,6 +348,12 @@ describe('Topbar', () => {
 
     const menuText = document.querySelector('.mat-mdc-menu-panel')?.textContent ?? '';
     expect(menuText).toContain('About LoreStitch…');
+    expect(menuText).toContain('Theme');
+    // The Theme entry is the phones-only duplicate: on >= 768px the direct
+    // button is visible and the entry must disappear (mobile-only class).
+    const mobileOnly = document.querySelectorAll('.mat-mdc-menu-panel .mobile-only');
+    expect(mobileOnly).toHaveLength(1);
+    expect(mobileOnly[0]?.textContent).toContain('Theme');
   });
 
   it('surfaces the persistence-failure banner while saving is broken', async () => {

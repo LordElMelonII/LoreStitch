@@ -180,6 +180,13 @@
       <mat-icon svgIcon="github"></mat-icon>
       <span>GitHub repository</span>
     </a>
+    <!-- Phones-only companion for the standalone theme button hidden from the
+         bar; the About entry below stays universal (the roadmap keeps an
+         About entry in the desktop overflow menu as well). -->
+    <button mat-menu-item class="mobile-only" [matMenuTriggerFor]="themeMenu">
+      <mat-icon>brightness_auto</mat-icon>
+      <span>Theme</span>
+    </button>
     <button mat-menu-item (click)="openAbout()">
       <mat-icon>info</mat-icon>
       <span>About LoreStitch…</span>
@@ -214,25 +221,29 @@
 
   <!-- Always rendered: theme must be reachable from the welcome screen,
        before any project exists (it used to be buried in the project-gated
-       More actions menu). -->
+       More actions menu). With a project open, phones collapse it into the
+       More actions menu instead (the bar cannot fit another 48px action). -->
   <button
     matIconButton
     type="button"
     [matMenuTriggerFor]="themeMenu"
     matTooltip="Theme"
     aria-label="Theme menu"
+    [class.mobile-hidden]="workspace.activeProject()"
   >
     <mat-icon>brightness_auto</mat-icon>
   </button>
 
   <!-- Always rendered: version/build info must be verifiable on the welcome
-       screen too (e.g. to check a PWA updated to the latest release). -->
+       screen too (e.g. to check a PWA updated to the latest release). With a
+       project open, phones collapse it into the More actions menu instead. -->
   <button
     matIconButton
     type="button"
     (click)="openAbout()"
     matTooltip="About LoreStitch"
     aria-label="About LoreStitch"
+    [class.mobile-hidden]="workspace.activeProject()"
   >
     <mat-icon>info</mat-icon>
   </button>
