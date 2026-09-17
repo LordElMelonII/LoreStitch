@@ -1,6 +1,5 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { TAB_STRIP_DRAG_SLOP_PX } from './entry-editor.constants';
 import { EntryEditor, TabStripDragScroller, scrollTabStripOnWheel } from './entry-editor';
 import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
@@ -264,7 +263,6 @@ describe('EntryEditor fields composition', () => {
     await TestBed.configureTestingModule({
       imports: [EntryEditor],
       providers: [
-        provideAnimationsAsync(),
         {
           provide: WorkspaceService,
           useValue: {

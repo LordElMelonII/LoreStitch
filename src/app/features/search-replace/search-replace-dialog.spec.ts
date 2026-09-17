@@ -1,5 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { SearchReplaceDialog } from './search-replace-dialog';
@@ -48,7 +47,6 @@ describe('SearchReplaceDialog', () => {
     TestBed.configureTestingModule({
       imports: [SearchReplaceDialog],
       providers: [
-        provideAnimationsAsync(),
         { provide: MAT_DIALOG_DATA, useValue: { activeEntryId: 1 } },
         { provide: MatDialogRef, useValue: { close: closeSpy } },
         { provide: MatSnackBar, useValue: { open: vi.fn() } },

@@ -1,5 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { DomSanitizer } from '@angular/platform-browser';
 import { MatIconRegistry } from '@angular/material/icon';
 import { App } from './app';
@@ -25,7 +24,6 @@ describe('App', () => {
     }
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideAnimationsAsync()],
     }).compileComponents();
     // The top bar renders the inlined GitHub mark. Its registration lives in
     // the app initializer (app.config), which unit tests bypass — replicate
