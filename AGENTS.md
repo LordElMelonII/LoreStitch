@@ -17,12 +17,13 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 | :------------------------------------------ | :------------------------------------------------- | :------------------------- |
 | Views, Components, Material Design 3        | `src/app/features/`, `src/app/shared/components/`  | `.agents/ui-specialist.md` |
 | JSON Serialization, VCS, Hashing            | `src/app/core/`                                    | `.agents/core-engine.md`   |
-| End-to-End, Unit Tests, Round-trips         | `e2e/`, `*.spec.ts`                                | `.agents/qa-auditor.md`    |
+| End-to-End, Unit Tests, Coverage, Round-trips | `e2e/`, `**/*.spec.ts`                            | `.agents/qa-auditor.md`    |
 | Cross-cutting Architecture, Typing, Linting | `src/app/**`, `tsconfig*.json`, `eslint.config.js` | `.agents/ts-reviewer.md`   |
 
 ## Standard Verification Commands
 
 - Build check: `npm run build`
 - Unit test suite: `npm test`
+- Code coverage: `ng test --coverage`
 - E2E & fidelity: `npx playwright test`
 - Linting: `npm run lint`
