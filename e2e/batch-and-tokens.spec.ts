@@ -120,6 +120,16 @@ test.describe('batch operations, token meter & split export', () => {
     await expect(
       page.getByRole('heading', { name: 'Export Selected Entries as Lorebook' }),
     ).toBeVisible();
+
+    // Verify format dropdown includes clarifying descriptions
+    const formatSelect = page.locator('.format-field mat-select');
+    await expect(formatSelect).toBeVisible();
+    await formatSelect.click();
+    const listbox = page.getByRole('listbox', { name: 'Export file format' });
+    await expect(listbox.getByText('Direct import into SillyTavern’s World Info panel')).toBeVisible();
+    await expect(listbox.getByText('Spec format for character cards & third-party tools')).toBeVisible();
+    await page.getByRole('option', { name: /SillyTavern World Info/ }).click();
+
     await expect(page.getByRole('button', { name: 'Export 2 entries' })).toBeEnabled();
 
     const downloadPromise = page.waitForEvent('download');

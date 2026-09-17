@@ -1,0 +1,28 @@
+# LoreStitch Agent Orchestrator
+
+LoreStitch is an Angular editor and version control manager for SillyTavern lorebooks and World Info cards.
+
+## Operating Principles
+
+- **Route Before Acting**: Inspect your assigned task and read the corresponding persona guide in `.agents/` before modifying code.
+- **Strict Invariants**:
+  - Never drop unknown vendor keys during import/export.
+  - No `::ng-deep` or legacy CSS overrides.
+  - Angular 22 reactivity: use Signals (`signal()`, `computed()`, `input()`, `output()`) over RxJS state.
+- **Verification First**: Always run tests and builds before completing a task.
+
+## Persona Directory
+
+| Task Scope                                  | File Path Focus                                    | Agent File                 |
+| :------------------------------------------ | :------------------------------------------------- | :------------------------- |
+| Views, Components, Material Design 3        | `src/app/features/`, `src/app/shared/components/`  | `.agents/ui-specialist.md` |
+| JSON Serialization, VCS, Hashing            | `src/app/core/`                                    | `.agents/core-engine.md`   |
+| End-to-End, Unit Tests, Round-trips         | `e2e/`, `*.spec.ts`                                | `.agents/qa-auditor.md`    |
+| Cross-cutting Architecture, Typing, Linting | `src/app/**`, `tsconfig*.json`, `eslint.config.js` | `.agents/ts-reviewer.md`   |
+
+## Standard Verification Commands
+
+- Build check: `npm run build`
+- Unit test suite: `npm test`
+- E2E & fidelity: `npx playwright test`
+- Linting: `npm run lint`

@@ -23,10 +23,31 @@
         [value]="format()"
         (selectionChange)="format.set($event.value)"
         aria-label="Export file format"
+        panelClass="export-format-panel"
       >
-        <mat-option value="st_native">SillyTavern World Info JSON</mat-option>
-        <mat-option value="character_book">Character Book JSON (V2)</mat-option>
+        <mat-select-trigger>
+          {{ format() === 'st_native' ? 'SillyTavern World Info JSON' : 'Character Book JSON (V2)' }}
+        </mat-select-trigger>
+        <mat-option value="st_native">
+          <div class="format-option">
+            <span class="format-option-title">SillyTavern World Info JSON</span>
+            <span class="format-option-desc">Direct import into SillyTavern’s World Info panel</span>
+          </div>
+        </mat-option>
+        <mat-option value="character_book">
+          <div class="format-option">
+            <span class="format-option-title">Character Book JSON (V2)</span>
+            <span class="format-option-desc">Spec format for character cards &amp; third-party tools</span>
+          </div>
+        </mat-option>
       </mat-select>
+      <mat-hint>
+        @if (format() === 'st_native') {
+          Direct import into SillyTavern’s World Info panel
+        } @else {
+          Standard V2 spec for character cards &amp; third-party tools
+        }
+      </mat-hint>
     </mat-form-field>
   </div>
 

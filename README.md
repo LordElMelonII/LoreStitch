@@ -64,7 +64,7 @@ The editor mirrors SillyTavern's World Info fields one-to-one, so nothing is los
 - **Export** in four flavors:
   - _World Info JSON_ — native SillyTavern format, importable via the World Info panel.
   - _Project archive (`.stproj`)_ — full backup including the entire commit history, reopenable in LoreStitch. Version history lives in the browser's IndexedDB, so export a `.stproj` regularly to keep a durable backup (the history drawer reminds you and has a one-click export).
-  - _Character Book JSON_ — bare V2-spec `character_book`, no card wrapper.
+  - _Character Book JSON_ — standard V2-spec `character_book` format (for character cards and third-party frontends).
   - _Proofread digest (Markdown)_ — all entries rendered as readable text with order, keys, and a rough token estimate, handy for review or sharing.
 
 ### Batch tools

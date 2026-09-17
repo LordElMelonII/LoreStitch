@@ -16,6 +16,7 @@ h2[mat-dialog-title] {
 
 .settings-row {
   display: flex;
+  align-items: flex-start;
   gap: 12px;
   // Outline fields float their labels ~7px above the field's top border and
   // Material zeroes the dialog content's top padding when it follows the
@@ -29,7 +30,7 @@ h2[mat-dialog-title] {
   }
 
   .format-field {
-    width: 270px;
+    width: 290px;
     flex: none;
   }
 }

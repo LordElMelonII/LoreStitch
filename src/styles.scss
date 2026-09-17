@@ -417,6 +417,36 @@ app-export-selected-dialog .rows-viewport .cdk-virtual-scroll-content-wrapper {
   width: 100%;
 }
 
+// --- Export format select panel (export-selected-dialog) ---
+.export-format-panel {
+  min-width: 320px;
+
+  .mat-mdc-option {
+    min-height: 54px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .format-option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .format-option-title {
+    font: var(--mat-sys-body-medium);
+    color: var(--mat-sys-on-surface);
+    line-height: 1.25;
+  }
+
+  .format-option-desc {
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+    line-height: 1.3;
+    white-space: normal;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Mobile touch targets (M3 accessibility): on compact screens icon buttons,
 // buttons, toggles and chips grow to the 48dp minimum clickable size. Desktop
