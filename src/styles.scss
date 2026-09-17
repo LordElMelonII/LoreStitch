@@ -10,11 +10,12 @@
 // Material Symbols Outlined (self-hosted, pre-subsetted)
 // ---------------------------------------------------------------------------
 // The full variable icon font from Google Fonts weighs ~3.9 MB. This copy was
-// subsetted via the Google Fonts API `icon_names` parameter to the 47 icons
-// LoreStitch actually uses (~40 KB). When adding a new `<mat-icon>name`,
-// re-request a subset including it:
-// https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=<comma,separated,names>&display=block
-// and replace public/fonts/material-symbols-outlined.woff2 with the served font.
+// subsetted via the Google Fonts API `icon_names` parameter to the 52 icons
+// LoreStitch uses (~42 KB), including dynamic ligatures like `expand_more`,
+// `expand_less`, `help`, and `undo`.
+// When adding or changing icons, run `npm run icons:refresh` (or re-request
+// from Google Fonts with `icon_names=<comma,separated,names>` and replace
+// public/fonts/material-symbols-outlined.woff2).
 @font-face {
   font-family: 'Material Symbols Outlined';
   font-style: normal;

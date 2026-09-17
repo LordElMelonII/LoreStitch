@@ -9,6 +9,7 @@
     "test": "ng test",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json --noEmit",
     "e2e": "playwright test",
+    "icons:refresh": "node scripts/refresh-icons.mjs",
     "lint": "ng lint",
     "lint:fix": "ng lint --fix",
     "format": "prettier --write .",
