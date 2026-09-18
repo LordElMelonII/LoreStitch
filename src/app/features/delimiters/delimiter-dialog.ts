@@ -12,11 +12,15 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   DELIMITER_STYLE_OPTIONS,
   DelimiterStyle,
+  delimiterNameMatches,
+  detectDelimiter,
   entryDelimiterName,
   entryDelimiterNameFromKey,
   rewrapContent,
+  sanitizeDelimiterName,
 } from '../../core/models/delimiters';
 import { CharacterBookEntry, entryTitle } from '../../core/models/lorebook.model';
+import { estimateTokens, formatTokenCount } from '../../core/services/token-estimator';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import {
   type DelimiterDialogData,
@@ -34,6 +38,22 @@ interface DelimiterFormModel {
   useEachName: boolean;
   /** Wrap with the entry's first primary key instead of its name. */
   usePrimaryKey: boolean;
+}
+
+/** Direction class used to color a token delta (`up` = more tokens). */
+type TokenDeltaDirection = 'up' | 'down' | 'neutral';
+
+/** `+N` / `−N` (U+2212, M3 typographic minus) / `=` label for a token delta. */
+function tokenDeltaLabel(delta: number): string {
+  if (delta === 0) {
+    return '=';
+  }
+  return delta > 0 ? `+${formatTokenCount(delta)}` : `−${formatTokenCount(-delta)}`;
+}
+
+/** Maps a token delta to its direction class. */
+function tokenDeltaDirection(delta: number): TokenDeltaDirection {
+  return delta > 0 ? 'up' : delta < 0 ? 'down' : 'neutral';
 }
 
 /**
@@ -128,6 +148,24 @@ export class DelimiterDialog {
     () => this.needsName() && !this.nameSkipped() && !this.name().trim(),
   );
 
+  /** The typed fixed name as it will be applied (empty while skipped). */
+  protected readonly resolvedFixedName = computed(() =>
+    this.nameSkipped() ? '' : sanitizeDelimiterName(this.name()),
+  );
+
+  /**
+   * True when the typed name contains characters the wrapper syntax cannot
+   * carry (`<`, `=`, `[`, `]`, newlines): the field is never rewritten, but
+   * the sanitized name is previewed — and applied — instead.
+   */
+  protected readonly fixedNameRewritten = computed(
+    () =>
+      this.needsName() &&
+      !this.nameSkipped() &&
+      this.name().trim() !== '' &&
+      this.resolvedFixedName() !== this.name().trim(),
+  );
+
   protected readonly targets = computed(() => {
     const entries = this.workspace.entries();
     return this.scope() === 'entry'
@@ -137,35 +175,97 @@ export class DelimiterDialog {
 
   /**
    * The wrapper name for one entry: its first primary key when key mode is
-   * on, else its own name in batch mode, else the fixed typed name.
+   * on, else its own name in batch mode, else the sanitized fixed typed name.
    */
   private resolveName(entry: CharacterBookEntry): string {
     if (this.usePrimaryKey()) {
       return entryDelimiterNameFromKey(entry);
     }
-    return this.nameResolvedFromEntries() ? entryDelimiterName(entry) : this.name().trim();
+    return this.nameResolvedFromEntries() ? entryDelimiterName(entry) : this.resolvedFixedName();
+  }
+
+  /**
+   * Every name that counts as "already wrapped under the target" for one
+   * entry: the resolved target name plus the entry-derived fallbacks,
+   * de-duplicated and filtered to non-empty. Handing this to `rewrapContent`
+   * keeps a wrapper with a foreign name (`<note>`, an old entry name) as
+   * payload instead of deleting it; stripping stays name-matched even for
+   * `separator`/`none`, where prose that merely looks wrapped must survive.
+   */
+  private resolveExpectedNames(entry: CharacterBookEntry): string[] {
+    const names = [
+      this.resolveName(entry),
+      entryDelimiterName(entry),
+      entryDelimiterNameFromKey(entry),
+    ];
+    return [...new Set(names.map((name) => name.trim()).filter((name) => name.length > 0))];
   }
 
   protected readonly previews = computed<EntryPreview[]>(() => {
     const style = this.style();
     return this.targets().map((entry) => {
-      const next = rewrapContent(entry.content ?? '', style, this.resolveName(entry));
+      const current = entry.content ?? '';
+      const expectedNames = this.resolveExpectedNames(entry);
+      const next = rewrapContent(current, style, this.resolveName(entry), expectedNames);
+      const detected = detectDelimiter(current);
       return {
         entryId: entry.id ?? -1,
         title: entryTitle(entry),
-        current: entry.content ?? '',
+        current,
         next,
-        changed: next !== entry.content,
+        changed: next !== current,
+        blank: current.trim() === '',
+        tokenDelta: estimateTokens(next) - estimateTokens(current),
+        unrecognizedName:
+          current.trim() !== '' &&
+          (detected.style === 'tag' || detected.style === 'bracket') &&
+          !delimiterNameMatches(detected.name, expectedNames),
       };
     });
   });
 
   protected readonly changedCount = computed(() => this.previews().filter((p) => p.changed).length);
 
-  /** The diff shown in the preview pane: the active entry, else the first. */
+  protected readonly blankCount = computed(() => this.previews().filter((p) => p.blank).length);
+
+  /** True when every target is blank — applying is then a guaranteed no-op. */
+  protected readonly allBlank = computed(
+    () => this.previews().length > 0 && this.previews().every((p) => p.blank),
+  );
+
+  /** Sum of the per-row estimates; only changed rows contribute non-zero. */
+  protected readonly tokenDeltaTotal = computed(() =>
+    this.previews().reduce((sum, p) => sum + p.tokenDelta, 0),
+  );
+
+  protected readonly tokenDeltaLabel = computed(() => tokenDeltaLabel(this.tokenDeltaTotal()));
+
+  protected readonly tokenDeltaDirection = computed(() =>
+    tokenDeltaDirection(this.tokenDeltaTotal()),
+  );
+
+  /** Diff target chosen by clicking a summary row; defaults to the active entry. */
+  protected readonly selectedPreviewId = signal<number | null>(this.data.activeEntryId);
+
+  protected selectPreview(entryId: number): void {
+    this.selectedPreviewId.set(entryId);
+  }
+
+  /** Per-row formatting helpers for the summary list. */
+  protected formatDelta(delta: number): string {
+    return tokenDeltaLabel(delta);
+  }
+
+  protected deltaDirection(delta: number): TokenDeltaDirection {
+    return tokenDeltaDirection(delta);
+  }
+
+  /** The diff shown in the preview pane: the selected row, else the active entry. */
   protected readonly previewEntry = computed<EntryPreview | null>(() => {
     const previews = this.previews();
+    const selectedId = this.selectedPreviewId();
     return (
+      previews.find((p) => p.entryId === selectedId) ??
       previews.find((p) => p.entryId === this.data.activeEntryId) ??
       previews.find((p) => p.changed) ??
       previews[0] ??
@@ -179,7 +279,7 @@ export class DelimiterDialog {
       ? this.usePrimaryKey()
         ? '<first key>'
         : '<entry name>'
-      : this.name().trim() || '<entry name>';
+      : this.resolvedFixedName() || '<entry name>';
     switch (this.style()) {
       case 'tag':
         return [`<${name}>`, 'Entry content…', `</${name}>`];
@@ -193,6 +293,12 @@ export class DelimiterDialog {
   });
 
   protected apply(): void {
+    // Blank targets are a no-op by construction: never write a phantom
+    // wrapper, even if a stray preview ever reported a change.
+    if (this.allBlank()) {
+      this.dialogRef.close(false);
+      return;
+    }
     const changedIds = this.previews()
       .filter((p) => p.changed)
       .map((p) => p.entryId);
@@ -202,7 +308,12 @@ export class DelimiterDialog {
     }
     const style = this.style();
     this.workspace.updateManyEntries(changedIds, (entry) => ({
-      content: rewrapContent(entry.content ?? '', style, this.resolveName(entry)),
+      content: rewrapContent(
+        entry.content ?? '',
+        style,
+        this.resolveName(entry),
+        this.resolveExpectedNames(entry),
+      ),
     }));
     this.snackBar.open(
       `Delimiters updated on ${changedIds.length} entr${changedIds.length === 1 ? 'y' : 'ies'}.`,

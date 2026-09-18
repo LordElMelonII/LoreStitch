@@ -53,6 +53,11 @@
         @if (nameMissing()) {
           <mat-hint class="pattern-error">A name is required for this style.</mat-hint>
         }
+        @if (fixedNameRewritten()) {
+          <mat-hint class="resolved-name-hint">
+            Will be applied as <code>{{ resolvedFixedName() }}</code>
+          </mat-hint>
+        }
       </mat-form-field>
 
       <mat-checkbox
@@ -89,7 +94,56 @@
     <span class="meta">
       {{ changedCount() }} of {{ targets().length }} entr{{ targets().length === 1 ? 'y' : 'ies' }}
       will change
+      @if (blankCount()) {
+        · {{ blankCount() }} blank unchanged
+      }
+      ·
+      <span
+        class="token-delta"
+        [class.up]="tokenDeltaDirection() === 'up'"
+        [class.down]="tokenDeltaDirection() === 'down'"
+        [class.neutral]="tokenDeltaDirection() === 'neutral'"
+        matTooltip="Estimated token change from these delimiters"
+        >~{{ tokenDeltaLabel() }} tokens</span
+      >
     </span>
+  </div>
+
+  <div class="preview-list" role="list" aria-label="Per-entry preview">
+    @for (p of previews(); track p.entryId) {
+      <div class="preview-list-item" role="listitem">
+        <button
+          type="button"
+          class="preview-row"
+          [class.selected]="p.entryId === selectedPreviewId()"
+          [attr.aria-pressed]="p.entryId === selectedPreviewId()"
+          [matTooltip]="'Show the diff for ' + p.title"
+          (click)="selectPreview(p.entryId)"
+        >
+          <span class="row-title">{{ p.title }}</span>
+          @if (p.blank) {
+            <span class="row-chip">blank</span>
+          }
+          <span class="row-state">{{ p.changed ? 'will change' : 'unchanged' }}</span>
+          <span
+            class="token-delta"
+            [class.up]="deltaDirection(p.tokenDelta) === 'up'"
+            [class.down]="deltaDirection(p.tokenDelta) === 'down'"
+            [class.neutral]="deltaDirection(p.tokenDelta) === 'neutral'"
+            >~{{ formatDelta(p.tokenDelta) }}</span
+          >
+        </button>
+        @if (p.unrecognizedName) {
+          <span class="row-hint">
+            {{
+              style() === 'none'
+                ? 'Not recognized as this entry’s wrapper — content will be left unchanged'
+                : 'Not recognized as this entry’s wrapper — applying will add a new wrapper'
+            }}
+          </span>
+        }
+      </div>
+    }
   </div>
 
   @if (previewEntry(); as p) {
@@ -103,7 +157,7 @@
     matButton="filled"
     type="button"
     (click)="apply()"
-    [disabled]="!changedCount() || nameMissing()"
+    [disabled]="!changedCount() || nameMissing() || allBlank()"
   >
     @if (scope() === 'all') {
       Apply to {{ changedCount() }} entr{{ changedCount() === 1 ? 'y' : 'ies' }}

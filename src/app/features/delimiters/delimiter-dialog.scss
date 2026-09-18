@@ -42,6 +42,15 @@
   color: var(--mat-sys-error);
 }
 
+.resolved-name-hint {
+  color: var(--mat-sys-on-surface-variant);
+
+  code {
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    color: var(--mat-sys-on-surface);
+  }
+}
+
 .example-card {
   display: flex;
   flex-direction: column;
@@ -66,6 +75,26 @@
   }
 }
 
+// Estimated delta of the current selection: more tokens (`up`) / fewer
+// tokens (`down`) / no change (`neutral`). Framed as an estimate like the
+// topbar meter, and colored with the same semantic roles used downstream.
+.token-delta {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  &.up {
+    color: var(--mat-sys-tertiary);
+  }
+
+  &.down {
+    color: var(--mat-sys-primary);
+  }
+
+  &.neutral {
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
 .preview-header {
   display: flex;
   align-items: baseline;
@@ -74,9 +103,99 @@
   font: var(--mat-sys-label-medium);
 
   .meta {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px;
     font: var(--mat-sys-label-small);
     color: var(--mat-sys-on-surface-variant);
     font-variant-numeric: tabular-nums;
+  }
+}
+
+.preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  // Per-row summaries scroll inside their own region so a long book never
+  // pushes the diff viewer and the actions out of reach.
+  max-height: min(30vh, 260px);
+  overflow-y: auto;
+
+  .preview-list-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .preview-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    // 44px minimum touch target (Material's compact density is too small on
+    // phones for a list of tappable rows).
+    min-height: 44px;
+    padding: 4px 12px;
+    border: none;
+    border-radius: var(--mat-sys-corner-small);
+    background: transparent;
+    color: var(--mat-sys-on-surface);
+    font: var(--mat-sys-body-medium);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--mat-sys-surface-container-high);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--mat-sys-primary);
+      outline-offset: -2px;
+    }
+
+    &.selected {
+      background: var(--mat-sys-secondary-container);
+      color: var(--mat-sys-on-secondary-container);
+    }
+
+    .row-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .row-state {
+      flex: none;
+      font: var(--mat-sys-label-small);
+      color: var(--mat-sys-on-surface-variant);
+    }
+
+    &.selected .row-state {
+      color: var(--mat-sys-on-secondary-container);
+    }
+
+    .row-chip {
+      flex: none;
+      padding: 1px 8px;
+      border-radius: var(--mat-sys-corner-full);
+      background: var(--mat-sys-surface-container-high);
+      color: var(--mat-sys-on-surface-variant);
+      font: var(--mat-sys-label-small);
+    }
+
+    .token-delta {
+      flex: none;
+      font: var(--mat-sys-label-medium);
+    }
+  }
+
+  .row-hint {
+    padding: 0 12px 4px;
+    font: var(--mat-sys-label-small);
+    color: var(--mat-sys-on-surface-variant);
   }
 }
 

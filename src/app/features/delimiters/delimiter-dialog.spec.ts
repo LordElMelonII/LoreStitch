@@ -7,6 +7,7 @@ import {
   createEmptyEntry,
   ProjectWorkspace,
 } from '../../core/models/lorebook.model';
+import { estimateTokens, formatTokenCount } from '../../core/services/token-estimator';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { DelimiterDialog } from './delimiter-dialog';
 
@@ -341,5 +342,242 @@ describe('DelimiterDialog', () => {
 
     expect(closeSpy).toHaveBeenCalledWith(false);
     expect(entryOf(0).content).toBe('London is a city.');
+  });
+
+  it('sanitizes the typed fixed name in the preview, hint, and applied wrapper', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'London', content: 'London is a city.' }),
+      entry(1, { comment: 'Paris', content: 'Paris is a city.' }),
+    ]);
+    dialog['setScope']('all');
+    await toggleCheckbox('Use each entry'); // per-entry naming off
+    await typeName('a<b');
+
+    expect(dialog['resolvedFixedName']()).toBe('a b');
+    expect(dialog['fixedNameRewritten']()).toBe(true);
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    assert(previews[1]);
+    expect(previews[0].next).toBe('<a b>\nLondon is a city.\n</a b>');
+    expect(previews[1].next).toBe('<a b>\nParis is a city.\n</a b>');
+
+    // The field is never rewritten, but the applied name is previewed.
+    assert(fixture);
+    const hint = (fixture.nativeElement as HTMLElement).querySelector('.resolved-name-hint');
+    assert(hint);
+    expect(hint.textContent).toContain('Will be applied as');
+    expect(hint.textContent).toContain('a b');
+
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('<a b>\nLondon is a city.\n</a b>');
+    expect(entryOf(1).content).toBe('<a b>\nParis is a city.\n</a b>');
+  });
+
+  it('reports a positive token delta for wrapping and neutral for a no-op', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'London', content: 'London is a city full of people.' }),
+    ]);
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    const delta = previews[0].tokenDelta;
+    expect(delta).toBe(estimateTokens(previews[0].next) - estimateTokens(previews[0].current));
+    expect(delta).toBeGreaterThan(0);
+    expect(dialog['tokenDeltaTotal']()).toBe(delta);
+    expect(dialog['tokenDeltaLabel']()).toBe(`+${formatTokenCount(delta)}`);
+    expect(dialog['tokenDeltaDirection']()).toBe('up');
+
+    assert(fixture);
+    const el = fixture.nativeElement as HTMLElement;
+    const headerDelta = el.querySelector('.preview-header .token-delta');
+    assert(headerDelta);
+    expect(headerDelta.textContent).toContain(`+${formatTokenCount(delta)}`);
+    expect(headerDelta.classList.contains('up')).toBe(true);
+    const rowDelta = el.querySelector('.preview-row .token-delta');
+    assert(rowDelta);
+    expect(rowDelta.textContent).toContain(`+${formatTokenCount(delta)}`);
+
+    // Same content, target `none`: the row is a no-op and reports `=`.
+    dialog['setStyle']('none');
+    expect(dialog['tokenDeltaTotal']()).toBe(0);
+    expect(dialog['tokenDeltaLabel']()).toBe('=');
+    expect(dialog['tokenDeltaDirection']()).toBe('neutral');
+    fixture.detectChanges();
+    const neutralDelta = el.querySelector('.preview-header .token-delta');
+    assert(neutralDelta);
+    expect(neutralDelta.textContent).toContain('=');
+    expect(neutralDelta.classList.contains('neutral')).toBe(true);
+  });
+
+  it('reports a negative token delta when stripping a wrapper', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'London', content: '<London>\nLondon is a city.\n</London>' }),
+    ]);
+    await pickStyle('None');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    expect(previews[0].tokenDelta).toBeLessThan(0);
+    expect(dialog['tokenDeltaLabel']()).toBe(`−${formatTokenCount(-previews[0].tokenDelta)}`);
+    expect(dialog['tokenDeltaDirection']()).toBe('down');
+
+    assert(fixture);
+    const headerDelta = (fixture.nativeElement as HTMLElement).querySelector(
+      '.preview-header .token-delta',
+    );
+    assert(headerDelta);
+    expect(headerDelta.textContent).toContain(`−${formatTokenCount(-previews[0].tokenDelta)}`);
+    expect(headerDelta.classList.contains('down')).toBe(true);
+  });
+
+  it('leaves blank entries unchanged and out of the write set', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'Blank', content: '   ' }),
+      entry(1, { comment: 'London', content: 'London is a city.' }),
+    ]);
+    dialog['setScope']('all');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    assert(previews[1]);
+    expect(previews[0].blank).toBe(true);
+    expect(previews[0].changed).toBe(false);
+    expect(previews[0].next).toBe('   ');
+    expect(dialog['changedCount']()).toBe(1);
+    expect(dialog['blankCount']()).toBe(1);
+    expect(dialog['allBlank']()).toBe(false);
+
+    assert(fixture);
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.row-chip')?.textContent,
+    ).toContain('blank');
+
+    dialog['apply']();
+    expect(closeSpy).toHaveBeenCalledWith(true);
+    expect(entryOf(0).content).toBe('   ');
+    expect(entryOf(1).content).toBe('<London>\nLondon is a city.\n</London>');
+    expect(snackBarOpen).toHaveBeenCalledWith('Delimiters updated on 1 entry.', 'OK', {
+      duration: 3500,
+    });
+  });
+
+  it('treats an all-blank book as a no-op apply', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'One', content: '   ' }),
+      entry(1, { comment: 'Two', content: '\n' }),
+    ]);
+    dialog['setScope']('all');
+
+    expect(dialog['allBlank']()).toBe(true);
+    expect(dialog['changedCount']()).toBe(0);
+    assert(fixture);
+    expect(applyButton().disabled).toBe(true);
+
+    dialog['apply']();
+    expect(closeSpy).toHaveBeenCalledWith(false);
+    expect(snackBarOpen).not.toHaveBeenCalled();
+    expect(workspace.entries().map((e) => e.content)).toEqual(['   ', '\n']);
+  });
+
+  it('does not strip a foreign wrapper when None is picked', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'New', content: '<Old>\nprose\n</Old>' }),
+    ]);
+    await pickStyle('None');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    expect(previews[0].unrecognizedName).toBe(true);
+    expect(previews[0].changed).toBe(false);
+    expect(previews[0].next).toBe('<Old>\nprose\n</Old>');
+
+    assert(fixture);
+    const hint = (fixture.nativeElement as HTMLElement).querySelector('.row-hint');
+    assert(hint);
+    expect(hint.textContent).toContain('Not recognized');
+  });
+
+  it('wraps additively around a wrapper with a foreign name', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'New', content: '<Old>\nprose\n</Old>' }),
+    ]);
+    await pickStyle('Tag');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    expect(previews[0].unrecognizedName).toBe(true);
+    expect(previews[0].next).toBe('<New>\n<Old>\nprose\n</Old>\n</New>');
+  });
+
+  it('strips a matching wrapper when None is picked', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'Old', content: '<Old>\nprose\n</Old>' }),
+    ]);
+    await pickStyle('None');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    expect(previews[0].unrecognizedName).toBe(false);
+    expect(previews[0].next).toBe('prose');
+  });
+
+  it('keeps a trailing scene break when wrapping and strips it only with None', async () => {
+    const dialog = await createDialog([entry(0, { comment: 'New', content: 'prose\n\n---' })]);
+    await pickStyle('Tag');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    expect(previews[0].next).toBe('<New>\nprose\n\n---\n</New>');
+  });
+
+  it('strips a separator when None is picked', async () => {
+    const dialog = await createDialog([entry(0, { comment: 'New', content: 'prose\n\n---' })]);
+    await pickStyle('None');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    expect(previews[0].next).toBe('prose');
+  });
+
+  it('keeps regex metacharacters in a fixed name verbatim', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'London', content: 'London is a city.' }),
+    ]);
+    dialog['setScope']('all');
+    await toggleCheckbox('Use each entry');
+    await typeName('*+?');
+
+    expect(dialog['resolvedFixedName']()).toBe('*+?');
+    expect(dialog['fixedNameRewritten']()).toBe(false);
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    expect(previews[0].next).toBe('<*+?>\nLondon is a city.\n</*+?>');
+
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('<*+?>\nLondon is a city.\n</*+?>');
+  });
+
+  it('selects a summary row as the diff target', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'London', content: 'London is a city.' }),
+      entry(1, { comment: 'Paris', content: 'Paris is a city.' }),
+    ]);
+    dialog['setScope']('all');
+    expect(dialog['previewEntry']()?.entryId).toBe(0);
+
+    assert(fixture);
+    fixture.detectChanges();
+    const rows = fixture.debugElement.queryAll(By.css('.preview-row'));
+    expect(rows).toHaveLength(2);
+    const second = rows[1];
+    assert(second);
+    (second.nativeElement as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(dialog['selectedPreviewId']()).toBe(1);
+    expect(dialog['previewEntry']()?.entryId).toBe(1);
   });
 });
