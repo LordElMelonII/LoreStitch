@@ -10,6 +10,7 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
   - No `::ng-deep` or legacy CSS overrides.
   - Angular 22 reactivity: use Signals (`signal()`, `computed()`, `input()`, `output()`) over RxJS state.
 - **Verification First**: Always run tests and builds before completing a task.
+- **Commit Per Task**: For each completed task, create an atomic git commit following the repository's conventional commit format (e.g., `feat: ...`, `fix: ...`, `test: ...`).
 
 ## Persona Directory
 
