@@ -1,8 +1,9 @@
 <app-topbar (toggleEntries)="toggleLeft()" (toggleHistory)="toggleRight()" />
 
-<mat-sidenav-container class="workspace">
+<mat-sidenav-container class="workspace" #workspaceEl>
   <mat-sidenav
     class="entries-sidenav"
+    #entriesPane
     [mode]="viewport() === 'mobile' ? 'over' : 'side'"
     [opened]="leftOpened()"
     (closed)="closeLeft()"
@@ -30,11 +31,17 @@
     }
   </mat-sidenav-content>
 
+  <!-- (opened): when this drawer is opened from the mobile bottom bar, its
+       trigger unstamps itself and focus falls to <body>, killing the pane's
+       Escape-to-close handling — the shell re-focuses the pane in that case
+       (App.onHistoryDrawerOpened). -->
   <mat-sidenav
     class="history-sidenav"
+    #historyPane
     position="end"
     [mode]="viewport() === 'desktop' ? 'side' : 'over'"
     [opened]="rightOpened()"
+    (opened)="onHistoryDrawerOpened()"
     (closed)="closeRight()"
   >
     @if (workspace.activeProject()) {

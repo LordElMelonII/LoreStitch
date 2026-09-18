@@ -1,4 +1,14 @@
-import { Component, computed, effect, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  DOCUMENT,
+  ElementRef,
+  Signal,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { WorkspaceService } from './core/services/workspace.service';
 import { EntryList } from './features/entry-list/entry-list';
@@ -44,6 +54,26 @@ export class App {
   private readonly entryList = viewChild(EntryList);
 
   /**
+   * Shell geometry the drawer focus/scroll reclaim works on: the pannable
+   * sidenav container and the two drawer panes. Read as ElementRef — only
+   * the host elements matter here, not the component instances.
+   */
+  private readonly workspaceEl: Signal<ElementRef<HTMLElement> | undefined> = viewChild(
+    'workspaceEl',
+    { read: ElementRef },
+  );
+  private readonly entriesPaneEl: Signal<ElementRef<HTMLElement> | undefined> = viewChild(
+    'entriesPane',
+    { read: ElementRef },
+  );
+  private readonly historyPaneEl: Signal<ElementRef<HTMLElement> | undefined> = viewChild(
+    'historyPane',
+    { read: ElementRef },
+  );
+
+  private readonly document = inject(DOCUMENT);
+
+  /**
    * The active responsive window class (mobile < 768px, tablet
    * 768px–1279px, desktop >= 1280px) — owned by `LayoutService`, the single
    * source of viewport truth; aliased here for the template and effects.
@@ -77,6 +107,11 @@ export class App {
           this.rightOpened.set(true);
           break;
       }
+      // A window-class flip re-lays-out the shell; a stale sideways pan on
+      // the workspace must not survive it (see settleAfterDrawerClose for
+      // how a pan can exist at all). The pan caused by a collapse fired
+      // here is re-zeroed again when the drawer's `(closed)` event lands.
+      this.resetWorkspaceScroll();
     });
 
     // Focus mode is a desktop-only affordance: shrinking the window below
@@ -98,10 +133,73 @@ export class App {
 
   protected closeLeft(): void {
     this.leftOpened.set(false);
+    this.settleAfterDrawerClose(this.entriesPaneEl());
   }
 
   protected closeRight(): void {
     this.rightOpened.set(false);
+    this.settleAfterDrawerClose(this.historyPaneEl());
+  }
+
+  /**
+   * Reclaims the shell after a drawer closes, whichever way it was
+   * triggered — backdrop tap, Escape and viewport-flip collapses all end at
+   * the sidenav's `(closed)` event.
+   *
+   * Mechanic being corrected: on close, Material restores focus to whatever
+   * held it before the drawer opened — which can be a control inside the
+   * now off-canvas pane. The browser then focus-scrolls the nearest
+   * scrollable ancestor to reveal that element: the `overflow: hidden`
+   * `.workspace` container, which gets panned sideways (observed scrollLeft
+   * 105–276px at phone widths) and, being hidden overflow, can never be
+   * panned back by the user. So: drop focus when it landed back inside the
+   * doomed pane (Material's own fallback for an unknown restore target is
+   * the same `blur()`; a settled closed drawer is `visibility: hidden`, so
+   * sequential focus navigation skips it and cannot re-pan), then re-zero
+   * the pan the restore already caused.
+   */
+  private settleAfterDrawerClose(pane: ElementRef<HTMLElement> | undefined): void {
+    const active = this.document.activeElement;
+    const paneEl = pane?.nativeElement;
+    if (paneEl && active instanceof HTMLElement && paneEl.contains(active)) {
+      active.blur();
+    }
+    this.resetWorkspaceScroll();
+  }
+
+  /** The workspace is overflow:hidden — a sideways pan there is unrecoverable. */
+  private resetWorkspaceScroll(): void {
+    const workspace = this.workspaceEl()?.nativeElement;
+    if (workspace) {
+      workspace.scrollLeft = 0;
+      workspace.scrollTop = 0;
+    }
+  }
+
+  /**
+   * Called from the history drawer's `(opened)` event — after its open
+   * transition, when Material has already attempted its own focus move.
+   *
+   * The mobile bottom bar unstamps itself while a drawer is open (the
+   * `drawerOpen` input), so the History item that opened this drawer
+   * vanishes mid-click and focus falls to `<body>` (the HTML focus-fixup
+   * rule). From there the pane's Escape handling — a keydown listener on
+   * the pane element — never fires: a phone user had to backdrop-tap to
+   * close, and screen readers never announced the drawer. Focus the pane
+   * (Material stamps tabindex="-1" on over-mode drawers itself) when — and
+   * only when — nothing better holds focus: persistent triggers keep their
+   * focus, and desktop `side` mode's no-autofocus behavior is untouched by
+   * the body guard. The entries drawer has no disappearing trigger (its
+   * hamburger persists), so it needs no matching hook.
+   *
+   * Implemented here, not in the bar: the bar is presentational by charter
+   * (render, hide, emit) and holds no pane reference — the shell owns the
+   * drawers, so it owns their focus policy.
+   */
+  protected onHistoryDrawerOpened(): void {
+    if (this.document.activeElement === this.document.body) {
+      this.historyPaneEl()?.nativeElement.focus();
+    }
   }
 
   /**
@@ -124,6 +222,8 @@ export class App {
         void this.entryList()?.openBatchOperations();
         break;
       case 'history':
+        // Focus handoff for the trigger that vanishes mid-click happens in
+        // `onHistoryDrawerOpened`, once the drawer has actually opened.
         this.toggleRight();
         break;
     }

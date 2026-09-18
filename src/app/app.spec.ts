@@ -1,8 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { DomSanitizer } from '@angular/platform-browser';
+import { ANIMATION_MODULE_TYPE } from '@angular/core';
 import { MatIconRegistry } from '@angular/material/icon';
 import { MatSidenav } from '@angular/material/sidenav';
+import { ESCAPE } from '@angular/cdk/keycodes';
 import { App } from './app';
 import { WorkspaceService } from './core/services/workspace.service';
 import { LayoutService } from './shared/services/layout.service';
@@ -92,6 +94,12 @@ describe('App', () => {
     viewport = installViewportStub();
     await TestBed.configureTestingModule({
       imports: [App],
+      // jsdom fires no transitionend, so a settled sidenav open would never
+      // complete (Material only schedules the animation-end there when a
+      // real transition is pending). NoopAnimations keeps the sidenav on its
+      // simulated-animation path, where opened/closed events always emit —
+      // the same public token a noop-animations app build provides.
+      providers: [{ provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' }],
     }).compileComponents();
     // The top bar renders the inlined GitHub mark. Its registration lives in
     // the app initializer (app.config), which unit tests bypass — replicate
@@ -200,6 +208,128 @@ describe('App', () => {
     const sidenav = left?.componentInstance as MatSidenav;
     sidenav.close();
     await vi.waitFor(() => expect(app['leftOpened']()).toBe(false), { timeout: 5000 });
+  });
+
+  it('reclaims workspace scroll and focus when a drawer closes over focused content', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const host = fixture.nativeElement as HTMLElement;
+
+    const workspaceEl = host.querySelector<HTMLElement>('.workspace');
+    assert(workspaceEl);
+    // jsdom has no layout, so scrollLeft is a stub that ignores writes —
+    // asserting it directly would be vacuous. Shadow the accessor with a
+    // writable own property to observe the shell's write honestly; the
+    // seeded value mimics the sideways focus-pan measured in e2e
+    // (scrollLeft 105-276px at phone widths).
+    Object.defineProperty(workspaceEl, 'scrollLeft', {
+      value: 187,
+      writable: true,
+      configurable: true,
+    });
+
+    // Reproduce the doomed-focus state from the e2e audit: a control inside
+    // the drawer holds focus when the drawer closes (the drawer's own
+    // "New entry" button in the real repro).
+    const doomed = await vi.waitFor(() => {
+      const button = host.querySelector<HTMLButtonElement>(
+        'app-entry-list [aria-label="New entry"]',
+      );
+      assert(button);
+      return button;
+    });
+    doomed.focus();
+    expect(document.activeElement).toBe(doomed);
+
+    const left = fixture.debugElement.query(By.css('.entries-sidenav'));
+    const sidenav = left?.componentInstance as MatSidenav;
+    sidenav.close();
+    await vi.waitFor(() => expect(app['leftOpened']()).toBe(false), { timeout: 4000 });
+
+    // The close re-zeros the focus-pan the restore caused...
+    expect(workspaceEl.scrollLeft).toBe(0);
+    // ...and nothing stays focused inside the now-hidden pane (a parked
+    // focus target would re-pan the workspace on the next Tab).
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it('focuses the history drawer opened from the bottom bar so Escape can close it', async () => {
+    // Boot straight into the phone class instead of resizing down from
+    // desktop: a mid-test resize races the sidenav's pending close
+    // animation-end against the re-open click (the same stale-transitionend
+    // race the e2e helpers work around), which can flip the drawer shut
+    // between the two. Booting mobile starts from a settled closed state.
+    viewport.setViewport('mobile');
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    await fixture.whenStable();
+    // Let any boot-time simulated animation timer land before interacting
+    // (jsdom has no real transitionend; Material completes via setTimeout).
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const host = fixture.nativeElement as HTMLElement;
+    const bar = host.querySelector('app-mobile-bottom-bar');
+    assert(bar);
+    expect(bar.classList.contains('bar-hidden')).toBe(false);
+    // The bug's precondition: nothing holds focus. The bar item that opens
+    // the drawer unstamps itself mid-click; real browsers land on <body>
+    // via the focus-fixup rule, and a synthetic click never focuses at all.
+    expect(document.activeElement).toBe(document.body);
+
+    const pane = host.querySelector<HTMLElement>('.history-sidenav');
+    assert(pane);
+    const historyNav = fixture.debugElement.query(By.css('.history-sidenav'))
+      ?.componentInstance as MatSidenav;
+    assert(historyNav);
+
+    bar.querySelector('[aria-label="Toggle history drawer"]')?.dispatchEvent(new Event('click'));
+    expect(app['rightOpened']()).toBe(true);
+
+    // Wait out the sidenav's own open transition (simulated in jsdom — no
+    // real transitionend exists) so the (opened) hook has run. waitFor's
+    // timeout stays below the test timeout so a stuck open surfaces as an
+    // assertion, not a bare timeout.
+    await vi.waitFor(() => expect(historyNav.opened).toBe(true), { timeout: 4000 });
+
+    // Focus now sits inside the drawer pane: the shell focuses the pane
+    // itself when the trigger vanished (Material stamps tabindex="-1" on
+    // over-mode drawers), and any subsequent Material focus move
+    // (first-tabbable) stays within the pane too. Asserting the end state
+    // inside the pane is the honest check — pinning the exact element would
+    // depend on whether Material's deferred focus move finds tabbable
+    // content.
+    await vi.waitFor(() => expect(pane.contains(document.activeElement)).toBe(true), {
+      timeout: 4000,
+    });
+
+    // End to end: Escape dispatched from the focused element (inside the
+    // pane, bubbling to the pane's keydown listener) closes the drawer.
+    const escape = new KeyboardEvent('keydown');
+    Object.defineProperty(escape, 'keyCode', { value: ESCAPE });
+    (document.activeElement as HTMLElement).dispatchEvent(escape);
+    await vi.waitFor(() => expect(app['rightOpened']()).toBe(false), { timeout: 4000 });
+  });
+
+  it('leaves focus on a persistent trigger when a drawer opens from it', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const host = fixture.nativeElement as HTMLElement;
+
+    // Desktop steady state: the topbar history toggle holds focus and
+    // persists across the toggle — the shell's (opened) hook must not
+    // disturb it (the body guard only fires when the trigger vanished).
+    const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Toggle history drawer"]');
+    assert(toggle);
+    toggle.focus();
+    expect(document.activeElement).toBe(toggle);
+
+    // First click closes the default-open drawer, the second re-opens it.
+    toggle.dispatchEvent(new Event('click'));
+    await vi.waitFor(() => expect(app['rightOpened']()).toBe(false), { timeout: 5000 });
+    toggle.dispatchEvent(new Event('click'));
+    await vi.waitFor(() => expect(app['rightOpened']()).toBe(true), { timeout: 5000 });
+
+    expect(document.activeElement).toBe(toggle);
   });
 
   it('activates focus mode on desktop and ends it when leaving the desktop class', async () => {
