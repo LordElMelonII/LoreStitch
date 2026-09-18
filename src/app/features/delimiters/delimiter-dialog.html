@@ -133,12 +133,12 @@
             >~{{ formatDelta(p.tokenDelta) }}</span
           >
         </button>
-        @if (p.unrecognizedName) {
+        @if (p.replacedDelimiter; as label) {
           <span class="row-hint">
             {{
               style() === 'none'
-                ? 'Not recognized as this entry’s wrapper — content will be left unchanged'
-                : 'Not recognized as this entry’s wrapper — applying will add a new wrapper'
+                ? 'Will remove the existing ' + label + ' delimiter'
+                : 'Will replace the existing ' + label + ' delimiter'
             }}
           </span>
         }

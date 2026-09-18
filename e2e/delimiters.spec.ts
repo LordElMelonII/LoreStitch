@@ -14,14 +14,17 @@ import { expect, type Download, type Locator, type Page, test } from '@playwrigh
  *  1. Apply `tag` to the whole book from the entry content field, assert the
  *     snackbar, the wrapped active entry, and the idempotent re-open.
  *  2. The ROADMAP cycle: wrap all → export World Info JSON → re-import →
- *     strip with `none` → export → the first entry is byte-identical to the
- *     original fixture content.
+ *     strip with `none` → export → the first entry's payload is byte-identical
+ *     to the fixture content underneath its (replaced) pre-existing wrapper.
  *  3. A literal trailing `---` scene break survives a tag wrap/strip cycle
  *     untouched (the Phase-1 D4 destructive-strip regression guard).
  *  4. On a phone-sized viewport the dialog is full-screen AND Apply really
  *     transforms the content (the layout-only check in `ui-responsiveness`).
  *  5. A mismatched `<foo>x</bar>` is wrapped additively and never truncated,
- *     then survives `none` because its name matches nothing.
+ *     then survives `none` because it is not a well-formed wrapper.
+ *  6. A well-formed wrapper with a foreign name (`<TEAFsa>`) is detected
+ *     regardless of its name: a re-wrap replaces it instead of nesting, and
+ *     `none` strips it.
  */
 
 const FATE_PATH = join(process.cwd(), 'example_card', 'Fate Stay Night - Fuyuki Lorebook(1).json');
@@ -67,6 +70,19 @@ function sanitizeDelimiterName(name: string): string {
     .replace(/\s+/g, ' ')
     .trim();
   return [...collapsed].slice(0, 80).join('');
+}
+
+/**
+ * Mirrors the core tag detection for a whole-content `<name>` wrapper:
+ * returns the wrapper name and the payload underneath it, or null when the
+ * content is not one. Every fixture entry arrives pre-wrapped this way
+ * (snake_case shells like `<greater_grail>`), so the payload — not the whole
+ * content — is what wrap/strip cycles must preserve. Inline (rather than
+ * imported from `src/`) to pin the on-disk format independently.
+ */
+function unwrapTagWrapper(content: string): { name: string; inner: string } | null {
+  const match = /^\s*<([^<>\n]{1,80})>\r?\n?([\s\S]*?)\r?\n?<\/\1>\s*$/.exec(content);
+  return match ? { name: match[1] ?? '', inner: match[2] ?? '' } : null;
 }
 
 /** Imports a lorebook file through the welcome screen, replacing the project. */
@@ -243,9 +259,11 @@ test.describe('delimiters via the real dialog', () => {
     expect(total).toBe(70);
     expect(total).toBe(Object.keys(original.entries).length);
 
-    // Per-entry naming keeps all fixture wrappers as payload (the fixture's
-    // wrappers are key-derived names, not the entry comment), so an additive
-    // tag wrap changes every target. Also pin the format example.
+    // Every fixture entry arrives pre-wrapped under a snake_case name that
+    // matches neither the comment nor the first key. Detection is
+    // name-agnostic, so those shells are replaced rather than dual-wrapped —
+    // every target still changes, and the total token estimate only grows.
+    // Also pin the format example.
     expect(await readChangedCount(page)).toBe(total);
     const pane = delimiterPane(page);
     const nameInput = pane.locator('input[aria-label="Wrapper name"]');
@@ -272,12 +290,16 @@ test.describe('delimiters via the real dialog', () => {
     const content = await readEntryContent(page);
     expect(content.startsWith(`<${firstName}>`)).toBe(true);
     expect(content.endsWith(`</${firstName}>`)).toBe(true);
-    // ... and the original body sits verbatim inside the wrapper.
+    // ... and the payload sits verbatim inside the new wrapper. The fixture's
+    // own snake_case shell was replaced (not nested), so the body is the
+    // original content minus that pre-existing wrapper.
+    const payload = unwrapTagWrapper(original.entries[FIRST_UID]?.content ?? '')?.inner;
+    assert(payload, 'fixture first entry content is not a tag wrapper');
     const body = content.slice(
       `<${firstName}>\n`.length,
       content.length - `\n</${firstName}>`.length,
     );
-    expect(body).toBe(original.entries[FIRST_UID]?.content);
+    expect(body).toBe(payload);
 
     // Re-open on the same entry: the wrap is a fixed point, Apply is disabled.
     await openDelimiterDialog(page);
@@ -289,14 +311,17 @@ test.describe('delimiters via the real dialog', () => {
     await delimiterPane(page).getByRole('button', { name: 'Cancel' }).click();
   });
 
-  test('wrap all -> export -> re-import -> strip -> export equals the original', async ({
+  test('wrap all -> export -> re-import -> strip -> export restores the payload', async ({
     page,
   }) => {
-    const originalContent = original.entries[FIRST_UID]?.content;
+    const originalEntry = original.entries[FIRST_UID] as { content?: string; comment?: string };
+    const originalContent = originalEntry.content;
     assert(originalContent, `fixture uid ${FIRST_UID} has no content`);
-    const firstName = sanitizeDelimiterName(
-      (original.entries[FIRST_UID] as { comment?: string }).comment ?? '',
-    );
+    const firstName = sanitizeDelimiterName(originalEntry.comment ?? '');
+    // The fixture content itself is already tag-wrapped (`greater_grail`);
+    // what wrap/strip cycles must preserve is the payload underneath.
+    const payload = unwrapTagWrapper(originalContent)?.inner;
+    assert(payload, `fixture uid ${FIRST_UID} content is not a tag wrapper`);
 
     await page.goto('/');
     await importLorebook(page, FATE_PATH);
@@ -306,12 +331,13 @@ test.describe('delimiters via the real dialog', () => {
     const total = await readTargetCount(page);
     await applyAndReadSnackbar(page);
 
-    // First export: the active entry is exactly wrapped, the fixture body is
-    // intact underneath the tag wrapper.
+    // First export: the active entry carries exactly the new wrapper around
+    // the untouched payload — the pre-existing snake_case shell was replaced,
+    // not nested into a dual-shell output.
     const wrapped = await exportWorldInfo(page);
     const firstExport = exportedEntries(wrapped.json)[FIRST_UID];
     assert(firstExport, `uid ${FIRST_UID} missing from the first export`);
-    expect(firstExport.content).toBe(tagWrap(originalContent, firstName));
+    expect(firstExport.content).toBe(tagWrap(payload, firstName));
 
     // Re-import that export through the Projects menu (replaces the project).
     const reimportChooser = page.waitForEvent('filechooser');
@@ -322,10 +348,8 @@ test.describe('delimiters via the real dialog', () => {
     await expect(page.locator('.entries-sidenav')).toBeAttached();
 
     // Strip every wrapper with `none`, then export once more: the cycle must
-    // restore the fixture content byte for byte. (A handful of fixture entries
-    // arrived pre-wrapped under a foreign name — those come back as dual-shell
-    // output, not the original; the first entry has no pre-existing wrapper and
-    // is the ROADMAP's comparison target.)
+    // restore the payload byte for byte (the replaced fixture shell is gone
+    // by design — wrap swaps shells, strip removes the current one).
     await openFirstEntry(page);
     await openDelimiterDialog(page);
     await pickSelectOption(page, scopeSelect(page), /All entries/);
@@ -336,7 +360,7 @@ test.describe('delimiters via the real dialog', () => {
     const stripped = await exportWorldInfo(page);
     const secondExport = exportedEntries(stripped.json)[FIRST_UID];
     assert(secondExport, `uid ${FIRST_UID} missing from the second export`);
-    expect(secondExport.content).toBe(originalContent);
+    expect(secondExport.content).toBe(payload);
   });
 
   test('a literal trailing --- scene break survives a tag wrap/strip cycle', async ({ page }) => {
@@ -393,6 +417,39 @@ test.describe('delimiters via the real dialog', () => {
     expect(await readChangedCount(page)).toBe(1);
     await applyAndReadSnackbar(page);
     expect(await readEntryContent(page)).toBe(malformed);
+  });
+
+  test('a foreign-named wrapper is replaced on re-wrap and stripped by none', async ({ page }) => {
+    await createProject(page);
+    await page.locator('app-entry-list [aria-label="New entry"]').click();
+    await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
+
+    // Regression: detection used to require the wrapper name to match the
+    // resolved wrapper name, so a well-formed `<TEAFsa>` shell was dual-wrapped
+    // on apply and survived `none` untouched.
+    const body = 'Greater Grail body stays verbatim.';
+    await setEntryContent(page, `<TEAFsa>\n${body}\n</TEAFsa>`);
+
+    await openDelimiterDialog(page);
+    // The resolved wrapper name comes from the entry's comment, not the tag —
+    // detection must still report the existing wrapper.
+    await expect(
+      delimiterPane(page).locator('input[aria-label="Wrapper name"]'),
+    ).toHaveValue('New entry 0');
+    await expect(delimiterPane(page).locator('.row-hint')).toContainText(
+      'Will replace the existing <TEAFsa> delimiter',
+    );
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(tagWrap(body, 'New entry 0'));
+
+    // And `none` strips the replacement back to the bare payload.
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /None/);
+    await expect(delimiterPane(page).locator('.row-hint')).toContainText(
+      'Will remove the existing <New entry 0> delimiter',
+    );
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(body);
   });
 });
 

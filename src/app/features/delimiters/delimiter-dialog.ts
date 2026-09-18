@@ -12,12 +12,13 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   DELIMITER_STYLE_OPTIONS,
   DelimiterStyle,
-  delimiterNameMatches,
+  delimiterLabel,
   detectDelimiter,
   entryDelimiterName,
   entryDelimiterNameFromKey,
   rewrapContent,
   sanitizeDelimiterName,
+  type DetectedDelimiter,
 } from '../../core/models/delimiters';
 import { CharacterBookEntry, entryTitle } from '../../core/models/lorebook.model';
 import { estimateTokens, formatTokenCount } from '../../core/services/token-estimator';
@@ -54,6 +55,18 @@ function tokenDeltaLabel(delta: number): string {
 /** Maps a token delta to its direction class. */
 function tokenDeltaDirection(delta: number): TokenDeltaDirection {
   return delta > 0 ? 'up' : delta < 0 ? 'down' : 'neutral';
+}
+
+/**
+ * True when a detection is a named tag/bracket wrapper whose name survives
+ * sanitizing — a name like `<=>` collapses to nothing and can never be
+ * matched, so it stays payload.
+ */
+function isNamedWrapper(detected: DetectedDelimiter): boolean {
+  return (
+    (detected.style === 'tag' || detected.style === 'bracket') &&
+    sanitizeDelimiterName(detected.name) !== ''
+  );
 }
 
 /**
@@ -185,18 +198,23 @@ export class DelimiterDialog {
   }
 
   /**
-   * Every name that counts as "already wrapped under the target" for one
-   * entry: the resolved target name plus the entry-derived fallbacks,
-   * de-duplicated and filtered to non-empty. Handing this to `rewrapContent`
-   * keeps a wrapper with a foreign name (`<note>`, an old entry name) as
-   * payload instead of deleting it; stripping stays name-matched even for
-   * `separator`/`none`, where prose that merely looks wrapped must survive.
+   * Every name that counts as "already wrapped" for one entry: the resolved
+   * target name, the entry-derived fallbacks, and — decisively — the name
+   * actually detected in the content. Accepting the detected wrapper is what
+   * lets the dialog replace a shell it did not choose (`<TEAFsa>`, an old
+   * key-style name) instead of nesting a second one around it, and lets
+   * `none` strip it; the preview diff and the row hint show that
+   * replacement before anything is written. Separator stripping stays
+   * conservative: a trailing `---` is only removed by the `separator`/`none`
+   * targets, so a scene break survives a re-wrap.
    */
   private resolveExpectedNames(entry: CharacterBookEntry): string[] {
+    const detected = detectDelimiter(entry.content ?? '');
     const names = [
       this.resolveName(entry),
       entryDelimiterName(entry),
       entryDelimiterNameFromKey(entry),
+      isNamedWrapper(detected) ? detected.name : '',
     ];
     return [...new Set(names.map((name) => name.trim()).filter((name) => name.length > 0))];
   }
@@ -208,6 +226,10 @@ export class DelimiterDialog {
       const expectedNames = this.resolveExpectedNames(entry);
       const next = rewrapContent(current, style, this.resolveName(entry), expectedNames);
       const detected = detectDelimiter(current);
+      // A detected whole-content wrapper is always stripped (its own name is
+      // in the accepted set); a trailing `---` only by the `none` target.
+      const stripped =
+        isNamedWrapper(detected) || (detected.style === 'separator' && style === 'none');
       return {
         entryId: entry.id ?? -1,
         title: entryTitle(entry),
@@ -216,10 +238,7 @@ export class DelimiterDialog {
         changed: next !== current,
         blank: current.trim() === '',
         tokenDelta: estimateTokens(next) - estimateTokens(current),
-        unrecognizedName:
-          current.trim() !== '' &&
-          (detected.style === 'tag' || detected.style === 'bracket') &&
-          !delimiterNameMatches(detected.name, expectedNames),
+        replacedDelimiter: next !== current && stripped ? delimiterLabel(detected) : null,
       };
     });
   });

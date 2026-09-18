@@ -177,6 +177,7 @@ describe('DelimiterDialog', () => {
     // Already wrapped: the preview is a no-op for that entry.
     expect(previews[0].changed).toBe(false);
     expect(previews[0].next).toBe(tagged);
+    expect(previews[0].replacedDelimiter).toBeNull();
     expect(previews[1].next).toBe('<Rin>\nPlain lore text.\n</Rin>');
     expect(dialog['changedCount']()).toBe(1);
 
@@ -197,6 +198,7 @@ describe('DelimiterDialog', () => {
     expect(previews[0].current).toBe('<London>\nLondon is a city.\n</London>');
     // The old wrapper is stripped before the new one is applied.
     expect(previews[0].next).toBe('[London=\nLondon is a city.]');
+    expect(previews[0].replacedDelimiter).toBe('<London>');
 
     assert(fixture);
     expect((fixture.nativeElement as HTMLElement).querySelector('.example-text')?.textContent).toBe(
@@ -481,7 +483,7 @@ describe('DelimiterDialog', () => {
     expect(workspace.entries().map((e) => e.content)).toEqual(['   ', '\n']);
   });
 
-  it('does not strip a foreign wrapper when None is picked', async () => {
+  it('strips a foreign-named wrapper when None is picked', async () => {
     const dialog = await createDialog([
       entry(0, { comment: 'New', content: '<Old>\nprose\n</Old>' }),
     ]);
@@ -489,17 +491,21 @@ describe('DelimiterDialog', () => {
 
     const previews = dialog['previews']();
     assert(previews[0]);
-    expect(previews[0].unrecognizedName).toBe(true);
-    expect(previews[0].changed).toBe(false);
-    expect(previews[0].next).toBe('<Old>\nprose\n</Old>');
+    // Detection is name-agnostic: any whole-content wrapper counts.
+    expect(previews[0].replacedDelimiter).toBe('<Old>');
+    expect(previews[0].changed).toBe(true);
+    expect(previews[0].next).toBe('prose');
 
     assert(fixture);
     const hint = (fixture.nativeElement as HTMLElement).querySelector('.row-hint');
     assert(hint);
-    expect(hint.textContent).toContain('Not recognized');
+    expect(hint.textContent).toContain('Will remove the existing <Old> delimiter');
+
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('prose');
   });
 
-  it('wraps additively around a wrapper with a foreign name', async () => {
+  it('replaces a wrapper with a foreign name instead of nesting', async () => {
     const dialog = await createDialog([
       entry(0, { comment: 'New', content: '<Old>\nprose\n</Old>' }),
     ]);
@@ -507,8 +513,28 @@ describe('DelimiterDialog', () => {
 
     const previews = dialog['previews']();
     assert(previews[0]);
-    expect(previews[0].unrecognizedName).toBe(true);
-    expect(previews[0].next).toBe('<New>\n<Old>\nprose\n</Old>\n</New>');
+    expect(previews[0].replacedDelimiter).toBe('<Old>');
+    expect(previews[0].next).toBe('<New>\nprose\n</New>');
+
+    assert(fixture);
+    const hint = (fixture.nativeElement as HTMLElement).querySelector('.row-hint');
+    assert(hint);
+    expect(hint.textContent).toContain('Will replace the existing <Old> delimiter');
+
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('<New>\nprose\n</New>');
+  });
+
+  it('wraps a mismatched <foo>x</bar> additively — nothing recognized to strip', async () => {
+    const dialog = await createDialog([entry(0, { comment: 'New', content: '<foo>x</bar>' })]);
+    await pickStyle('Tag');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    // The markup is not a well-formed wrapper, so it is undetected and stays
+    // payload verbatim; no replacement hint either.
+    expect(previews[0].replacedDelimiter).toBeNull();
+    expect(previews[0].next).toBe('<New>\n<foo>x</bar>\n</New>');
   });
 
   it('strips a matching wrapper when None is picked', async () => {
@@ -519,7 +545,7 @@ describe('DelimiterDialog', () => {
 
     const previews = dialog['previews']();
     assert(previews[0]);
-    expect(previews[0].unrecognizedName).toBe(false);
+    expect(previews[0].replacedDelimiter).toBe('<Old>');
     expect(previews[0].next).toBe('prose');
   });
 
@@ -529,6 +555,8 @@ describe('DelimiterDialog', () => {
 
     const previews = dialog['previews']();
     assert(previews[0]);
+    // The `---` rides along as payload — no replacement hint for it.
+    expect(previews[0].replacedDelimiter).toBeNull();
     expect(previews[0].next).toBe('<New>\nprose\n\n---\n</New>');
   });
 

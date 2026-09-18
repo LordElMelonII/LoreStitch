@@ -21,10 +21,13 @@ export interface EntryPreview {
   /** Estimated token change: `estimateTokens(next) - estimateTokens(current)`. */
   tokenDelta: number;
   /**
-   * The current content carries a tag/bracket wrapper whose name matches none
-   * of the entry's expected wrapper names. Applying the target style then
-   * wraps additively around it (or, for `none`, leaves it untouched) instead
-   * of stripping it — the row renders a hint so the user knows why.
+   * Label of the delimiter detected in the current content (`<TEAFsa>`,
+   * `[Old=…]`, `---`) when applying will strip it: a detected whole-content
+   * wrapper is replaced by the target style — or removed by `none` —
+   * regardless of its name. `null` when nothing recognized is stripped: no
+   * wrapper detected, the row is a fixed point, or a trailing `---` kept as
+   * payload under a tag/bracket target. The row renders a hint from it so
+   * the replacement is visible before anything is written.
    */
-  unrecognizedName: boolean;
+  replacedDelimiter: string | null;
 }
