@@ -16,7 +16,7 @@ import { FormField, form } from '@angular/forms/signals';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -26,7 +26,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { entryTags, entryTitle, entryTriggerState } from '../../core/models/lorebook.model';
 import { estimateEntryTokens, formatTokenCount } from '../../core/services/token-estimator';
 import { WorkspaceService } from '../../core/services/workspace.service';
-import { ProjectActionsService } from '../shell/project-actions.service';
+import { paneResult, ProjectActionsService } from '../shell/project-actions.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
 import { type EntryListItem } from './entry-list.model';
 import { type BatchOperationsDialogData } from './batch-operations-dialog';
@@ -421,12 +421,7 @@ export class EntryList {
       sheetPanelClass: 'app-batch-sheet',
       sheetConfig: { ariaLabel: 'Batch edit entries' },
     });
-    // The two ref types carry no common completion stream, and both are the
-    // concrete classes their containers construct (never wrapped), so a
-    // prototype check reliably picks the matching one.
-    const applied = await firstValueFrom(
-      ref instanceof MatDialogRef ? ref.afterClosed() : ref.afterDismissed(),
-    );
+    const applied = await paneResult(ref);
     if (applied) {
       this.clearSelection();
     }

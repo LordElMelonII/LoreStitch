@@ -23,7 +23,7 @@ import { IMPORT_ACCEPT, MERGE_ACCEPT } from './project-actions.constants';
  * classes their containers construct (never wrapped or substituted), so a
  * prototype check reliably picks the matching one.
  */
-function paneResult<R>(
+export function paneResult<R>(
   ref: MatDialogRef<unknown, R> | MatBottomSheetRef<unknown, R>,
 ): Promise<R | undefined> {
   return firstValueFrom(ref instanceof MatDialogRef ? ref.afterClosed() : ref.afterDismissed());
