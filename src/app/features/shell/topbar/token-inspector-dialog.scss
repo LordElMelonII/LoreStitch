@@ -97,7 +97,10 @@
     align-items: center;
     gap: 10px;
     width: 100%;
-    min-height: 44px;
+    // Touch-target floor; the scoped rule outranks the global mobile
+    // .mat-mdc-button-base bump, so the 48px target is restated in the
+    // mobile block at the end of this file.
+    min-height: var(--touch-target-min);
     padding: 4px 12px;
     justify-content: flex-start;
     text-align: left;
@@ -141,5 +144,14 @@
       margin: 0;
       font: var(--mat-sys-body-medium);
     }
+  }
+}
+
+// Touch-target bump on the shell's mobile breakpoint (767px, see
+// breakpoints.ts): the scoped 44px floor above outranks the global mobile
+// .mat-mdc-button-base rule in src/styles.scss.
+@media (max-width: 767px) {
+  .entry-list .entry-row {
+    min-height: var(--touch-target-mobile);
   }
 }

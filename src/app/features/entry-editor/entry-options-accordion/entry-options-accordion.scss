@@ -20,7 +20,13 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 16px;
-  min-height: 48px;
+  // Accordion trigger row: sized to the mobile touch target unconditionally,
+  // which also clears the universal 44px floor on desktop — so neither a
+  // media query nor a :host(.mobile) bump is needed here. The slide toggle
+  // ships a 48px default touch target; the strategy button toggles and the
+  // expand icon button inherit the global mobile bump (48px <= 767px) from
+  // src/styles.scss.
+  min-height: var(--touch-target-mobile);
 }
 
 .expand-toggle {

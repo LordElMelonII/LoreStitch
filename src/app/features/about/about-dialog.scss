@@ -134,12 +134,22 @@
   gap: 8px;
   margin-top: 16px;
 
+  // Scoped rule beats the global mobile .mat-mdc-button-base bump, so the
+  // 48px target is restated at the shell's mobile query below.
   a {
-    min-height: 44px; // Touch-target floor (M3 accessibility).
+    min-height: var(--touch-target-min); // Touch-target floor (M3 accessibility).
   }
 
   mat-icon {
     margin-right: 8px;
+  }
+}
+
+// Touch-target bump on the shell's mobile breakpoint (767px, see
+// breakpoints.ts) — the raw 44px floor above would otherwise win on phones.
+@media (max-width: 767px) {
+  .links a {
+    min-height: var(--touch-target-mobile);
   }
 }
 

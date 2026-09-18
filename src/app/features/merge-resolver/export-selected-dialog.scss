@@ -176,15 +176,40 @@
   min-height: 0;
 }
 
+// Rows live in a cdk-virtual-scroll-viewport with itemSize="44", so the row
+// height must stay uniform and raw: it equals the template's itemSize. The
+// 44px row is therefore the touch-target floor for its interactive children
+// (the full-row .row-toggle button). The 48px mobile target is unattainable
+// without breaking the scroll math — a larger hit area would overlap the
+// neighbor row's target — so 44px is the accepted row-constrained size on
+// every viewport.
 .entry-row {
   display: flex;
   align-items: center;
   gap: 8px;
   height: 44px;
   padding: 0 12px;
+  // Material checkboxes ship a default 48px touch target that would spill
+  // 2px into the neighboring 44px rows; clamp it to the row height (still
+  // above the universal floor).
+  --mat-checkbox-touch-target-size: var(--touch-target-min);
 
   &:hover {
     background: var(--mat-sys-surface-container-high);
+  }
+
+  // Full-row toggle (the touch affordance documented in the template): the
+  // plain button stretches across the row's remaining width and its full
+  // 44px height. display:flex is what the .row-title / .tag-chip /
+  // .row-tokens rules below are written against.
+  .row-toggle {
+    flex: 1;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
   }
 
   .row-title {

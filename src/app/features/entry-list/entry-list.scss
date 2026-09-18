@@ -50,8 +50,9 @@
       border-radius: var(--mat-sys-corner-full);
       padding: 4px 12px;
       // Plain buttons: carry the touch-target floor themselves (the global
-      // 48px mobile rule only covers .mat-mdc-button-base).
-      min-height: 44px;
+      // mobile rule only covers .mat-mdc-button-base); the mobile block at
+      // the bottom of this file raises them to the 48px target.
+      min-height: var(--touch-target-min);
       cursor: pointer;
       user-select: none;
 
@@ -237,6 +238,11 @@
     .ghost {
       opacity: 0;
       transition: opacity 120ms;
+      // Touch-target floor for the row actions: M3 icon buttons default to a
+      // 40px state layer. This scoped rule outranks the global mobile bump in
+      // src/styles.scss, so the 48px target is restated at the shell's mobile
+      // query below.
+      --mat-icon-button-state-layer-size: var(--touch-target-min);
 
       &.danger mat-icon {
         color: var(--mat-sys-error);
@@ -250,6 +256,19 @@
 @media (hover: none) {
   .entry-item .item-actions .ghost {
     opacity: 1;
+  }
+}
+
+// Touch-target bump on the shell's mobile breakpoint (767px, see
+// breakpoints.ts). The scoped floor rules above outrank the global mobile
+// block in src/styles.scss, so the 48px target is restated here.
+@media (max-width: 767px) {
+  .tag-filter .tag-chip {
+    min-height: var(--touch-target-mobile);
+  }
+
+  .entry-item .item-actions .ghost {
+    --mat-icon-button-state-layer-size: var(--touch-target-mobile);
   }
 }
 

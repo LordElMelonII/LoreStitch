@@ -121,6 +121,13 @@ body {
   --ls-diff-add-text: color-mix(in srgb, #2e7d32 70%, var(--mat-sys-on-surface));
   --ls-diff-remove-bg: color-mix(in srgb, #c62828 12%, var(--mat-sys-surface));
   --ls-diff-remove-text: color-mix(in srgb, #c62828 70%, var(--mat-sys-on-surface));
+
+  // Touch-target policy (values sourced from src/app/shared/constants/
+  // touch-targets.ts — keep the two in sync): 44px is the universal minimum
+  // floor for every interactive element; 48px is the mobile target, applied
+  // on the shell's mobile query (max-width: 767px, see breakpoints.ts).
+  --touch-target-min: 44px;
+  --touch-target-mobile: 48px;
 }
 
 // Slimmer scrollbars for the dense studio UI.
@@ -513,27 +520,29 @@ app-export-selected-dialog .rows-viewport .cdk-virtual-scroll-content-wrapper {
 
 // ---------------------------------------------------------------------------
 // Mobile touch targets (M3 accessibility): on compact screens icon buttons,
-// buttons, toggles and chips grow to the 48dp minimum clickable size. Desktop
-// keeps the M3 component defaults.
+// buttons, toggles and chips grow to the 48dp minimum clickable size (see
+// --touch-target-mobile in :root above). Desktop keeps the M3 component
+// defaults; elements with per-component sizing rules restate the 48px locally
+// because scoped selectors outrank these global ones.
 // ---------------------------------------------------------------------------
 
 @media (max-width: 767px) {
   // Drives the icon button's real width/height (see icon-button theme).
   .mat-mdc-icon-button {
-    --mat-icon-button-state-layer-size: 48px;
+    --mat-icon-button-state-layer-size: var(--touch-target-mobile);
   }
 
   // Standard buttons are 40px tall at M3 defaults.
   .mat-mdc-button-base {
-    min-height: 48px;
+    min-height: var(--touch-target-mobile);
   }
 
   .mat-button-toggle-appearance-standard,
   .mat-button-toggle-appearance-standard .mat-button-toggle-label-content {
-    --mat-button-toggle-height: 48px;
+    --mat-button-toggle-height: var(--touch-target-mobile);
   }
 
   .mat-mdc-standard-chip {
-    --mat-chip-container-height: 48px;
+    --mat-chip-container-height: var(--touch-target-mobile);
   }
 }
