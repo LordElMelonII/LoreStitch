@@ -18,7 +18,7 @@ Planning documents for the four MEDIUM PRIORITY items in `ROADMAP.md`. **Plannin
 04 (Sandbox)     ── depends on 03 Phase 1 (shared regex modules)
 ```
 
-Recommended sequence: **01 and 02 in parallel → 03 → 04**.
+Recommended sequence: **02 → 03 → 04** (01 completed 2026-09-18).
 Rationale:
 
 - Task 02 establishes the reusable dialog→bottom-sheet conversion pattern; the ROADMAP explicitly requires the (not-yet-built) Linter modal to be a bottom sheet on narrow screens, so 02 should land first.
@@ -26,8 +26,11 @@ Rationale:
 
 ## Shared Conventions (apply to every task)
 
-- **Agents & routing**: follow the persona directory in `AGENTS.md` (`.agents/*.md`); the orchestrator dispatches the `core-engine`, `ui-specialist`, `qa-auditor`, and `ts-reviewer` subagents via the Agent tool.
+- **Agents & routing**: follow the persona directory in `AGENTS.md` (`.agents/*.md`); the orchestrator dispatches the `core-engine`, `ui-specialist`, `qa-auditor`, and `ts-reviewer` subagents via the Agent tool. All four are registered agent types, and every skill they cite (`angular-developer`, `material-3`, `typescript-advanced-types`, `playwright-cli`) exists in `.agents/skills/` and `.zcode/skills/`.
+- **MCP availability**: `AngularMCP` (`angular-cli`) is configured in `.zcode/config.json` but may not be connected when a session starts. The orchestrator must confirm its tools are live before directing a subagent to it; otherwise the subagent falls back to the `angular-developer` skill plus installed typings under `node_modules/@angular/*`. qa-auditor browser work runs through the `playwright` MCP / `playwright-cli` skill.
+- **Parallel dispatch**: concurrent subagent runs are allowed only on disjoint file sets; the orchestrator serializes their commits (single working tree) and runs verification gates between dispatches.
+- **Re-grounding**: plans are point-in-time audits. Before dispatching a task, re-check its file list at current HEAD (directly or via a read-only `Explore` agent) and refresh any drifted section of the plan before phase 1 starts.
 - **Invariants**: never drop unknown vendor keys; no `::ng-deep`; Signals over RxJS; core services stay UI-framework-free.
 - **Verification gates** (per `AGENTS.md`): `npm run build`, `npm test`, `ng test --coverage`, `npx playwright test`, `npm run lint`.
-- **Commit per task**: for each completed task, create an atomic git commit following the repository's conventional commit format (`feat: ...`, `fix: ...`, `test: ...`, `refactor: ...`).
-- **Baseline assumption**: plans are grounded against `develop` @ `4120bb9` (About dialog already implemented — it is the reference pattern for responsive dialogs).
+- **Commit per phase**: each subagent deliverable lands as its own atomic conventional commit (`feat: ...`, `fix: ...`, `test: ...`, `refactor: ...`); task completion adds a `docs(next_tasks): ...` status commit (matches Task 01's history).
+- **Baseline**: plans were grounded against `develop` @ `4120bb9`; Task 01 has since landed (`a5f4c34`..`109061d`, delimiters + `topbar.*`). No file-set overlap with 02–04 except `topbar.html/.scss/.spec.ts` (touched by Task 02 P1 and Task 03 P3) — re-read topbar at current HEAD before those phases.
