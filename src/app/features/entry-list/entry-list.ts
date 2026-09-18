@@ -393,12 +393,15 @@ export class EntryList {
   /**
    * Opens the batch editor over the current selection: centered dialog on
    * tablet/desktop, bottom sheet on phones (`ResponsiveOverlayService` owns
-   * the viewport branch). Public so the mobile shell (Phase 4 FAB) can
-   * trigger it with the sidebar's live selection.
+   * the viewport branch). Public so the mobile shell (bottom bar's Batch
+   * edit item) can trigger it with the sidebar's live selection.
    */
   async openBatchOperations(): Promise<void> {
     const ids = [...this.selection()];
     if (!ids.length) {
+      // The bottom bar's item is reachable with nothing selected; say so
+      // instead of doing nothing.
+      this.snackBar.open('Select entries first to batch edit.', 'OK', { duration: 3000 });
       return;
     }
     // Lazy-loaded: keeps the batch pane out of the initial bundle.

@@ -7,7 +7,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ImportExportService } from '../../../core/services/import-export.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { GITHUB_REPO_URL } from '../../../shared/constants/github';
@@ -41,7 +40,6 @@ export class Topbar {
   protected readonly actions = inject(ProjectActionsService);
   private readonly dialog = inject(MatDialog);
   private readonly overlay = inject(ResponsiveOverlayService);
-  private readonly importer = inject(ImportExportService);
 
   /** Drawer toggles, handled by the shell that owns the sidenav layout. */
   readonly toggleEntries = output<void>();
@@ -64,9 +62,9 @@ export class Topbar {
   /**
    * Opens global search & replace seeded with the active entry (null when no
    * entry is open — the dialog then defaults to its "All entries" scope).
-   * Public: the shell forwards the mobile FAB's Search & replace action here
-   * through `viewChild`, keeping this dialog config the single source of
-   * truth for every trigger (topbar buttons and FAB alike).
+   * Public: the shell forwards the mobile bottom bar's Search & replace
+   * action here through `viewChild`, keeping this dialog config the single
+   * source of truth for every trigger (topbar buttons and the bar alike).
    */
   async openSearch(): Promise<void> {
     // Lazy-loaded: keeps the search/replace UI out of the initial bundle.
@@ -103,32 +101,8 @@ export class Topbar {
   // -------------------------------------------------------------------------
   // Export
   // -------------------------------------------------------------------------
-
-  protected exportBook(): void {
-    const project = this.workspace.activeProject();
-    if (project) {
-      this.importer.exportCharacterBook(project.activeBook, project.title);
-    }
-  }
-
-  protected exportStNative(): void {
-    const project = this.workspace.activeProject();
-    if (project) {
-      this.importer.exportStNative(project.activeBook, project.title);
-    }
-  }
-
-  protected exportProjectArchive(): void {
-    const project = this.workspace.activeProject();
-    if (project) {
-      this.importer.exportProject(project);
-    }
-  }
-
-  protected exportDigest(): void {
-    const project = this.workspace.activeProject();
-    if (project) {
-      this.importer.exportMarkdownDigest(project.activeBook, project.title);
-    }
-  }
+  // The four fixed-format export wrappers live on `ProjectActionsService`
+  // (`actions.exportStNative/exportProjectArchive/exportBook/exportDigest`) —
+  // the mobile bottom bar's Export menu calls the very same methods, so the
+  // logic exists exactly once. This template only wires menu items to them.
 }

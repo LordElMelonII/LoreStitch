@@ -1,0 +1,122 @@
+// ---------------------------------------------------------------------------
+// M3 bottom action bar (compact widths only — see `MobileBottomBar.visible`).
+//
+// The host is a normal flex child of app-root (topbar / workspace / bar),
+// NEVER fixed-positioned: the workspace shrinks above the bar, so no bar
+// pixel can ever overlap editor content — the overlap that retired the
+// mobile FAB. The bar pads its bottom with the safe-area inset so iOS's
+// gesture bar / the PWA home indicator never cover the labels (0px where
+// the environment value does not exist).
+// ---------------------------------------------------------------------------
+
+:host {
+  flex: none;
+  display: block;
+
+  // M3 bottom app bar surface: the `surface-container` tint marks the bar as
+  // an app surface distinct from the `surface` editor beneath it — tonal
+  // color, not shadow, is MD3's primary depth cue (the bar rides on the
+  // viewport edge, so a standard downward elevation shadow would fall
+  // outside the screen and render nothing anyway).
+  background: var(--mat-sys-surface-container);
+
+  // Hairline top edge: the one sanctioned separation cue where scrolling
+  // editor content passes beneath the bar.
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  padding-block-end: env(safe-area-inset-bottom, 0px);
+}
+
+// Hidden while a modal pane or drawer covers the app (or on non-phone
+// viewports / with no project): the template unstamps the content entirely
+// (see the @if in mobile-bottom-bar.html) and the host drops out of flow,
+// so the workspace reclaims the row.
+:host(.bar-hidden) {
+  display: none;
+}
+
+.bar {
+  display: flex;
+  align-items: stretch;
+  height: 64px;
+  padding-inline: 4px;
+}
+
+// ---------------------------------------------------------------------------
+// Items: M3 navigation-bar-like rows — icon over a small label. Plain
+// buttons (Angular Material has no bottom-app-bar/navigation-bar web
+// component), tokenized and given the M3 state-layer treatment by hand.
+// ---------------------------------------------------------------------------
+
+.bar-item {
+  position: relative;
+  flex: 1 1 0;
+  // The bar renders only on phones, so the enhanced 48px target applies
+  // (see --touch-target-* in src/styles.scss / touch-targets.ts).
+  min-width: var(--touch-target-mobile);
+  max-width: 120px;
+  min-height: var(--touch-target-mobile);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-inline: 2px;
+  padding: 6px 4px;
+  border: none;
+  border-radius: var(--mat-sys-corner-small);
+  background: none;
+  color: var(--mat-sys-on-surface-variant);
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bar-item mat-icon {
+  flex: none;
+}
+
+.bar-label {
+  font: var(--mat-sys-label-medium);
+  // M3 navigation-bar labels track slightly wide; centered and never wrapped
+  // so a row can never grow a second line and push the icon out of place.
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+// M3 state layer: a currentColor veil over the item at the spec opacities
+// (hover 8%, focus and pressed 12%), rounded to the item's own corner.
+.bar-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.bar-item:hover::after {
+  opacity: 0.08;
+}
+
+.bar-item:focus-visible::after {
+  opacity: 0.12;
+}
+
+.bar-item:active::after {
+  opacity: 0.12;
+}
+
+// ---------------------------------------------------------------------------
+// Reduced motion: collapse the state-layer fade to a near-instant state
+// change, matching the CDK's own 1ms convention.
+// ---------------------------------------------------------------------------
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-item::after {
+    transition-duration: 1ms;
+  }
+}

@@ -115,7 +115,7 @@
   }
   <mat-menu #exportMenu="matMenu" class="export-menu">
     <div class="menu-section">Use in SillyTavern</div>
-    <button mat-menu-item (click)="exportStNative()">
+    <button mat-menu-item (click)="actions.exportStNative()">
       <mat-icon>data_object</mat-icon>
       <span class="menu-text">
         <span class="menu-title">World Info JSON</span>
@@ -124,7 +124,7 @@
     </button>
 
     <div class="menu-section">Backup</div>
-    <button mat-menu-item (click)="exportProjectArchive()">
+    <button mat-menu-item (click)="actions.exportProjectArchive()">
       <mat-icon>archive</mat-icon>
       <span class="menu-text">
         <span class="menu-title">Project archive (.stproj)</span>
@@ -146,14 +146,14 @@
 
     <mat-divider></mat-divider>
     <div class="menu-section">Reference &amp; proofreading</div>
-    <button mat-menu-item (click)="exportBook()">
+    <button mat-menu-item (click)="actions.exportBook()">
       <mat-icon>book</mat-icon>
       <span class="menu-text">
         <span class="menu-title">Character Book JSON</span>
         <span class="menu-desc">Standard V2 spec for character cards &amp; third-party tools</span>
       </span>
     </button>
-    <button mat-menu-item (click)="exportDigest()">
+    <button mat-menu-item (click)="actions.exportDigest()">
       <mat-icon>description</mat-icon>
       <span class="menu-text">
         <span class="menu-title">Proofread digest (Markdown)</span>
@@ -314,7 +314,13 @@
     }
   </mat-menu>
 
-  @if (workspace.activeProject()) {
+  <!-- Phones reach history through the mobile bottom bar's History item
+       (app-mobile-bottom-bar, which carries the same unsaved-changes badge),
+       so the topbar button is not rendered at all below the shell's mobile
+       breakpoint — tablets and desktops keep it. Removal (not display:none)
+       keeps exactly one "Toggle history drawer" control in the DOM at any
+       width, the contract the responsive e2e suite relies on. -->
+  @if (workspace.activeProject() && !layout.isMobile()) {
     <button
       matIconButton
       type="button"

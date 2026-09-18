@@ -359,6 +359,11 @@ function itemAt(list: EntryList, index: number) {
 
     expect(dialogOpen).not.toHaveBeenCalled();
     expect(openResponsive).not.toHaveBeenCalled();
+    // The empty-selection tap (e.g. the bottom bar's Batch edit item) says
+    // so instead of doing nothing.
+    expect(snackBar.open).toHaveBeenCalledWith('Select entries first to batch edit.', 'OK', {
+      duration: 3000,
+    });
   });
 
   it('exports the selection through the project actions service', async () => {

@@ -276,14 +276,55 @@ export class ProjectActionsService {
   }
 
   // -------------------------------------------------------------------------
+  // Export (whole project, fixed formats)
+  // -------------------------------------------------------------------------
+
+  /**
+   * "World Info JSON": SillyTavern-native format, imported through
+   * SillyTavern's World Info panel. One implementation home for every
+   * trigger — the topbar's Export menu and the mobile bottom bar's Export
+   * menu both call these wrappers over the active project.
+   */
+  exportStNative(): void {
+    const project = this.workspace.activeProject();
+    if (project) {
+      this.importer.exportStNative(project.activeBook, project.title);
+    }
+  }
+
+  /** ".stproj" archive: full backup including commit history. */
+  exportProjectArchive(): void {
+    const project = this.workspace.activeProject();
+    if (project) {
+      this.importer.exportProject(project);
+    }
+  }
+
+  /** "Character Book JSON": standard V2 spec for cards and third-party tools. */
+  exportBook(): void {
+    const project = this.workspace.activeProject();
+    if (project) {
+      this.importer.exportCharacterBook(project.activeBook, project.title);
+    }
+  }
+
+  /** Markdown digest of every entry, for proofreading outside the app. */
+  exportDigest(): void {
+    const project = this.workspace.activeProject();
+    if (project) {
+      this.importer.exportMarkdownDigest(project.activeBook, project.title);
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Entry creation (mobile shell trigger)
   // -------------------------------------------------------------------------
 
   /**
    * Appends a new entry to the active book. Thin wrapper over the workspace
-   * so the mobile shell (Phase 4 FAB) can start an entry without reaching
-   * into the sidebar component; the sidebar reveals/scrolls to the appended
-   * row through its own append-tracking effect.
+   * so the mobile shell (topbar button, bottom bar) can start an entry
+   * without reaching into the sidebar component; the sidebar reveals/scrolls
+   * to the appended row through its own append-tracking effect.
    */
   createEntry(): void {
     this.workspace.addEntry();

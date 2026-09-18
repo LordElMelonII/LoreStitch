@@ -450,4 +450,49 @@ describe('ProjectActionsService', () => {
 
     expect(exportSpy).not.toHaveBeenCalled();
   });
+
+  // ---------------------------------------------------------------------------
+  // Export (whole project, fixed formats)
+  // ---------------------------------------------------------------------------
+
+  it('exports the open project in every fixed format through the importer', async () => {
+    await workspace.createProject('Fuyuki');
+    const bookSpy = vi.spyOn(importer, 'exportCharacterBook').mockImplementation(() => undefined);
+    const nativeSpy = vi.spyOn(importer, 'exportStNative').mockImplementation(() => undefined);
+    const archiveSpy = vi.spyOn(importer, 'exportProject').mockImplementation(() => undefined);
+    const digestSpy = vi
+      .spyOn(importer, 'exportMarkdownDigest')
+      .mockImplementation(() => undefined);
+    const project = workspace.activeProject();
+    assert(project);
+
+    actions.exportBook();
+    actions.exportStNative();
+    actions.exportProjectArchive();
+    actions.exportDigest();
+
+    expect(bookSpy).toHaveBeenCalledWith(project.activeBook, 'Fuyuki');
+    expect(nativeSpy).toHaveBeenCalledWith(project.activeBook, 'Fuyuki');
+    expect(archiveSpy).toHaveBeenCalledWith(project);
+    expect(digestSpy).toHaveBeenCalledWith(project.activeBook, 'Fuyuki');
+  });
+
+  it('skips every fixed-format export without an open project', async () => {
+    const bookSpy = vi.spyOn(importer, 'exportCharacterBook').mockImplementation(() => undefined);
+    const nativeSpy = vi.spyOn(importer, 'exportStNative').mockImplementation(() => undefined);
+    const archiveSpy = vi.spyOn(importer, 'exportProject').mockImplementation(() => undefined);
+    const digestSpy = vi
+      .spyOn(importer, 'exportMarkdownDigest')
+      .mockImplementation(() => undefined);
+
+    actions.exportBook();
+    actions.exportStNative();
+    actions.exportProjectArchive();
+    actions.exportDigest();
+
+    expect(bookSpy).not.toHaveBeenCalled();
+    expect(nativeSpy).not.toHaveBeenCalled();
+    expect(archiveSpy).not.toHaveBeenCalled();
+    expect(digestSpy).not.toHaveBeenCalled();
+  });
 });

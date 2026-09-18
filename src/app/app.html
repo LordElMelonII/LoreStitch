@@ -49,10 +49,16 @@
   </mat-sidenav>
 </mat-sidenav-container>
 
-<!-- Mobile quick actions: phones get a collapsible bottom-end FAB instead of
-     relying on desktop-only topbar buttons and keyboard shortcuts. Mounted
-     outside the sidenav container — Material's container only projects
-     mat-sidenav/mat-sidenav-content children — and fixed to the viewport
-     bottom-end, so it never scrolls with the editor pane (see mobile-fab.scss
-     for the anchor and stacking rationale). -->
-<app-mobile-fab [overlayOpen]="anyOverlayOpen()" [drawerOpen]="anyDrawerOpen()" (action)="runFabAction($event)" />
+<!-- Mobile quick actions: phones get an M3 bottom action bar hosting the
+     actions that desktop-only topbar buttons and keyboard shortcuts cover
+     (including History, which leaves the phone topbar with this bar as its
+     home). Mounted outside the sidenav container — Material's container only
+     projects mat-sidenav/mat-sidenav-content children — but as a normal flex
+     child of app-root, NOT fixed-positioned: the workspace shrinks above it,
+     so it can never overlap editor content (the bug that retired the FAB;
+     see mobile-bottom-bar.scss for the surface rationale). -->
+<app-mobile-bottom-bar
+  [overlayOpen]="anyOverlayOpen()"
+  [drawerOpen]="anyDrawerOpen()"
+  (action)="runBarAction($event)"
+/>

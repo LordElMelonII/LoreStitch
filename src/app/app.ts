@@ -6,7 +6,10 @@ import { EntryEditor } from './features/entry-editor/entry-editor';
 import { CommitHistory } from './features/commit-history/commit-history';
 import { Topbar } from './features/shell/topbar/topbar';
 import { WelcomeScreen } from './features/shell/welcome-screen/welcome-screen';
-import { MobileFab, MobileFabAction } from './features/shell/mobile-fab/mobile-fab';
+import {
+  MobileBottomBar,
+  MobileBarAction,
+} from './features/shell/mobile-bottom-bar/mobile-bottom-bar';
 import { LayoutService } from './shared/services/layout.service';
 import { ResponsiveOverlayService } from './shared/services/responsive-overlay.service';
 import { ProjectActionsService } from './features/shell/project-actions.service';
@@ -21,7 +24,7 @@ import { ProjectActionsService } from './features/shell/project-actions.service'
     EntryList,
     EntryEditor,
     CommitHistory,
-    MobileFab,
+    MobileBottomBar,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -102,10 +105,11 @@ export class App {
   }
 
   /**
-   * Routes a mobile-FAB quick action to the component or service that owns
-   * it — the FAB itself stays presentational and only emits.
+   * Routes a mobile bottom-bar quick action to the component or service that
+   * owns it — the bar itself stays presentational and only emits (its Export
+   * item additionally opens the shared export menu in place, never routed).
    */
-  protected runFabAction(action: MobileFabAction): void {
+  protected runBarAction(action: MobileBarAction): void {
     switch (action) {
       case 'new-entry':
         this.actions.createEntry();
@@ -115,12 +119,12 @@ export class App {
         // (width, compact class, active-entry seeding).
         void this.topbar()?.openSearch();
         break;
-      case 'export':
-        void this.actions.exportSelectedEntries();
-        break;
       case 'batch':
         // The sidebar owns the live selection the batch pane edits.
         void this.entryList()?.openBatchOperations();
+        break;
+      case 'history':
+        this.toggleRight();
         break;
     }
   }

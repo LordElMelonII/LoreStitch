@@ -11,10 +11,10 @@ import {
   createEmptyEntry,
 } from '../../../core/models/lorebook.model';
 import { StorageService } from '../../../core/services/storage.service';
-import { ImportExportService } from '../../../core/services/import-export.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
+import { ProjectActionsService } from '../project-actions.service';
 import { GITHUB_ICON } from '../../../shared/constants/github';
 import {
   DESKTOP_BREAKPOINT_QUERY,
@@ -71,7 +71,6 @@ function installMatchMediaStub(): {
 
 describe('Topbar', () => {
   let workspace: WorkspaceService;
-  let importer: ImportExportService;
   let dialogOpen: ReturnType<typeof vi.fn>;
   let overlayOpen: ReturnType<typeof vi.fn>;
   let desktop: { setDesktop: (matches: boolean) => void; setMobile: (matches: boolean) => void };
@@ -107,7 +106,6 @@ describe('Topbar', () => {
       TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
     );
     workspace = TestBed.inject(WorkspaceService);
-    importer = TestBed.inject(ImportExportService);
     // Allow the workspace's async init() to settle.
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
@@ -161,6 +159,31 @@ describe('Topbar', () => {
     expect(badge?.textContent).toBe('!');
   });
 
+  it('parks the history button for phones, where the bottom bar hosts it', async () => {
+    await workspace.createProject('Fuyuki');
+    await createTopbar();
+    fixture.detectChanges();
+
+    const button = () =>
+      fixture.nativeElement.querySelector('[aria-label="Toggle history drawer"]');
+    // Desktop keeps the topbar history button...
+    expect(button()).toBeTruthy();
+
+    // ...phones get it removed from the DOM entirely (the bottom bar is its
+    // home there), so exactly one control carries the label at any width.
+    desktop.setMobile(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    expect(button()).toBeNull();
+
+    desktop.setMobile(false);
+    desktop.setDesktop(true);
+    // The CDK observer throttles breakpoint emissions.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    expect(button()).toBeTruthy();
+  });
+
   it('emits drawer toggles from the menu and history buttons', async () => {
     await workspace.createProject('Fuyuki');
     const topbar = await createTopbar();
@@ -193,47 +216,42 @@ describe('Topbar', () => {
     expect(workspace.entries()).toHaveLength(1);
   });
 
-  it('exports the open project in every format through the importer', async () => {
+  it('wires the export menu items to the shared project actions service', async () => {
     await workspace.createProject('Fuyuki');
-    const topbar = await createTopbar();
-    const bookSpy = vi.spyOn(importer, 'exportCharacterBook').mockImplementation(() => undefined);
-    const nativeSpy = vi.spyOn(importer, 'exportStNative').mockImplementation(() => undefined);
-    const archiveSpy = vi.spyOn(importer, 'exportProject').mockImplementation(() => undefined);
-    const digestSpy = vi
-      .spyOn(importer, 'exportMarkdownDigest')
+    await createTopbar();
+    // The fixed-format export logic lives on ProjectActionsService (shared
+    // with the mobile bottom bar's export menu — covered there and in the
+    // service spec); the topbar only wires menu items to it.
+    const actions = TestBed.inject(ProjectActionsService);
+    const nativeSpy = vi.spyOn(actions, 'exportStNative').mockImplementation(() => undefined);
+    const archiveSpy = vi
+      .spyOn(actions, 'exportProjectArchive')
       .mockImplementation(() => undefined);
-    const project = workspace.activeProject();
-    assert(project);
+    const bookSpy = vi.spyOn(actions, 'exportBook').mockImplementation(() => undefined);
+    const digestSpy = vi.spyOn(actions, 'exportDigest').mockImplementation(() => undefined);
 
-    topbar['exportBook']();
-    topbar['exportStNative']();
-    topbar['exportProjectArchive']();
-    topbar['exportDigest']();
+    const clickItem = (title: string): void => {
+      const triggerDebug = fixture.debugElement.query(By.css('[aria-label="Export menu"]'));
+      assert(triggerDebug);
+      triggerDebug.injector.get(MatMenuTrigger).openMenu();
+      fixture.detectChanges();
+      const item = [...document.querySelectorAll('.mat-mdc-menu-panel button')].find((button) =>
+        button.textContent?.includes(title),
+      );
+      assert(item);
+      item.dispatchEvent(new Event('click'));
+      fixture.detectChanges();
+    };
 
-    expect(bookSpy).toHaveBeenCalledWith(project.activeBook, 'Fuyuki');
-    expect(nativeSpy).toHaveBeenCalledWith(project.activeBook, 'Fuyuki');
-    expect(archiveSpy).toHaveBeenCalledWith(project);
-    expect(digestSpy).toHaveBeenCalledWith(project.activeBook, 'Fuyuki');
-  });
+    clickItem('World Info JSON');
+    clickItem('Project archive');
+    clickItem('Character Book JSON');
+    clickItem('Proofread digest');
 
-  it('skips every export without an open project', async () => {
-    const topbar = await createTopbar();
-    const bookSpy = vi.spyOn(importer, 'exportCharacterBook').mockImplementation(() => undefined);
-    const nativeSpy = vi.spyOn(importer, 'exportStNative').mockImplementation(() => undefined);
-    const archiveSpy = vi.spyOn(importer, 'exportProject').mockImplementation(() => undefined);
-    const digestSpy = vi
-      .spyOn(importer, 'exportMarkdownDigest')
-      .mockImplementation(() => undefined);
-
-    topbar['exportBook']();
-    topbar['exportStNative']();
-    topbar['exportProjectArchive']();
-    topbar['exportDigest']();
-
-    expect(bookSpy).not.toHaveBeenCalled();
-    expect(nativeSpy).not.toHaveBeenCalled();
-    expect(archiveSpy).not.toHaveBeenCalled();
-    expect(digestSpy).not.toHaveBeenCalled();
+    expect(nativeSpy).toHaveBeenCalledTimes(1);
+    expect(archiveSpy).toHaveBeenCalledTimes(1);
+    expect(bookSpy).toHaveBeenCalledTimes(1);
+    expect(digestSpy).toHaveBeenCalledTimes(1);
   });
 
   it('opens search & replace seeded with the active entry', async () => {

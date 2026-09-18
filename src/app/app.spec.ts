@@ -217,26 +217,41 @@ describe('App', () => {
     expect(fixture.nativeElement.classList.contains('focus-mode')).toBe(false);
   });
 
-  it('mounts the mobile FAB only on phones with an open project', async () => {
+  it('mounts the mobile bottom bar only on phones with an open project', async () => {
     await createApp();
     const compiled = fixture.nativeElement as HTMLElement;
-    const fab = () => compiled.querySelector<HTMLElement>('app-mobile-fab');
+    const bar = () => compiled.querySelector<HTMLElement>('app-mobile-bottom-bar');
 
-    // Desktop class with no project: mounted (it self-hides) but invisible.
-    expect(fab()?.classList.contains('fab-hidden')).toBe(true);
+    // Desktop class with no project: mounted (it self-hides) but out of flow.
+    expect(bar()?.classList.contains('bar-hidden')).toBe(true);
 
     // Phones without a project: still hidden — there is nothing to act on.
     await resizeTo('mobile');
-    expect(fab()?.classList.contains('fab-hidden')).toBe(true);
+    expect(bar()?.classList.contains('bar-hidden')).toBe(true);
 
-    // Phone + project: the collapsed toggle appears.
+    // Phone + project: the five-item bar appears.
     await workspace.createProject('Fuyuki');
     await fixture.whenStable();
-    expect(fab()?.classList.contains('fab-hidden')).toBe(false);
-    expect(fab()?.querySelector('.fab-toggle')).toBeTruthy();
+    expect(bar()?.classList.contains('bar-hidden')).toBe(false);
+    expect(bar()?.querySelectorAll('.bar-item')).toHaveLength(5);
 
     // Back on desktop it hides again.
     await resizeTo('desktop');
-    expect(fab()?.classList.contains('fab-hidden')).toBe(true);
+    expect(bar()?.classList.contains('bar-hidden')).toBe(true);
+  });
+
+  it('routes the bottom bar history action to the history drawer', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    await resizeTo('mobile');
+    await fixture.whenStable();
+
+    const bar = (fixture.nativeElement as HTMLElement).querySelector('app-mobile-bottom-bar');
+    assert(bar);
+    expect(bar.classList.contains('bar-hidden')).toBe(false);
+    expect(app['rightOpened']()).toBe(false);
+
+    bar.querySelector('[aria-label="Toggle history drawer"]')?.dispatchEvent(new Event('click'));
+    expect(app['rightOpened']()).toBe(true);
   });
 });
