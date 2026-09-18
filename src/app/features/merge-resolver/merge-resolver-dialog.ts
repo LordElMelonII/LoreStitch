@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -19,7 +20,15 @@ import {
 } from './merge-resolver.model';
 import { DiffViewer } from '../../shared/components/diff-viewer/diff-viewer';
 
-/** Cherry-picker for merging a second lorebook into the current one. */
+/**
+ * Cherry-picker for merging a second lorebook into the current one.
+ *
+ * Dual-container pane like the About pane: a centered `MatDialog`
+ * (tablet/desktop) and a `MatBottomSheet` (phones, `.app-merge-sheet`) share
+ * this template — header fixed, rows scrolling, actions pinned — so both refs
+ * and both data tokens are injected optionally and `close()` routes to
+ * whichever container is present.
+ */
 @Component({
   selector: 'app-merge-resolver-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -37,8 +46,22 @@ import { DiffViewer } from '../../shared/components/diff-viewer/diff-viewer';
   styleUrl: './merge-resolver-dialog.scss',
 })
 export class MergeResolverDialog {
-  private readonly dialogRef = inject(MatDialogRef<MergeResolverDialog, MergeOutcome | null>);
-  protected readonly data = inject<MergeDialogData>(MAT_DIALOG_DATA);
+  /** Ref of the opening container — exactly one of the two is present. */
+  private readonly dialogRef = inject(MatDialogRef<MergeResolverDialog, MergeOutcome | null>, {
+    optional: true,
+  });
+  private readonly sheetRef = inject(MatBottomSheetRef<MergeResolverDialog, MergeOutcome | null>, {
+    optional: true,
+  });
+
+  /** Payload from whichever container opened the pane (canonical at the caller). */
+  protected readonly data: MergeDialogData =
+    (inject(MAT_DIALOG_DATA, { optional: true }) as MergeDialogData | null) ??
+    (inject(MAT_BOTTOM_SHEET_DATA, { optional: true }) as MergeDialogData | null) ?? {
+      incoming: { name: '', extensions: {}, entries: [] },
+      sourceName: '',
+    };
+
   private readonly workspace = inject(WorkspaceService);
 
   /** Per-entry action, keyed by incoming entry id (falls back to index). */
@@ -146,11 +169,17 @@ export class MergeResolverDialog {
       }
     });
 
-    this.dialogRef.close({ entries: current, imported, overwritten, skipped });
+    this.close({ entries: current, imported, overwritten, skipped });
   }
 
   protected cancel(): void {
-    this.dialogRef.close(null);
+    this.close(null);
+  }
+
+  /** Closes the pane through whichever container opened it. */
+  protected close(result: MergeOutcome | null = null): void {
+    this.dialogRef?.close(result);
+    this.sheetRef?.dismiss(result);
   }
 
   protected title(entry: CharacterBookEntry): string {

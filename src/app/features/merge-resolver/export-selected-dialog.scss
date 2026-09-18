@@ -1,27 +1,96 @@
-h2[mat-dialog-title] {
+// Dual-container pane: a centered MatDialog (tablet/desktop) and a
+// MatBottomSheet (.app-export-sheet, phones) share this template, so the pane
+// paints its own header / scrolling body / pinned footer instead of the
+// mat-dialog-title/content/actions sections. Desktop metrics mirror
+// Material's own paddings so the dialog path stays pixel-comparable.
+
+// The sheet path needs a block host to inherit the fixed container height;
+// the dialog path renders the host `display: contents` (or inline-block), and
+// height: 100% of a content-sized surface resolves to auto either way.
+:host {
+  display: block;
+  height: 100%;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+// ---------------------------------------------------------------------------
+// Header: title + close affordance
+// ---------------------------------------------------------------------------
+
+.pane-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: none;
+  // Same inset as the dialog headline token (20px 24px 12px); the right side
+  // yields to the close button instead.
+  padding: 20px 12px 12px 24px;
+}
+
+.pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  font: var(--mat-sys-headline-small);
+
+  // The mat-dialog-title directive's legacy ::before spacer is dropped inside
+  // a dialog surface by the global reset; a bottom sheet has no surface, so
+  // drop it here as well (same treatment as the About pane).
+  &::before {
+    display: none;
+  }
 
   mat-icon {
     color: var(--mat-sys-primary);
   }
 }
 
-.dialog-body {
+.pane-close {
+  flex: none;
+}
+
+// ---------------------------------------------------------------------------
+// Body: settings + warnings + the pickable rows
+// ---------------------------------------------------------------------------
+
+// Mirrors .mat-mdc-dialog-content: title-adjacent top padding zeroed, the
+// actions strip owns the bottom gap, 65vh cap inside the centered dialog.
+.pane-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 24px;
+  max-height: 65vh;
+}
+
+// Phone sheet: the fixed-height container owns the height chain; the body
+// stops capping and the virtual scroll list below derives its height from it.
+:host-context(.app-export-sheet) .pane-body {
+  max-height: none;
 }
 
 .settings-row {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  flex: none;
   // Outline fields float their labels ~7px above the field's top border and
-  // Material zeroes the dialog content's top padding when it follows the
-  // title (`.mat-mdc-dialog-title + .mat-mdc-dialog-content`), so without
-  // this clearance the "Lorebook name" / "Format" labels render cut off.
+  // the pane body keeps the dialog convention of zero top padding after the
+  // title, so without this clearance the "Lorebook name" / "Format" labels
+  // render cut off.
   padding-top: 10px;
 
   .name-field {
@@ -36,6 +105,7 @@ h2[mat-dialog-title] {
 }
 
 .warnings {
+  flex: none;
   border: 1px solid color-mix(in srgb, var(--mat-sys-error) 45%, transparent);
   background: color-mix(in srgb, var(--mat-sys-error-container) 40%, transparent);
   border-radius: var(--mat-sys-corner-medium);
@@ -72,6 +142,7 @@ h2[mat-dialog-title] {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: none;
 
   .counts {
     font: var(--mat-sys-label-large);
@@ -94,6 +165,15 @@ h2[mat-dialog-title] {
   height: min(38vh, 360px);
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: var(--mat-sys-corner-medium);
+}
+
+// Phone sheet: the list derives its height from the flex chain (container →
+// host → pane → body leftovers) instead of a fixed viewport-ratio box, so
+// the CDK measures the real rendered height.
+:host-context(.app-export-sheet) .rows-viewport {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .entry-row {
@@ -133,8 +213,27 @@ h2[mat-dialog-title] {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Footer: pinned actions
+// ---------------------------------------------------------------------------
+
+// Mirrors .mat-mdc-dialog-actions (align="end"): the same padding band,
+// min-height and end alignment, pinned as the pane's last flex row.
+.pane-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  min-height: 52px;
+  flex: none;
+  padding: 16px 24px;
+}
+
 // Compact screens: the name + format fields stack at full width so neither
-// label truncates, and the tag chips yield their space to the titles.
+// label truncates, and the tag chips yield their space to the titles. Dialog
+// mode never sees this width (the sheet path covers every viewport below
+// 768px), but phone-width sheets still match it, so it stays.
 @media (max-width: 599px) {
   .settings-row {
     flex-direction: column;

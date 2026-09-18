@@ -198,6 +198,38 @@ body {
   padding: 0;
 }
 
+// --- Batch / merge / export responsive sheets ---
+// Phones (< 768px) open these three panes as bottom sheets via
+// ResponsiveOverlayService instead of the compact full-screen dialog; the
+// shared pane components (self-painted header/body/footer) stretch the fixed
+// container height, so its height must be definite and its padding dropped so
+// the content meets the edges. The 28px top radius is M3's bottom-sheet shape
+// — Material only applies it from the Medium viewport class up, so phone
+// sheets must carry it explicitly.
+
+.app-batch-sheet .mat-bottom-sheet-container {
+  height: 88dvh;
+  max-height: 88dvh;
+  padding: 0;
+  border-radius: 28px 28px 0 0;
+}
+
+// The merge resolver gets the tallest pane: its diff rows + pinned actions
+// need the most room, and cherry-picking benefits from seeing many rows.
+.app-merge-sheet .mat-bottom-sheet-container {
+  height: 92dvh;
+  max-height: 92dvh;
+  padding: 0;
+  border-radius: 28px 28px 0 0;
+}
+
+.app-export-sheet .mat-bottom-sheet-container {
+  height: 88dvh;
+  max-height: 88dvh;
+  padding: 0;
+  border-radius: 28px 28px 0 0;
+}
+
 // The about tab group must flex within its pane; Material's body wrapper is
 // not a flex-grow item by default (same treatment as the entry editor tabs).
 app-about-dialog .about-tabs .mat-mdc-tab-body-wrapper {

@@ -1,15 +1,95 @@
-.dialog-body {
+// Dual-container pane: a centered MatDialog (tablet/desktop) and a
+// MatBottomSheet (.app-merge-sheet, phones) share this template, so the pane
+// paints its own header / scrolling body / pinned footer instead of the
+// mat-dialog-title/content/actions sections. Desktop metrics mirror
+// Material's own paddings so the dialog path stays pixel-comparable.
+
+// The sheet path needs a block host to inherit the fixed container height;
+// the dialog path renders the host `display: contents` (or inline-block), and
+// height: 100% of a content-sized surface resolves to auto either way.
+:host {
+  display: block;
+  height: 100%;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+// ---------------------------------------------------------------------------
+// Header: title + close affordance
+// ---------------------------------------------------------------------------
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  // Same inset as the dialog headline token (20px 24px 12px); the right side
+  // yields to the close button instead.
+  padding: 20px 12px 12px 24px;
+}
+
+.pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  font: var(--mat-sys-headline-small);
+
+  // The mat-dialog-title directive's legacy ::before spacer is dropped inside
+  // a dialog surface by the global reset; a bottom sheet has no surface, so
+  // drop it here as well (same treatment as the About pane).
+  &::before {
+    display: none;
+  }
+
+  mat-icon {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.pane-close {
+  flex: none;
+}
+
+// ---------------------------------------------------------------------------
+// Body: summary + bulk shortcuts + the per-entry rows
+// ---------------------------------------------------------------------------
+
+// Mirrors .mat-mdc-dialog-content: title-adjacent top padding zeroed, the
+// actions strip owns the bottom gap, 65vh cap inside the centered dialog.
+// Wide on desktop, phone-safe on mobile (no hard floor to overflow against).
+.pane-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  // Wide on desktop, phone-safe on mobile (no hard floor to overflow against).
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 24px;
   width: min(92vw, 680px);
+  max-height: 65vh;
+}
+
+// Phone sheet: the fixed-height container owns the height chain — the body
+// goes full width and hands scrolling to the rows list.
+:host-context(.app-merge-sheet) .pane-body {
+  width: auto;
+  max-height: none;
 }
 
 .summary {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: none;
   font: var(--mat-sys-label-large);
   color: var(--mat-sys-on-surface-variant);
 
@@ -30,6 +110,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: none;
+  flex-wrap: wrap;
   font: var(--mat-sys-label-medium);
   color: var(--mat-sys-on-surface-variant);
 }
@@ -43,7 +125,16 @@
   padding-right: 4px;
 }
 
+// In the sheet the rows list owns the leftover pane height (body and rows
+// both grow into the fixed container instead of capping at viewport ratios).
+:host-context(.app-merge-sheet) .rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
 .merge-row {
+  flex: none;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: var(--mat-sys-corner-small);
   padding: 6px 10px;
@@ -122,4 +213,21 @@
   padding: 24px;
   text-align: center;
   color: var(--mat-sys-on-surface-variant);
+}
+
+// ---------------------------------------------------------------------------
+// Footer: pinned actions
+// ---------------------------------------------------------------------------
+
+// Mirrors .mat-mdc-dialog-actions (align="end"): the same padding band,
+// min-height and end alignment, pinned as the pane's last flex row.
+.pane-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  min-height: 52px;
+  flex: none;
+  padding: 16px 24px;
 }

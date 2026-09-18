@@ -1,16 +1,33 @@
 import { inject, Service } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { MatDialog } from '@angular/material/dialog';
+import { type MatBottomSheetRef } from '@angular/material/bottom-sheet';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ParsedImport, ImportExportService } from '../../core/services/import-export.service';
 import { ProjectWorkspace } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { LayoutService } from '../../shared/services/layout.service';
-import { type MergeOutcome } from '../merge-resolver/merge-resolver.model';
+import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
+import {
+  type MergeDialogData,
+  type MergeOutcome,
+} from '../merge-resolver/merge-resolver.model';
 import { type ExportSelection } from '../merge-resolver/export-selected.model';
 import { type ExportSelectedDialogData } from '../merge-resolver/export-selected-dialog';
 import { type NewProjectResult } from './new-project.model';
 import { IMPORT_ACCEPT, MERGE_ACCEPT } from './project-actions.constants';
+
+/**
+ * Awaits the result of a responsive pane whichever container opened it: the
+ * two ref types carry no common completion stream, and both are the concrete
+ * classes their containers construct (never wrapped or substituted), so a
+ * prototype check reliably picks the matching one.
+ */
+function paneResult<R>(
+  ref: MatDialogRef<unknown, R> | MatBottomSheetRef<unknown, R>,
+): Promise<R | undefined> {
+  return firstValueFrom(ref instanceof MatDialogRef ? ref.afterClosed() : ref.afterDismissed());
+}
 
 /**
  * Project lifecycle & import orchestration shared by the topbar and the
@@ -18,12 +35,15 @@ import { IMPORT_ACCEPT, MERGE_ACCEPT } from './project-actions.constants';
  *
  * Dialog components are loaded through dynamic imports so their code (and
  * the diff viewer pulled in by the merge resolver) stays out of the initial
- * bundle — they only run after an explicit user action.
+ * bundle — they only run after an explicit user action. The merge resolver
+ * and the export picker render as bottom sheets on phones via
+ * `ResponsiveOverlayService`.
  */
 @Service()
 export class ProjectActionsService {
   private readonly workspace = inject(WorkspaceService);
   private readonly dialog = inject(MatDialog);
+  private readonly overlays = inject(ResponsiveOverlayService);
   private readonly importer = inject(ImportExportService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly layout = inject(LayoutService);
@@ -161,21 +181,28 @@ export class ProjectActionsService {
       return;
     }
     const { MergeResolverDialog } = await import('../merge-resolver/merge-resolver-dialog');
-    const outcome = await firstValueFrom(
-      this.dialog
-        .open(MergeResolverDialog, {
-          minWidth: 'min(94vw, 780px)',
-          // MD3 adaptive behavior: the dialog goes full-screen on compact
-          // screens (see the global .app-compact-fullscreen-dialog rules).
-          panelClass: 'app-compact-fullscreen-dialog',
-          data: {
-            incoming: parsed.book,
-            sourceName: fileName,
-            mode: this.layout.isMobile() ? 'unified' : 'split',
-          },
-        })
-        .afterClosed(),
-    );
+    const ref = this.overlays.openResponsive<
+      InstanceType<typeof MergeResolverDialog>,
+      MergeDialogData,
+      MergeOutcome | null
+    >(MergeResolverDialog, {
+      data: {
+        incoming: parsed.book,
+        sourceName: fileName,
+        // Phone widths cannot fit a side-by-side diff.
+        mode: this.layout.isMobile() ? 'unified' : 'split',
+      },
+      // Tablet/desktop config, identical to the former dialog.open() call.
+      dialog: {
+        minWidth: 'min(94vw, 780px)',
+        // MD3 adaptive behavior: the dialog goes full-screen on compact
+        // screens (see the global .app-compact-fullscreen-dialog rules).
+        panelClass: 'app-compact-fullscreen-dialog',
+      },
+      sheetPanelClass: 'app-merge-sheet',
+      sheetConfig: { ariaLabel: 'Merge lorebook' },
+    });
+    const outcome = await paneResult(ref);
     if (!outcome) {
       return;
     }
@@ -210,18 +237,24 @@ export class ProjectActionsService {
       return;
     }
     const { ExportSelectedDialog } = await import('../merge-resolver/export-selected-dialog');
-    const selection = (await firstValueFrom(
-      this.dialog
-        .open(ExportSelectedDialog, {
-          width: '100%',
-          maxWidth: 'min(96vw, 680px)',
-          // MD3 adaptive behavior: the dialog goes full-screen on compact
-          // screens (see the global .app-compact-fullscreen-dialog rules).
-          panelClass: 'app-compact-fullscreen-dialog',
-          data: { preselectedIds } satisfies ExportSelectedDialogData,
-        })
-        .afterClosed(),
-    )) as ExportSelection | undefined;
+    const ref = this.overlays.openResponsive<
+      InstanceType<typeof ExportSelectedDialog>,
+      ExportSelectedDialogData,
+      ExportSelection | null
+    >(ExportSelectedDialog, {
+      data: { preselectedIds } satisfies ExportSelectedDialogData,
+      // Tablet/desktop config, identical to the former dialog.open() call.
+      dialog: {
+        width: '100%',
+        maxWidth: 'min(96vw, 680px)',
+        // MD3 adaptive behavior: the dialog goes full-screen on compact
+        // screens (see the global .app-compact-fullscreen-dialog rules).
+        panelClass: 'app-compact-fullscreen-dialog',
+      },
+      sheetPanelClass: 'app-export-sheet',
+      sheetConfig: { ariaLabel: 'Export selected entries as lorebook' },
+    });
+    const selection = await paneResult(ref);
     if (!selection) {
       return;
     }
@@ -240,5 +273,19 @@ export class ProjectActionsService {
       'OK',
       { duration: 4000 },
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Entry creation (mobile shell trigger)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Appends a new entry to the active book. Thin wrapper over the workspace
+   * so the mobile shell (Phase 4 FAB) can start an entry without reaching
+   * into the sidebar component; the sidebar reveals/scrolls to the appended
+   * row through its own append-tracking effect.
+   */
+  createEntry(): void {
+    this.workspace.addEntry();
   }
 }

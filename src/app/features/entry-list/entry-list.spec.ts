@@ -10,7 +10,9 @@ import {
 } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { ProjectActionsService } from '../shell/project-actions.service';
+import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
 import { EntryList } from './entry-list';
+import { BatchOperationsDialog } from './batch-operations-dialog';
 
 /** Builds an entry with sensible defaults for list tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
@@ -35,6 +37,7 @@ describe('EntryList', () => {
   let actions: ProjectActionsService;
   let snackBar: MatSnackBar;
   let dialogOpen: ReturnType<typeof vi.fn>;
+  let openResponsive: ReturnType<typeof vi.fn>;
   let fixture: ComponentFixture<EntryList>;
 
   async function createList(
@@ -78,10 +81,14 @@ function itemAt(list: EntryList, index: number) {
       });
     }
     dialogOpen = vi.fn().mockReturnValue({ afterClosed: () => of(true) });
+    // The batch pane opens through the responsive overlay (dialog or sheet);
+    // the plain-object ref makes the caller take its afterDismissed branch.
+    openResponsive = vi.fn().mockReturnValue({ afterDismissed: () => of(true) });
     await TestBed.configureTestingModule({
       imports: [EntryList],
       providers: [
         { provide: MatDialog, useValue: { open: dialogOpen } },
+        { provide: ResponsiveOverlayService, useValue: { openResponsive } },
       ],
     }).compileComponents();
     workspace = TestBed.inject(WorkspaceService);
@@ -304,22 +311,42 @@ function itemAt(list: EntryList, index: number) {
     expect(list['selection']()).toEqual(new Set([0]));
   });
 
-  it('opens batch operations and clears the selection when applied', async () => {
+  it('opens batch operations through the responsive overlay and clears the selection when applied', async () => {
     const list = await createList([entry(0), entry(1)]);
     list['toggleRow'](itemAt(list, 0), true);
 
-    await list['openBatchOperations']();
+    await list.openBatchOperations();
 
-    expect(dialogOpen).toHaveBeenCalledTimes(1);
+    expect(openResponsive).toHaveBeenCalledTimes(1);
+    const [component, config] = openResponsive.mock.calls[0] as unknown as [
+      unknown,
+      {
+        data: { entryIds: number[] };
+        dialog: Record<string, string>;
+        sheetPanelClass: string;
+        sheetConfig: { ariaLabel: string };
+      },
+    ];
+    expect(component).toBe(BatchOperationsDialog);
+    expect(config.data).toEqual({ entryIds: [0] });
+    // The tablet/desktop dialog config is unchanged from the direct
+    // dialog.open() era; the sheet variant is registered alongside it.
+    expect(config.dialog).toEqual({
+      width: '100%',
+      maxWidth: 'min(96vw, 560px)',
+      panelClass: 'app-compact-fullscreen-dialog',
+    });
+    expect(config.sheetPanelClass).toBe('app-batch-sheet');
+    expect(config.sheetConfig).toEqual({ ariaLabel: 'Batch edit entries' });
     expect(list['selection']().size).toBe(0);
   });
 
   it('keeps the selection when batch operations are cancelled', async () => {
-    dialogOpen.mockReturnValue({ afterClosed: () => of(false) });
+    openResponsive.mockReturnValue({ afterDismissed: () => of(false) });
     const list = await createList([entry(0)]);
     list['toggleRow'](itemAt(list, 0), true);
 
-    await list['openBatchOperations']();
+    await list.openBatchOperations();
 
     expect(list['selection']()).toEqual(new Set([0]));
   });
@@ -328,9 +355,10 @@ function itemAt(list: EntryList, index: number) {
     const list = await createList([entry(0)]);
 
     await list['deleteSelection']();
-    await list['openBatchOperations']();
+    await list.openBatchOperations();
 
     expect(dialogOpen).not.toHaveBeenCalled();
+    expect(openResponsive).not.toHaveBeenCalled();
   });
 
   it('exports the selection through the project actions service', async () => {

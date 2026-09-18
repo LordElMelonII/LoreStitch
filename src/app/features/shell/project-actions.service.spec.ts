@@ -5,6 +5,9 @@ import { of } from 'rxjs';
 import { ImportExportService } from '../../core/services/import-export.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { LayoutService } from '../../shared/services/layout.service';
+import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
+import { MergeResolverDialog } from '../merge-resolver/merge-resolver-dialog';
+import { ExportSelectedDialog } from '../merge-resolver/export-selected-dialog';
 import { ProjectActionsService } from './project-actions.service';
 
 /**
@@ -46,16 +49,22 @@ describe('ProjectActionsService', () => {
   let importer: ImportExportService;
   let actions: ProjectActionsService;
   let dialogOpen: ReturnType<typeof vi.fn>;
+  let openResponsive: ReturnType<typeof vi.fn>;
   let snackBarOpen: ReturnType<typeof vi.fn>;
   let isMobile: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     dialogOpen = vi.fn().mockReturnValue({ afterClosed: () => of(undefined) });
+    // The merge resolver and export picker open through the responsive
+    // overlay (dialog or sheet); the plain-object ref makes the caller take
+    // its afterDismissed branch.
+    openResponsive = vi.fn().mockReturnValue({ afterDismissed: () => of(undefined) });
     snackBarOpen = vi.fn();
     isMobile = vi.fn().mockReturnValue(false);
     TestBed.configureTestingModule({
       providers: [
         { provide: MatDialog, useValue: { open: dialogOpen } },
+        { provide: ResponsiveOverlayService, useValue: { openResponsive } },
         { provide: MatSnackBar, useValue: { open: snackBarOpen } },
         { provide: LayoutService, useValue: { isMobile } },
       ],
@@ -254,6 +263,7 @@ describe('ProjectActionsService', () => {
     await actions.importMergeFromPicker();
 
     expect(dialogOpen).not.toHaveBeenCalled();
+    expect(openResponsive).not.toHaveBeenCalled();
     expect(snackBarOpen).toHaveBeenCalledWith(
       expect.stringContaining('Create or open a project before merging into it.'),
       'OK',
@@ -265,17 +275,30 @@ describe('ProjectActionsService', () => {
     await workspace.createProject('Fuyuki');
     const incoming = { entries: { '0': { uid: 0, key: ['rin'], content: 'Tohsaka.' } } };
     stubFilePicker(jsonFile('rin.json', incoming));
-    dialogOpen.mockReturnValue({ afterClosed: () => of(undefined) });
 
     await actions.importMergeFromPicker();
 
-    expect(dialogOpen).toHaveBeenCalledTimes(1);
-    const [ , options] = dialogOpen.mock.calls[0] as unknown as [
+    expect(openResponsive).toHaveBeenCalledTimes(1);
+    const [component, config] = openResponsive.mock.calls[0] as unknown as [
       unknown,
-      { data: { sourceName: string; mode: string } },
+      {
+        data: { sourceName: string; mode: string };
+        dialog: Record<string, string>;
+        sheetPanelClass: string;
+        sheetConfig: { ariaLabel: string };
+      },
     ];
-    expect(options.data.sourceName).toBe('rin.json');
-    expect(options.data.mode).toBe('split');
+    expect(component).toBe(MergeResolverDialog);
+    expect(config.data.sourceName).toBe('rin.json');
+    expect(config.data.mode).toBe('split');
+    // The tablet/desktop dialog config is unchanged from the direct
+    // dialog.open() era; the sheet variant is registered alongside it.
+    expect(config.dialog).toEqual({
+      minWidth: 'min(94vw, 780px)',
+      panelClass: 'app-compact-fullscreen-dialog',
+    });
+    expect(config.sheetPanelClass).toBe('app-merge-sheet');
+    expect(config.sheetConfig).toEqual({ ariaLabel: 'Merge lorebook' });
     expect(isMobile).toHaveBeenCalled();
   });
 
@@ -283,15 +306,14 @@ describe('ProjectActionsService', () => {
     await workspace.createProject('Fuyuki');
     isMobile.mockReturnValue(true);
     stubFilePicker(jsonFile('book.json', { entries: {} }));
-    dialogOpen.mockReturnValue({ afterClosed: () => of(undefined) });
 
     await actions.importMergeFromPicker();
 
-    const [ , options] = dialogOpen.mock.calls[0] as unknown as [
+    const [, config] = openResponsive.mock.calls[0] as unknown as [
       unknown,
       { data: { mode: string } },
     ];
-    expect(options.data.mode).toBe('unified');
+    expect(config.data.mode).toBe('unified');
   });
 
   it('applies the merge outcome to the active book', async () => {
@@ -305,7 +327,7 @@ describe('ProjectActionsService', () => {
         entries: { '7': { uid: 7, key: ['rin'], content: 'Tohsaka Rin.' } },
       }),
     );
-    dialogOpen.mockImplementation(() => {
+    openResponsive.mockImplementation(() => {
       const local = workspace.entries();
       const first = local[0];
       assert(first);
@@ -317,7 +339,9 @@ describe('ProjectActionsService', () => {
           comment: 'Rin',
         },
       ];
-      return { afterClosed: () => of({ entries: merged, imported: 1, overwritten: 0, skipped: 0 }) };
+      return {
+        afterDismissed: () => of({ entries: merged, imported: 1, overwritten: 0, skipped: 0 }),
+      };
     });
 
     await actions.importMergeFromPicker();
@@ -350,6 +374,7 @@ describe('ProjectActionsService', () => {
     await actions.exportSelectedEntries([0]);
 
     expect(dialogOpen).not.toHaveBeenCalled();
+    expect(openResponsive).not.toHaveBeenCalled();
     expect(snackBarOpen).toHaveBeenCalledWith(
       expect.stringContaining('Create or open a project before exporting.'),
       'OK',
@@ -360,11 +385,33 @@ describe('ProjectActionsService', () => {
   it('exports the picked selection as a standalone book', async () => {
     await workspace.createProject('Fuyuki');
     const exportSpy = vi.spyOn(importer, 'exportSelectedBook').mockImplementation(() => undefined);
-    dialogOpen.mockReturnValue({
-      afterClosed: () => of({ entryIds: [0, 2], title: 'Split book', format: 'st_native' }),
+    openResponsive.mockReturnValue({
+      afterDismissed: () => of({ entryIds: [0, 2], title: 'Split book', format: 'st_native' }),
     });
 
     await actions.exportSelectedEntries([0]);
+
+    expect(openResponsive).toHaveBeenCalledTimes(1);
+    const [component, config] = openResponsive.mock.calls[0] as unknown as [
+      unknown,
+      {
+        data: { preselectedIds: number[] };
+        dialog: Record<string, string>;
+        sheetPanelClass: string;
+        sheetConfig: { ariaLabel: string };
+      },
+    ];
+    expect(component).toBe(ExportSelectedDialog);
+    expect(config.data).toEqual({ preselectedIds: [0] });
+    // The tablet/desktop dialog config is unchanged from the direct
+    // dialog.open() era; the sheet variant is registered alongside it.
+    expect(config.dialog).toEqual({
+      width: '100%',
+      maxWidth: 'min(96vw, 680px)',
+      panelClass: 'app-compact-fullscreen-dialog',
+    });
+    expect(config.sheetPanelClass).toBe('app-export-sheet');
+    expect(config.sheetConfig).toEqual({ ariaLabel: 'Export selected entries as lorebook' });
 
     const project = workspace.activeProject();
     assert(project);
@@ -387,15 +434,16 @@ describe('ProjectActionsService', () => {
 
     await actions.exportSelectedEntries([0]);
 
+    expect(openResponsive).toHaveBeenCalledTimes(1);
     expect(exportSpy).not.toHaveBeenCalled();
   });
 
   it('exports nothing when the project disappeared while the dialog was open', async () => {
     await workspace.createProject('Fuyuki');
     const exportSpy = vi.spyOn(importer, 'exportSelectedBook').mockImplementation(() => undefined);
-    dialogOpen.mockImplementation(() => {
+    openResponsive.mockImplementation(() => {
       workspace.activeProject.set(null);
-      return { afterClosed: () => of({ entryIds: [0], title: 'Split', format: 'st_native' }) };
+      return { afterDismissed: () => of({ entryIds: [0], title: 'Split', format: 'st_native' }) };
     });
 
     await actions.exportSelectedEntries([0]);

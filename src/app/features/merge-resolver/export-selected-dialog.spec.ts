@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { type CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { By } from '@angular/platform-browser';
+import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSelect } from '@angular/material/select';
 import {
@@ -54,6 +55,12 @@ describe('ExportSelectedDialog', () => {
   let workspace: WorkspaceService;
   let closeSpy: ReturnType<typeof vi.fn>;
   let dialogData: ExportSelectedDialogData;
+  /**
+   * Sheet-mode stub: when set before `createDialog`, the pane is mounted the
+   * way a phone bottom sheet opens it — a `MatBottomSheetRef` with the sheet
+   * data token, and no dialog ref or data token at all.
+   */
+  let sheetRefStub: { dismiss: ReturnType<typeof vi.fn> } | null;
 
   /** Normalized text of an element (the templates wrap lines freely). */
   function textOf(element: Element | null | undefined): string {
@@ -128,11 +135,22 @@ describe('ExportSelectedDialog', () => {
 
   beforeEach(async () => {
     closeSpy = vi.fn();
+    sheetRefStub = null;
     TestBed.configureTestingModule({
       imports: [ExportSelectedDialog],
       providers: [
-        { provide: MAT_DIALOG_DATA, useFactory: () => dialogData },
-        { provide: MatDialogRef, useValue: { close: closeSpy } },
+        // Factories resolve at component-creation time, so flipping
+        // `sheetRefStub` before createDialog switches the mounted container.
+        {
+          provide: MAT_DIALOG_DATA,
+          useFactory: () => (sheetRefStub ? null : dialogData),
+        },
+        {
+          provide: MatDialogRef,
+          useFactory: () => (sheetRefStub ? null : { close: closeSpy }),
+        },
+        { provide: MAT_BOTTOM_SHEET_DATA, useFactory: () => dialogData },
+        { provide: MatBottomSheetRef, useFactory: () => sheetRefStub },
       ],
     });
     workspace = TestBed.inject(WorkspaceService);
@@ -329,5 +347,25 @@ describe('ExportSelectedDialog', () => {
 
     expect(closeSpy).toHaveBeenCalledTimes(1);
     expect(closeSpy).toHaveBeenCalledWith(null);
+  });
+
+  it('opens as a phone bottom sheet and dismisses through the sheet ref', async () => {
+    sheetRefStub = { dismiss: vi.fn() };
+    const fixture = await createDialog({ preselectedIds: [1] });
+    const component = fixture.componentInstance;
+    const el = fixture.nativeElement as HTMLElement;
+
+    // The picker still virtual-scrolls its rows inside the sheet container.
+    expect(fixture.debugElement.query(By.css('cdk-virtual-scroll-viewport'))).toBeTruthy();
+    expect(rowOf(el, 'Saber')).toBeTruthy();
+    expect(sortedIds(component['selected']())).toEqual([1]);
+    expect(closeSpy).not.toHaveBeenCalled();
+
+    findButton(el, 'Cancel').click();
+    await settle(fixture);
+
+    expect(sheetRefStub.dismiss).toHaveBeenCalledTimes(1);
+    expect(sheetRefStub.dismiss).toHaveBeenCalledWith(null);
+    expect(closeSpy).not.toHaveBeenCalled();
   });
 });

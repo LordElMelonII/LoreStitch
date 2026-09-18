@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
@@ -45,16 +46,28 @@ describe('BatchOperationsDialog', () => {
   let close: ReturnType<typeof vi.fn> = vi.fn();
   let fixture: ComponentFixture<BatchOperationsDialog>;
 
+  /**
+   * Mounts the pane as one of its two containers would: `sheet: false`
+   * (default) mirrors the centered dialog (data + MatDialogRef), `sheet: true`
+   * mirrors the phone bottom sheet (sheet data token + MatBottomSheetRef and
+   * no dialog ref at all).
+   */
   async function createDialog(
     entryIds: number[],
     entries: CharacterBookEntry[],
+    options: { sheet?: boolean; dismiss?: ReturnType<typeof vi.fn> } = {},
   ): Promise<BatchOperationsDialog> {
     close = vi.fn();
     TestBed.configureTestingModule({
       imports: [BatchOperationsDialog],
       providers: [
-        { provide: MAT_DIALOG_DATA, useValue: { entryIds } },
-        { provide: MatDialogRef, useValue: { close } },
+        {
+          provide: options.sheet ? MAT_BOTTOM_SHEET_DATA : MAT_DIALOG_DATA,
+          useValue: { entryIds },
+        },
+        ...(options.sheet
+          ? [{ provide: MatBottomSheetRef, useValue: { dismiss: options.dismiss ?? vi.fn() } }]
+          : [{ provide: MatDialogRef, useValue: { close } }]),
       ],
     });
     workspace = TestBed.inject(WorkspaceService);
@@ -103,7 +116,7 @@ describe('BatchOperationsDialog', () => {
   function applyButton(): HTMLButtonElement {
     const match = [
       ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
-        'mat-dialog-actions button',
+        '.pane-footer button',
       ),
     ].find((b) => b.textContent?.includes('Apply to'));
     assert(match);
@@ -113,7 +126,7 @@ describe('BatchOperationsDialog', () => {
   function actionButton(label: string): HTMLButtonElement {
     const match = [
       ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
-        'mat-dialog-actions button',
+        '.pane-footer button',
       ),
     ].find((b) => b.textContent?.trim() === label);
     assert(match);
@@ -349,5 +362,26 @@ describe('BatchOperationsDialog', () => {
     expect(first.position).toBe('outlet');
     expect(first.extensions['position']).toBe(ST_POSITION.outlet);
     expect(first.extensions['outlet_name']).toBe('world_state');
+  });
+
+  it('opens as a phone bottom sheet and dismisses through the sheet ref', async () => {
+    const dismiss = vi.fn();
+    await createDialog([0], [entry(0)], { sheet: true, dismiss });
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('h2')?.textContent).toContain(
+      'Batch Edit 1 Entries',
+    );
+    expect(statusText()).toBe('No changes to apply');
+
+    // The header close affordance routes to the sheet ref; the dialog ref is
+    // absent entirely on this path.
+    const closeButton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button[aria-label="Close batch edit"]',
+    );
+    assert(closeButton);
+    closeButton.click();
+    expect(dismiss).toHaveBeenCalledWith(false);
+    expect(close).not.toHaveBeenCalled();
   });
 });

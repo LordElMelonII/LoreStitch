@@ -1,124 +1,138 @@
-<h2 mat-dialog-title>
-  <mat-icon>call_split</mat-icon>
-  Export Selected Entries as Lorebook
-</h2>
+<div class="pane">
+  <header class="pane-header">
+    <h2 mat-dialog-title class="pane-title">
+      <mat-icon>call_split</mat-icon>
+      Export Selected Entries as Lorebook
+    </h2>
+    <button
+      matIconButton
+      type="button"
+      class="pane-close"
+      (click)="close()"
+      matTooltip="Close"
+      aria-label="Close export selection"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
 
-<mat-dialog-content class="dialog-body">
-  <div class="settings-row">
-    <mat-form-field subscriptSizing="dynamic" appearance="outline" class="name-field">
-      <mat-label>Lorebook name</mat-label>
-      <input
-        matInput
-        type="text"
-        [ngModel]="title()"
-        (ngModelChange)="title.set($event)"
-        placeholder="Split name"
-        aria-label="Lorebook name for the export"
-      />
-    </mat-form-field>
+  <div class="pane-body">
+    <div class="settings-row">
+      <mat-form-field subscriptSizing="dynamic" appearance="outline" class="name-field">
+        <mat-label>Lorebook name</mat-label>
+        <input
+          matInput
+          type="text"
+          [ngModel]="title()"
+          (ngModelChange)="title.set($event)"
+          placeholder="Split name"
+          aria-label="Lorebook name for the export"
+        />
+      </mat-form-field>
 
-    <mat-form-field subscriptSizing="dynamic" appearance="outline" class="format-field">
-      <mat-label>Format</mat-label>
-      <mat-select
-        [value]="format()"
-        (selectionChange)="format.set($event.value)"
-        aria-label="Export file format"
-        panelClass="export-format-panel"
-      >
-        <mat-select-trigger>
-          {{ format() === 'st_native' ? 'SillyTavern World Info JSON' : 'Character Book JSON (V2)' }}
-        </mat-select-trigger>
-        <mat-option value="st_native">
-          <div class="format-option">
-            <span class="format-option-title">SillyTavern World Info JSON</span>
-            <span class="format-option-desc">Direct import into SillyTavern’s World Info panel</span>
-          </div>
-        </mat-option>
-        <mat-option value="character_book">
-          <div class="format-option">
-            <span class="format-option-title">Character Book JSON (V2)</span>
-            <span class="format-option-desc">Spec format for character cards &amp; third-party tools</span>
-          </div>
-        </mat-option>
-      </mat-select>
-      <mat-hint>
-        @if (format() === 'st_native') {
-          Direct import into SillyTavern’s World Info panel
-        } @else {
-          Standard V2 spec for character cards &amp; third-party tools
-        }
-      </mat-hint>
-    </mat-form-field>
-  </div>
+      <mat-form-field subscriptSizing="dynamic" appearance="outline" class="format-field">
+        <mat-label>Format</mat-label>
+        <mat-select
+          [value]="format()"
+          (selectionChange)="format.set($event.value)"
+          aria-label="Export file format"
+          panelClass="export-format-panel"
+        >
+          <mat-select-trigger>
+            {{ format() === 'st_native' ? 'SillyTavern World Info JSON' : 'Character Book JSON (V2)' }}
+          </mat-select-trigger>
+          <mat-option value="st_native">
+            <div class="format-option">
+              <span class="format-option-title">SillyTavern World Info JSON</span>
+              <span class="format-option-desc">Direct import into SillyTavern’s World Info panel</span>
+            </div>
+          </mat-option>
+          <mat-option value="character_book">
+            <div class="format-option">
+              <span class="format-option-title">Character Book JSON (V2)</span>
+              <span class="format-option-desc">Spec format for character cards &amp; third-party tools</span>
+            </div>
+          </mat-option>
+        </mat-select>
+        <mat-hint>
+          @if (format() === 'st_native') {
+            Direct import into SillyTavern’s World Info panel
+          } @else {
+            Standard V2 spec for character cards &amp; third-party tools
+          }
+        </mat-hint>
+      </mat-form-field>
+    </div>
 
-  @if (warnings().length) {
-    <div class="warnings" role="alert">
-      <div class="warnings-head">
-        <mat-icon aria-hidden="true">link_off</mat-icon>
-        <span>
-          {{ warnings().length }} selective trigger {{ warnings().length === 1 ? 'link' : 'links' }}
-          will break in the exported file:
-        </span>
+    @if (warnings().length) {
+      <div class="warnings" role="alert">
+        <div class="warnings-head">
+          <mat-icon aria-hidden="true">link_off</mat-icon>
+          <span>
+            {{ warnings().length }} selective trigger {{ warnings().length === 1 ? 'link' : 'links' }}
+            will break in the exported file:
+          </span>
+        </div>
+        <ul>
+          @for (warning of warnings(); track warning.entryId + warning.key) {
+            <li>
+              “{{ warning.entryTitle }}” — secondary key <code>{{ warning.key }}</code> triggers
+              “{{ warning.targetTitle }}”<span [hidden]="warning.targetCount < 2">
+                (+{{ warning.targetCount - 1 }} more)</span
+              >, which is not exported.
+            </li>
+          }
+        </ul>
       </div>
-      <ul>
-        @for (warning of warnings(); track warning.entryId + warning.key) {
-          <li>
-            “{{ warning.entryTitle }}” — secondary key <code>{{ warning.key }}</code> triggers
-            “{{ warning.targetTitle }}”<span [hidden]="warning.targetCount < 2">
-              (+{{ warning.targetCount - 1 }} more)</span
-            >, which is not exported.
-          </li>
-        }
-      </ul>
-    </div>
-  }
+    }
 
-  <div class="selection-bar">
-    <span class="counts">
-      {{ selected().size }} of {{ rows().length }} selected
-      <span class="dot">·</span>
-      ~{{ formatTokens(selectionTokens()) }} tokens
-    </span>
-    <span class="spacer"></span>
-    <button matButton type="button" (click)="selectAll()">All</button>
-    <button matButton type="button" (click)="selectNone()">None</button>
-    <button matButton type="button" (click)="invert()">Invert</button>
+    <div class="selection-bar">
+      <span class="counts">
+        {{ selected().size }} of {{ rows().length }} selected
+        <span class="dot">·</span>
+        ~{{ formatTokens(selectionTokens()) }} tokens
+      </span>
+      <span class="spacer"></span>
+      <button matButton type="button" (click)="selectAll()">All</button>
+      <button matButton type="button" (click)="selectNone()">None</button>
+      <button matButton type="button" (click)="invert()">Invert</button>
+    </div>
+
+    <cdk-virtual-scroll-viewport class="rows-viewport" itemSize="44">
+      <div *cdkVirtualFor="let row of rows(); templateCacheSize: 0" class="entry-row">
+        <mat-checkbox
+          [checked]="isSelected(row.id)"
+          (change)="toggle(row.id, $event.checked)"
+          (click)="$event.stopPropagation()"
+          [attr.aria-label]="'Include ' + row.title"
+        />
+        <!-- The whole row toggles too: on touch, the checkbox is the only
+             active target and it is far smaller than the row. -->
+        <button
+          type="button"
+          class="row-toggle"
+          (click)="toggle(row.id, !isSelected(row.id))"
+          [attr.aria-label]="(isSelected(row.id) ? 'Exclude ' : 'Include ') + row.title"
+        >
+          <span class="row-title">{{ row.title }}</span>
+          @for (tag of row.tags.slice(0, 2); track tag) {
+            <span class="tag-chip">{{ tag }}</span>
+          }
+          <span class="row-tokens">~{{ formatTokens(row.tokens) }}</span>
+        </button>
+      </div>
+    </cdk-virtual-scroll-viewport>
   </div>
 
-  <cdk-virtual-scroll-viewport class="rows-viewport" itemSize="44">
-    <div *cdkVirtualFor="let row of rows(); templateCacheSize: 0" class="entry-row">
-      <mat-checkbox
-        [checked]="isSelected(row.id)"
-        (change)="toggle(row.id, $event.checked)"
-        (click)="$event.stopPropagation()"
-        [attr.aria-label]="'Include ' + row.title"
-      />
-      <!-- The whole row toggles too: on touch, the checkbox is the only
-           active target and it is far smaller than the row. -->
-      <button
-        type="button"
-        class="row-toggle"
-        (click)="toggle(row.id, !isSelected(row.id))"
-        [attr.aria-label]="(isSelected(row.id) ? 'Exclude ' : 'Include ') + row.title"
-      >
-        <span class="row-title">{{ row.title }}</span>
-        @for (tag of row.tags.slice(0, 2); track tag) {
-          <span class="tag-chip">{{ tag }}</span>
-        }
-        <span class="row-tokens">~{{ formatTokens(row.tokens) }}</span>
-      </button>
-    </div>
-  </cdk-virtual-scroll-viewport>
-</mat-dialog-content>
-
-<mat-dialog-actions align="end">
-  <button matButton type="button" (click)="cancel()">Cancel</button>
-  <button
-    matButton="filled"
-    type="button"
-    (click)="export()"
-    [disabled]="!selected().size || !title().trim()"
-  >
-    Export {{ selected().size }} {{ selected().size === 1 ? 'entry' : 'entries' }}
-  </button>
-</mat-dialog-actions>
+  <footer class="pane-footer">
+    <button matButton type="button" (click)="cancel()">Cancel</button>
+    <button
+      matButton="filled"
+      type="button"
+      (click)="export()"
+      [disabled]="!selected().size || !title().trim()"
+    >
+      Export {{ selected().size }} {{ selected().size === 1 ? 'entry' : 'entries' }}
+    </button>
+  </footer>
+</div>

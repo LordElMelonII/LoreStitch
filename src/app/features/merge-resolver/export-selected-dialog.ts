@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { FormsModule } from '@angular/forms';
+import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -37,6 +38,12 @@ export interface ExportSelectedDialogData {
  * "Export Selected Entries as Lorebook": pick a subset of the working book,
  * name the split, choose the file format, and review selective-trigger
  * dependency warnings before the standalone file is written.
+ *
+ * Dual-container pane like the About pane: a centered `MatDialog`
+ * (tablet/desktop) and a `MatBottomSheet` (phones, `.app-export-sheet`) share
+ * this template — header fixed, body scrolling, actions pinned — so both refs
+ * and both data tokens are injected optionally and `close()` routes to
+ * whichever container is present.
  */
 @Component({
   selector: 'app-export-selected-dialog',
@@ -57,8 +64,21 @@ export interface ExportSelectedDialogData {
   styleUrl: './export-selected-dialog.scss',
 })
 export class ExportSelectedDialog {
-  private readonly dialogRef = inject(MatDialogRef<ExportSelectedDialog, ExportSelection | null>);
-  protected readonly data = inject<ExportSelectedDialogData>(MAT_DIALOG_DATA);
+  /** Ref of the opening container — exactly one of the two is present. */
+  private readonly dialogRef = inject(MatDialogRef<ExportSelectedDialog, ExportSelection | null>, {
+    optional: true,
+  });
+  private readonly sheetRef = inject(
+    MatBottomSheetRef<ExportSelectedDialog, ExportSelection | null>,
+    { optional: true },
+  );
+
+  /** Payload from whichever container opened the pane (canonical at the caller). */
+  protected readonly data: ExportSelectedDialogData =
+    (inject(MAT_DIALOG_DATA, { optional: true }) as ExportSelectedDialogData | null) ??
+    (inject(MAT_BOTTOM_SHEET_DATA, { optional: true }) as ExportSelectedDialogData | null) ??
+    {};
+
   private readonly workspace = inject(WorkspaceService);
 
   protected readonly rows = computed<ExportRow[]>(() =>
@@ -141,7 +161,7 @@ export class ExportSelectedDialog {
     if (!name || !this.selected().size) {
       return;
     }
-    this.dialogRef.close({
+    this.close({
       entryIds: [...this.selected()],
       title: name,
       format: this.format(),
@@ -149,7 +169,13 @@ export class ExportSelectedDialog {
   }
 
   protected cancel(): void {
-    this.dialogRef.close(null);
+    this.close(null);
+  }
+
+  /** Closes the pane through whichever container opened it. */
+  protected close(result: ExportSelection | null = null): void {
+    this.dialogRef?.close(result);
+    this.sheetRef?.dismiss(result);
   }
 
   protected formatTokens(tokens: number): string {

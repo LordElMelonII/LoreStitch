@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatChipsModule } from '@angular/material/chips';
@@ -38,6 +39,12 @@ export interface BatchOperationsDialogData {
  * set insertion orders, standardize the evaluation strategy (scan depth,
  * case sensitivity, selective logic, position) and assign tags. Only fields
  * the operator explicitly changed are written (see `BatchOperations`).
+ *
+ * The pane is dual-container, like the About pane: a centered `MatDialog`
+ * (tablet/desktop) and a `MatBottomSheet` (phones, `.app-batch-sheet`) share
+ * this template — header fixed, body scrolling, actions pinned — so both refs
+ * and both data tokens are injected optionally and `close()` routes to
+ * whichever container is present.
  */
 @Component({
   selector: 'app-batch-operations-dialog',
@@ -58,8 +65,21 @@ export interface BatchOperationsDialogData {
   styleUrl: './batch-operations-dialog.scss',
 })
 export class BatchOperationsDialog {
-  private readonly dialogRef = inject(MatDialogRef<BatchOperationsDialog, boolean>);
-  protected readonly data = inject<BatchOperationsDialogData>(MAT_DIALOG_DATA);
+  /** Ref of the opening container — exactly one of the two is present. */
+  private readonly dialogRef = inject(MatDialogRef<BatchOperationsDialog, boolean>, {
+    optional: true,
+  });
+  private readonly sheetRef = inject(MatBottomSheetRef<BatchOperationsDialog, boolean>, {
+    optional: true,
+  });
+
+  /** Payload from whichever container opened the pane (canonical at the caller). */
+  protected readonly data: BatchOperationsDialogData =
+    (inject(MAT_DIALOG_DATA, { optional: true }) as BatchOperationsDialogData | null) ??
+    (inject(MAT_BOTTOM_SHEET_DATA, { optional: true }) as BatchOperationsDialogData | null) ?? {
+      entryIds: [],
+    };
+
   private readonly workspace = inject(WorkspaceService);
   private readonly snackBar = inject(MatSnackBar);
 
@@ -189,7 +209,7 @@ export class BatchOperationsDialog {
     const ops = this.operations();
     const count = this.affectedCount();
     if (count === 0) {
-      this.dialogRef.close(false);
+      this.close(false);
       return;
     }
     this.workspace.updateManyEntries(
@@ -199,11 +219,17 @@ export class BatchOperationsDialog {
     this.snackBar.open(`Updated ${count} entr${count === 1 ? 'y' : 'ies'}.`, 'OK', {
       duration: 3500,
     });
-    this.dialogRef.close(true);
+    this.close(true);
   }
 
   protected cancel(): void {
-    this.dialogRef.close(false);
+    this.close(false);
+  }
+
+  /** Closes the pane through whichever container opened it. */
+  protected close(result = false): void {
+    this.dialogRef?.close(result);
+    this.sheetRef?.dismiss(result);
   }
 
   /** Comma-separated tag draft -> trimmed, de-duplicated tag list. */

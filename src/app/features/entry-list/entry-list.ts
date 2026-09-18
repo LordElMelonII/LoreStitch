@@ -16,7 +16,7 @@ import { FormField, form } from '@angular/forms/signals';
 import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -27,7 +27,9 @@ import { entryTags, entryTitle, entryTriggerState } from '../../core/models/lore
 import { estimateEntryTokens, formatTokenCount } from '../../core/services/token-estimator';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { ProjectActionsService } from '../shell/project-actions.service';
+import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
 import { type EntryListItem } from './entry-list.model';
+import { type BatchOperationsDialogData } from './batch-operations-dialog';
 
 /** Form model of the sidebar filter box. */
 interface EntryFilterModel {
@@ -60,6 +62,7 @@ export class EntryList {
   protected readonly workspace = inject(WorkspaceService);
   protected readonly actions = inject(ProjectActionsService);
   private readonly dialog = inject(MatDialog);
+  private readonly overlays = inject(ResponsiveOverlayService);
   private readonly snackBar = inject(MatSnackBar);
 
   private readonly viewport = viewChild.required(CdkVirtualScrollViewport);
@@ -387,22 +390,39 @@ export class EntryList {
     });
   }
 
-  protected async openBatchOperations(): Promise<void> {
+  /**
+   * Opens the batch editor over the current selection: centered dialog on
+   * tablet/desktop, bottom sheet on phones (`ResponsiveOverlayService` owns
+   * the viewport branch). Public so the mobile shell (Phase 4 FAB) can
+   * trigger it with the sidebar's live selection.
+   */
+  async openBatchOperations(): Promise<void> {
     const ids = [...this.selection()];
     if (!ids.length) {
       return;
     }
-    // Lazy-loaded: keeps the batch dialog out of the initial bundle.
+    // Lazy-loaded: keeps the batch pane out of the initial bundle.
     const { BatchOperationsDialog } = await import('./batch-operations-dialog');
+    const ref = this.overlays.openResponsive<
+      InstanceType<typeof BatchOperationsDialog>,
+      BatchOperationsDialogData,
+      boolean
+    >(BatchOperationsDialog, {
+      data: { entryIds: ids },
+      // Tablet/desktop config, identical to the former dialog.open() call.
+      dialog: {
+        width: '100%',
+        maxWidth: 'min(96vw, 560px)',
+        panelClass: 'app-compact-fullscreen-dialog',
+      },
+      sheetPanelClass: 'app-batch-sheet',
+      sheetConfig: { ariaLabel: 'Batch edit entries' },
+    });
+    // The two ref types carry no common completion stream, and both are the
+    // concrete classes their containers construct (never wrapped), so a
+    // prototype check reliably picks the matching one.
     const applied = await firstValueFrom(
-      this.dialog
-        .open(BatchOperationsDialog, {
-          width: '100%',
-          maxWidth: 'min(96vw, 560px)',
-          panelClass: 'app-compact-fullscreen-dialog',
-          data: { entryIds: ids },
-        })
-        .afterClosed(),
+      ref instanceof MatDialogRef ? ref.afterClosed() : ref.afterDismissed(),
     );
     if (applied) {
       this.clearSelection();

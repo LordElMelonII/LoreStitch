@@ -1,96 +1,110 @@
-<h2 mat-dialog-title>
-  <mat-icon>merge_type</mat-icon>
-  Merge “{{ data.sourceName }}”
-</h2>
-
-<mat-dialog-content class="dialog-body">
-  <div class="summary">
-    <span>{{ data.incoming.entries.length }} incoming entries</span>
-    <span class="dot">·</span>
-    <span
-      >{{ clashCount() }} clash{{ clashCount() === 1 ? '' : 'es' }} detected (id, key or name
-      overlap)</span
+<div class="pane">
+  <header class="pane-header">
+    <h2 mat-dialog-title class="pane-title">
+      <mat-icon>merge_type</mat-icon>
+      Merge “{{ data.sourceName }}”
+    </h2>
+    <button
+      matIconButton
+      type="button"
+      class="pane-close"
+      (click)="close()"
+      matTooltip="Close"
+      aria-label="Close merge resolver"
     >
-    <span class="spacer"></span>
-    <span class="pending">
-      {{ pendingCounts().import }} new · {{ pendingCounts().overwrite }} overwrite ·
-      {{ pendingCounts().skip }} skip
-    </span>
-  </div>
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
 
-  <div class="bulk">
-    <span>Bulk:</span>
-    <button matButton type="button" (click)="setAll('import')">Import all as new</button>
-    <button matButton type="button" (click)="setAll('overwrite', true)">Overwrite matched</button>
-    <button matButton type="button" (click)="setAll('skip')">Skip all</button>
-  </div>
+  <div class="pane-body">
+    <div class="summary">
+      <span>{{ data.incoming.entries.length }} incoming entries</span>
+      <span class="dot">·</span>
+      <span
+        >{{ clashCount() }} clash{{ clashCount() === 1 ? '' : 'es' }} detected (id, key or name
+        overlap)</span
+      >
+      <span class="spacer"></span>
+      <span class="pending">
+        {{ pendingCounts().import }} new · {{ pendingCounts().overwrite }} overwrite ·
+        {{ pendingCounts().skip }} skip
+      </span>
+    </div>
 
-  <div class="rows">
-    @for (row of rows(); track $index) {
-      <div class="merge-row" [class.identical]="row.identical">
-        <div class="row-head">
-          <mat-form-field subscriptSizing="dynamic" class="action-select">
-            <mat-select
-              [value]="action($index)"
-              (selectionChange)="setAction($index, $event.value)"
-              [attr.aria-label]="'Action for ' + title(row.incoming)"
-            >
-              <mat-option value="import">Import as New</mat-option>
-              <mat-option value="overwrite" [disabled]="!row.local">Overwrite Existing</mat-option>
-              <mat-option value="skip">Skip</mat-option>
-            </mat-select>
-          </mat-form-field>
+    <div class="bulk">
+      <span>Bulk:</span>
+      <button matButton type="button" (click)="setAll('import')">Import all as new</button>
+      <button matButton type="button" (click)="setAll('overwrite', true)">Overwrite matched</button>
+      <button matButton type="button" (click)="setAll('skip')">Skip all</button>
+    </div>
 
-          <div class="row-info">
-            <div class="row-title">
-              {{ title(row.incoming) }}
-              @if (row.identical) {
-                <span class="flag identical-flag">identical</span>
-              } @else if (row.local) {
-                <span class="flag clash-flag"> matches local “{{ title(row.local) }}” </span>
-              }
+    <div class="rows">
+      @for (row of rows(); track $index) {
+        <div class="merge-row" [class.identical]="row.identical">
+          <div class="row-head">
+            <mat-form-field subscriptSizing="dynamic" class="action-select">
+              <mat-select
+                [value]="action($index)"
+                (selectionChange)="setAction($index, $event.value)"
+                [attr.aria-label]="'Action for ' + title(row.incoming)"
+              >
+                <mat-option value="import">Import as New</mat-option>
+                <mat-option value="overwrite" [disabled]="!row.local">Overwrite Existing</mat-option>
+                <mat-option value="skip">Skip</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <div class="row-info">
+              <div class="row-title">
+                {{ title(row.incoming) }}
+                @if (row.identical) {
+                  <span class="flag identical-flag">identical</span>
+                } @else if (row.local) {
+                  <span class="flag clash-flag"> matches local “{{ title(row.local) }}” </span>
+                }
+              </div>
+              <div class="row-keys">
+                @for (key of row.incoming.keys.slice(0, 4); track $index) {
+                  <span class="key-chip">{{ key }}</span>
+                }
+                @if (row.incoming.keys.length > 4) {
+                  <span class="key-chip more">+{{ row.incoming.keys.length - 4 }}</span>
+                }
+              </div>
             </div>
-            <div class="row-keys">
-              @for (key of row.incoming.keys.slice(0, 4); track $index) {
-                <span class="key-chip">{{ key }}</span>
-              }
-              @if (row.incoming.keys.length > 4) {
-                <span class="key-chip more">+{{ row.incoming.keys.length - 4 }}</span>
-              }
-            </div>
+
+            @if (row.local) {
+              <button
+                matIconButton
+                type="button"
+                (click)="toggleExpand($index)"
+                [matTooltip]="expanded() === $index ? 'Hide diff' : 'Diff vs local'"
+                [attr.aria-label]="'Toggle diff for ' + title(row.incoming)"
+              >
+                <mat-icon>difference</mat-icon>
+              </button>
+            }
           </div>
 
-          @if (row.local) {
-            <button
-              matIconButton
-              type="button"
-              (click)="toggleExpand($index)"
-              [matTooltip]="expanded() === $index ? 'Hide diff' : 'Diff vs local'"
-              [attr.aria-label]="'Toggle diff for ' + title(row.incoming)"
-            >
-              <mat-icon>difference</mat-icon>
-            </button>
+          @if (expanded() === $index && row.local) {
+            <app-diff-viewer
+              class="row-diff"
+              [oldText]="row.local.content"
+              [newText]="row.incoming.content"
+              [mode]="data.mode ?? 'split'"
+            />
           }
         </div>
-
-        @if (expanded() === $index && row.local) {
-          <app-diff-viewer
-            class="row-diff"
-            [oldText]="row.local.content"
-            [newText]="row.incoming.content"
-            [mode]="data.mode ?? 'split'"
-          />
-        }
-      </div>
-    } @empty {
-      <div class="no-rows">The imported file contains no entries.</div>
-    }
+      } @empty {
+        <div class="no-rows">The imported file contains no entries.</div>
+      }
+    </div>
   </div>
-</mat-dialog-content>
 
-<mat-dialog-actions align="end">
-  <button matButton type="button" (click)="cancel()">Cancel</button>
-  <button matButton="filled" type="button" (click)="apply()" [disabled]="!rows().length">
-    Apply merge
-  </button>
-</mat-dialog-actions>
+  <footer class="pane-footer">
+    <button matButton type="button" (click)="cancel()">Cancel</button>
+    <button matButton="filled" type="button" (click)="apply()" [disabled]="!rows().length">
+      Apply merge
+    </button>
+  </footer>
+</div>
