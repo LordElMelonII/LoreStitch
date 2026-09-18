@@ -52,6 +52,7 @@ Thumbs.db
 /.opencode
 /.vscode
 /.zcode
+next_tasks
 /skills
 skills-lock.json
 # Playwright
