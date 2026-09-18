@@ -171,7 +171,11 @@
       <mat-icon>merge_type</mat-icon>
       <span>Merge lorebook…</span>
     </button>
-    <button mat-menu-item [matMenuTriggerFor]="exportMenu">
+    <button
+      mat-menu-item
+      [matMenuTriggerFor]="exportMenu"
+      appTouchSafeNestedMenuTrigger
+    >
       <mat-icon>file_download</mat-icon>
       <span>Export</span>
     </button>
@@ -183,7 +187,12 @@
     <!-- Phones-only companion for the standalone theme button hidden from the
          bar; the About entry below stays universal (the roadmap keeps an
          About entry in the desktop overflow menu as well). -->
-    <button mat-menu-item class="mobile-only" [matMenuTriggerFor]="themeMenu">
+    <button
+      mat-menu-item
+      class="mobile-only"
+      [matMenuTriggerFor]="themeMenu"
+      appTouchSafeNestedMenuTrigger
+    >
       <mat-icon>brightness_auto</mat-icon>
       <span>Theme</span>
     </button>

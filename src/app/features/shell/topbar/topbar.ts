@@ -11,6 +11,7 @@ import { ImportExportService } from '../../../core/services/import-export.servic
 import { ThemeService } from '../../../core/services/theme.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { GITHUB_REPO_URL } from '../../../shared/constants/github';
+import { TouchSafeNestedMenuTrigger } from '../../../shared/directives/touch-safe-nested-menu-trigger';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
 import { ProjectActionsService } from '../project-actions.service';
@@ -28,6 +29,7 @@ import { TokenMeter } from './token-meter';
     MatToolbarModule,
     MatTooltipModule,
     TokenMeter,
+    TouchSafeNestedMenuTrigger,
   ],
   templateUrl: './topbar.html',
   styleUrl: './topbar.scss',
