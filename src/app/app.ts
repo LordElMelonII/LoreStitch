@@ -1,4 +1,4 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { WorkspaceService } from './core/services/workspace.service';
 import { EntryList } from './features/entry-list/entry-list';
@@ -6,12 +6,23 @@ import { EntryEditor } from './features/entry-editor/entry-editor';
 import { CommitHistory } from './features/commit-history/commit-history';
 import { Topbar } from './features/shell/topbar/topbar';
 import { WelcomeScreen } from './features/shell/welcome-screen/welcome-screen';
+import { MobileFab, MobileFabAction } from './features/shell/mobile-fab/mobile-fab';
 import { LayoutService } from './shared/services/layout.service';
+import { ResponsiveOverlayService } from './shared/services/responsive-overlay.service';
+import { ProjectActionsService } from './features/shell/project-actions.service';
 
 /** Studio shell: top bar, entry sidenav, tabbed editor, commit history drawer. */
 @Component({
   selector: 'app-root',
-  imports: [MatSidenavModule, Topbar, WelcomeScreen, EntryList, EntryEditor, CommitHistory],
+  imports: [
+    MatSidenavModule,
+    Topbar,
+    WelcomeScreen,
+    EntryList,
+    EntryEditor,
+    CommitHistory,
+    MobileFab,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
   host: {
@@ -22,6 +33,12 @@ import { LayoutService } from './shared/services/layout.service';
 export class App {
   protected readonly workspace = inject(WorkspaceService);
   protected readonly layout = inject(LayoutService);
+  private readonly overlays = inject(ResponsiveOverlayService);
+  private readonly actions = inject(ProjectActionsService);
+
+  /** Children the shell forwards actions into (search dialog, batch pane). */
+  private readonly topbar = viewChild(Topbar);
+  private readonly entryList = viewChild(EntryList);
 
   /**
    * The active responsive window class (mobile < 768px, tablet
@@ -32,6 +49,12 @@ export class App {
 
   protected readonly leftOpened = signal(true);
   protected readonly rightOpened = signal(true);
+
+  /** Whether either sidenav drawer overlays the editor right now. */
+  protected readonly anyDrawerOpen = computed(() => this.leftOpened() || this.rightOpened());
+
+  /** Whether any dialog or bottom sheet covers the app right now. */
+  protected readonly anyOverlayOpen = this.overlays.anyOverlayOpen;
 
   constructor() {
     // Re-apply the per-class defaults when the window class changes. User
@@ -76,5 +99,29 @@ export class App {
 
   protected closeRight(): void {
     this.rightOpened.set(false);
+  }
+
+  /**
+   * Routes a mobile-FAB quick action to the component or service that owns
+   * it — the FAB itself stays presentational and only emits.
+   */
+  protected runFabAction(action: MobileFabAction): void {
+    switch (action) {
+      case 'new-entry':
+        this.actions.createEntry();
+        break;
+      case 'search-replace':
+        // Single source of truth: the topbar opener owns the dialog config
+        // (width, compact class, active-entry seeding).
+        void this.topbar()?.openSearch();
+        break;
+      case 'export':
+        void this.actions.exportSelectedEntries();
+        break;
+      case 'batch':
+        // The sidebar owns the live selection the batch pane edits.
+        void this.entryList()?.openBatchOperations();
+        break;
+    }
   }
 }

@@ -216,4 +216,27 @@ describe('App', () => {
     expect(layout.focusMode()).toBe(false);
     expect(fixture.nativeElement.classList.contains('focus-mode')).toBe(false);
   });
+
+  it('mounts the mobile FAB only on phones with an open project', async () => {
+    await createApp();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const fab = () => compiled.querySelector<HTMLElement>('app-mobile-fab');
+
+    // Desktop class with no project: mounted (it self-hides) but invisible.
+    expect(fab()?.classList.contains('fab-hidden')).toBe(true);
+
+    // Phones without a project: still hidden — there is nothing to act on.
+    await resizeTo('mobile');
+    expect(fab()?.classList.contains('fab-hidden')).toBe(true);
+
+    // Phone + project: the collapsed toggle appears.
+    await workspace.createProject('Fuyuki');
+    await fixture.whenStable();
+    expect(fab()?.classList.contains('fab-hidden')).toBe(false);
+    expect(fab()?.querySelector('.fab-toggle')).toBeTruthy();
+
+    // Back on desktop it hides again.
+    await resizeTo('desktop');
+    expect(fab()?.classList.contains('fab-hidden')).toBe(true);
+  });
 });

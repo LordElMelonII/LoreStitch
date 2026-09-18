@@ -1,4 +1,4 @@
-import { Service, inject } from '@angular/core';
+import { Service, computed, inject, signal } from '@angular/core';
 import { ComponentType } from '@angular/cdk/portal';
 import {
   MatBottomSheet,
@@ -51,6 +51,38 @@ export class ResponsiveOverlayService {
   private readonly layout = inject(LayoutService);
 
   /**
+   * Open `MatDialog` count, maintained app-wide: every dialog open — through
+   * this service or a direct `MatDialog.open` (search & replace, new
+   * project, confirms) — refreshes it from MatDialog's own registry, and
+   * `afterAllClosed` clears it.
+   */
+  private readonly openDialogCount = signal(0);
+
+  /**
+   * Open `MatBottomSheet` count. The bottom sheet exposes no registry the
+   * way `MatDialog.openDialogs` does, and this service is the app's only
+   * sheet opener, so the count tracks exactly the refs opened here.
+   */
+  private readonly openSheetCount = signal(0);
+
+  /**
+   * Whether any modal pane currently covers the app: any dialog app-wide or
+   * any sheet this service opened. The mobile FAB hides while this is true
+   * so it never competes with (or peeks out from under) a modal surface.
+   */
+  readonly anyOverlayOpen = computed(() => this.openDialogCount() + this.openSheetCount() > 0);
+
+  constructor() {
+    // App-wide dialog tracking. `afterOpened` fires per open and re-reads
+    // the live registry (stacked dialogs included); `afterAllClosed` fires
+    // once the last one dismisses and zeroes the count.
+    this.dialog.afterOpened.subscribe(
+      () => this.openDialogCount.set(this.dialog.openDialogs.length),
+    );
+    this.dialog.afterAllClosed.subscribe(() => this.openDialogCount.set(0));
+  }
+
+  /**
    * Opens `component` as a bottom sheet on phones (when a sheet variant is
    * registered) and as a dialog everywhere else. Returns whichever ref the
    * active container produced; callers that need to narrow it can check
@@ -76,7 +108,15 @@ export class ResponsiveOverlayService {
       if (data !== undefined) {
         sheetOptions.data = data;
       }
-      return this.bottomSheet.open<T, D, R>(component, sheetOptions);
+      const ref = this.bottomSheet.open<T, D, R>(component, sheetOptions);
+      // Sheet bookkeeping for `anyOverlayOpen`: release the slot when this
+      // exact sheet dismisses. The clamp keeps a stray double-dismiss from
+      // ever driving the count negative.
+      this.openSheetCount.update((count) => count + 1);
+      ref.afterDismissed().subscribe(() =>
+        this.openSheetCount.update((count) => Math.max(0, count - 1)),
+      );
+      return ref;
     }
 
     const dialogOptions: MatDialogConfig<D> = { ...dialog };

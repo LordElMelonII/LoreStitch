@@ -59,7 +59,14 @@ export class Topbar {
   /** External repository link (top bar on the welcome screen, More menu otherwise). */
   protected readonly githubUrl = GITHUB_REPO_URL;
 
-  protected async openSearch(): Promise<void> {
+  /**
+   * Opens global search & replace seeded with the active entry (null when no
+   * entry is open — the dialog then defaults to its "All entries" scope).
+   * Public: the shell forwards the mobile FAB's Search & replace action here
+   * through `viewChild`, keeping this dialog config the single source of
+   * truth for every trigger (topbar buttons and FAB alike).
+   */
+  async openSearch(): Promise<void> {
     // Lazy-loaded: keeps the search/replace UI out of the initial bundle.
     const { SearchReplaceDialog } = await import('../../search-replace/search-replace-dialog');
     this.dialog.open(SearchReplaceDialog, {

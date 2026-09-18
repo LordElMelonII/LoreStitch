@@ -48,3 +48,11 @@
     }
   </mat-sidenav>
 </mat-sidenav-container>
+
+<!-- Mobile quick actions: phones get a collapsible bottom-end FAB instead of
+     relying on desktop-only topbar buttons and keyboard shortcuts. Mounted
+     outside the sidenav container — Material's container only projects
+     mat-sidenav/mat-sidenav-content children — and fixed to the viewport
+     bottom-end, so it never scrolls with the editor pane (see mobile-fab.scss
+     for the anchor and stacking rationale). -->
+<app-mobile-fab [overlayOpen]="anyOverlayOpen()" [drawerOpen]="anyDrawerOpen()" (action)="runFabAction($event)" />
