@@ -83,6 +83,11 @@
   letter-spacing: 0.3px;
   white-space: nowrap;
   user-select: none;
+  // Clamp inside the item: a long label (or a long localized one) must
+  // ellipsize, never bleed into the neighboring item's hit area.
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 // M3 state layer: a currentColor veil over the item at the spec opacities

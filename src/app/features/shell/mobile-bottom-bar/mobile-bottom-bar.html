@@ -5,17 +5,21 @@
      by aria-label). -->
 @if (visible()) {
   <!-- M3 bottom action bar: five icon-over-label rows, always visible while
-       shown (no expanded/collapsed state to manage). Visible labels double as
-       the accessible names of the plain action buttons. -->
+       shown (no expanded/collapsed state to manage). Visible labels are short
+       (navigation-bar style); buttons that need a longer accessible name
+       carry an explicit aria-label. -->
   <nav class="bar" aria-label="Quick actions">
   <button type="button" class="bar-item" (click)="select('new-entry')">
     <mat-icon aria-hidden="true">post_add</mat-icon>
     <span class="bar-label">New entry</span>
   </button>
 
-  <button type="button" class="bar-item" (click)="select('search-replace')">
+  <!-- Short visible label (M3 navigation-bar style — the row is ~72px wide on
+       a 390px phone); the aria-label keeps the full action name for AT and
+       the shell e2e. -->
+  <button type="button" class="bar-item" aria-label="Search & replace" (click)="select('search-replace')">
     <mat-icon aria-hidden="true">find_replace</mat-icon>
-    <span class="bar-label">Search &amp; replace</span>
+    <span class="bar-label">Search</span>
   </button>
 
   <!-- Standalone menu trigger: deliberately NOT carrying

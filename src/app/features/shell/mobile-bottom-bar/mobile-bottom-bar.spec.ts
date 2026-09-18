@@ -173,7 +173,7 @@ describe('MobileBottomBar', () => {
     const labels = [...host().querySelectorAll<HTMLElement>('.bar-label')].map(
       (label) => label.textContent,
     );
-    expect(labels).toEqual(['New entry', 'Search & replace', 'Export', 'Batch edit', 'History']);
+    expect(labels).toEqual(['New entry', 'Search', 'Export', 'Batch edit', 'History']);
   });
 
   it('emits the matching action when an item runs', async () => {
