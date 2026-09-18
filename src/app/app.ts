@@ -1,15 +1,6 @@
 import { Component, effect, inject, signal } from '@angular/core';
-import { BreakpointObserver } from '@angular/cdk/layout';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { WorkspaceService } from './core/services/workspace.service';
-import {
-  DESKTOP_BREAKPOINT_QUERY,
-  MOBILE_BREAKPOINT_QUERY,
-  TABLET_BREAKPOINT_QUERY,
-  ViewportClass,
-} from './shared/constants/breakpoints';
 import { EntryList } from './features/entry-list/entry-list';
 import { EntryEditor } from './features/entry-editor/entry-editor';
 import { CommitHistory } from './features/commit-history/commit-history';
@@ -31,27 +22,13 @@ import { LayoutService } from './shared/services/layout.service';
 export class App {
   protected readonly workspace = inject(WorkspaceService);
   protected readonly layout = inject(LayoutService);
-  private readonly breakpoints = inject(BreakpointObserver);
 
   /**
-   * The active responsive window class: mobile (< 768px), tablet
-   * (768px–1279px) or desktop (>= 1280px). Defaults to desktop when no query
-   * matches (e.g. test environments without matchMedia).
+   * The active responsive window class (mobile < 768px, tablet
+   * 768px–1279px, desktop >= 1280px) — owned by `LayoutService`, the single
+   * source of viewport truth; aliased here for the template and effects.
    */
-  protected readonly viewport = toSignal(
-    this.breakpoints
-      .observe([MOBILE_BREAKPOINT_QUERY, TABLET_BREAKPOINT_QUERY, DESKTOP_BREAKPOINT_QUERY])
-      .pipe(
-        map(({ breakpoints }): ViewportClass =>
-          breakpoints[MOBILE_BREAKPOINT_QUERY]
-            ? 'mobile'
-            : breakpoints[TABLET_BREAKPOINT_QUERY]
-              ? 'tablet'
-              : 'desktop',
-        ),
-      ),
-    { initialValue: 'desktop' },
-  );
+  protected readonly viewport = this.layout.viewport;
 
   protected readonly leftOpened = signal(true);
   protected readonly rightOpened = signal(true);

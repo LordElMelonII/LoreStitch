@@ -1,6 +1,4 @@
-import { BreakpointObserver } from '@angular/cdk/layout';
 import { Component, computed, inject, input } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -10,13 +8,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { map } from 'rxjs';
 import {
   CharacterBookEntry,
   WiTriggerState,
   entryTriggerState,
 } from '../../../core/models/lorebook.model';
-import { MOBILE_BREAKPOINT_QUERY } from '../../../shared/constants/breakpoints';
+import { LayoutService } from '../../../shared/services/layout.service';
 import { entrySliceSignal } from '../entry-edit-form';
 import { EntryActivation } from '../entry-activation/entry-activation';
 import { EntryInclusionGroup } from '../entry-inclusion-group/entry-inclusion-group';
@@ -90,13 +87,10 @@ export class EntryOptionsAccordion {
    */
   protected readonly expanded = inject(EntryOptionsPanelState).expanded;
 
-  // Mirrors the shell's mobile breakpoint (`App`), which drives the expansion
-  // direction: the panel opens downward in flow on mobile, upward on desktop.
-  private readonly breakpoints = inject(BreakpointObserver);
-  protected readonly isMobile = toSignal(
-    this.breakpoints.observe(MOBILE_BREAKPOINT_QUERY).pipe(map((r) => r.matches)),
-    { initialValue: false },
-  );
+  // Mirrors the shell's mobile breakpoint through `LayoutService` (the single
+  // source of viewport truth), which drives the expansion direction: the
+  // panel opens downward in flow on mobile, upward on desktop.
+  protected readonly isMobile = inject(LayoutService).isMobile;
 
   /** The entry's trigger strategy: normal 🟢 / constant 🔵 / vectorized 🔗. */
   protected readonly triggerState = computed<WiTriggerState>(() => entryTriggerState(this.entry()));

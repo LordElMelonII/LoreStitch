@@ -251,9 +251,15 @@ describe('Topbar', () => {
   it('shows the focus toggle only on desktop viewports', async () => {
     await workspace.createProject('Fuyuki');
     await createTopbar();
+    // LayoutService classifies a window where no query has answered yet as
+    // desktop, so pin an explicit phone viewport before asserting the
+    // toggle is hidden below the desktop class.
+    desktop.setMobile(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[aria-label="Toggle focus mode"]')).toBeNull();
 
+    desktop.setMobile(false);
     desktop.setDesktop(true);
     // The CDK observer throttles breakpoint emissions (auditTime).
     await new Promise((resolve) => setTimeout(resolve, 0));

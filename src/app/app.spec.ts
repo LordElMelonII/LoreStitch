@@ -133,7 +133,7 @@ describe('App', () => {
   it('defaults both drawers open on desktop', async () => {
     const app = await createApp();
 
-    expect(app['viewport']()).toBe('desktop');
+    expect(layout.viewport()).toBe('desktop');
     expect(app['leftOpened']()).toBe(true);
     expect(app['rightOpened']()).toBe(true);
     expect(fixture.nativeElement.classList.contains('mobile')).toBe(false);
@@ -203,13 +203,13 @@ describe('App', () => {
   });
 
   it('activates focus mode on desktop and ends it when leaving the desktop class', async () => {
-    const app = await createApp();
+    await createApp();
 
     layout.toggleFocusMode();
     await fixture.whenStable();
     expect(layout.focusMode()).toBe(true);
     expect(fixture.nativeElement.classList.contains('focus-mode')).toBe(true);
-    expect(app['viewport']()).toBe('desktop');
+    expect(layout.viewport()).toBe('desktop');
 
     // Shrinking the window ends focus mode instead of leaving a cramped editor.
     await resizeTo('tablet');

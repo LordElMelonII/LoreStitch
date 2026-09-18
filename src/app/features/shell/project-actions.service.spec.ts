@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { BreakpointObserver } from '@angular/cdk/layout';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import { ImportExportService } from '../../core/services/import-export.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { LayoutService } from '../../shared/services/layout.service';
 import { ProjectActionsService } from './project-actions.service';
 
 /**
@@ -47,17 +47,17 @@ describe('ProjectActionsService', () => {
   let actions: ProjectActionsService;
   let dialogOpen: ReturnType<typeof vi.fn>;
   let snackBarOpen: ReturnType<typeof vi.fn>;
-  let isMatched: ReturnType<typeof vi.fn>;
+  let isMobile: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     dialogOpen = vi.fn().mockReturnValue({ afterClosed: () => of(undefined) });
     snackBarOpen = vi.fn();
-    isMatched = vi.fn().mockReturnValue(false);
+    isMobile = vi.fn().mockReturnValue(false);
     TestBed.configureTestingModule({
       providers: [
         { provide: MatDialog, useValue: { open: dialogOpen } },
         { provide: MatSnackBar, useValue: { open: snackBarOpen } },
-        { provide: BreakpointObserver, useValue: { isMatched } },
+        { provide: LayoutService, useValue: { isMobile } },
       ],
     });
     workspace = TestBed.inject(WorkspaceService);
@@ -276,12 +276,12 @@ describe('ProjectActionsService', () => {
     ];
     expect(options.data.sourceName).toBe('rin.json');
     expect(options.data.mode).toBe('split');
-    expect(isMatched).toHaveBeenCalled();
+    expect(isMobile).toHaveBeenCalled();
   });
 
   it('passes unified merge mode on mobile viewports', async () => {
     await workspace.createProject('Fuyuki');
-    isMatched.mockReturnValue(true);
+    isMobile.mockReturnValue(true);
     stubFilePicker(jsonFile('book.json', { entries: {} }));
     dialogOpen.mockReturnValue({ afterClosed: () => of(undefined) });
 

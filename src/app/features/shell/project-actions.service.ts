@@ -1,17 +1,16 @@
 import { inject, Service } from '@angular/core';
-import { BreakpointObserver } from '@angular/cdk/layout';
 import { firstValueFrom } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ParsedImport, ImportExportService } from '../../core/services/import-export.service';
 import { ProjectWorkspace } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { LayoutService } from '../../shared/services/layout.service';
 import { type MergeOutcome } from '../merge-resolver/merge-resolver.model';
 import { type ExportSelection } from '../merge-resolver/export-selected.model';
 import { type ExportSelectedDialogData } from '../merge-resolver/export-selected-dialog';
 import { type NewProjectResult } from './new-project.model';
 import { IMPORT_ACCEPT, MERGE_ACCEPT } from './project-actions.constants';
-import { MOBILE_BREAKPOINT_QUERY } from '../../shared/constants/breakpoints';
 
 /**
  * Project lifecycle & import orchestration shared by the topbar and the
@@ -27,7 +26,7 @@ export class ProjectActionsService {
   private readonly dialog = inject(MatDialog);
   private readonly importer = inject(ImportExportService);
   private readonly snackBar = inject(MatSnackBar);
-  private readonly breakpoints = inject(BreakpointObserver);
+  private readonly layout = inject(LayoutService);
 
   // -------------------------------------------------------------------------
   // Project lifecycle
@@ -172,7 +171,7 @@ export class ProjectActionsService {
           data: {
             incoming: parsed.book,
             sourceName: fileName,
-            mode: this.breakpoints.isMatched(MOBILE_BREAKPOINT_QUERY) ? 'unified' : 'split',
+            mode: this.layout.isMobile() ? 'unified' : 'split',
           },
         })
         .afterClosed(),
