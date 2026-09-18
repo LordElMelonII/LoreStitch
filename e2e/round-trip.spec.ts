@@ -13,11 +13,7 @@ import { devices, expect, type Download, type Page, test } from '@playwright/tes
  * devices and the theme menu on the welcome screen.
  */
 
-const FATE_PATH = join(
-  process.cwd(),
-  'example_card',
-  'Fate Stay Night - Fuyuki Lorebook(1).json',
-);
+const FATE_PATH = join(process.cwd(), 'example_card', 'Fate Stay Night - Fuyuki Lorebook(1).json');
 
 const original = JSON.parse(readFileSync(FATE_PATH, 'utf8')) as {
   stlo: Record<string, unknown>;
@@ -68,6 +64,10 @@ async function exportWorldInfo(
 }
 
 test.describe('native lorebook round trip', () => {
+  // Boot + import + edit + export + re-import is a long interaction on the
+  // WebKit simulator; the default 30s budget expires mid-suite even when every
+  // assertion is healthy.
+  test.describe.configure({ timeout: 90_000 });
   test.use({ viewport: { width: 1920, height: 1080 } });
 
   test('import, edit, export: stlo, every attribute and the edits survive', async ({ page }) => {
@@ -155,6 +155,39 @@ test.describe('native lorebook round trip', () => {
     ).toHaveAttribute('aria-selected', 'true');
   });
 
+  test('wrapped content survives the import/edit/export round trip', async ({ page }) => {
+    await page.goto('/');
+    await importLorebook(page, FATE_PATH);
+
+    await openFirstEntryOptions(page);
+
+    // Replace the fixture's content with an already-wrapped body. The studio
+    // must not re-wrap, strip, or otherwise normalize it on the way out.
+    const wrapped = '<London>\nA wrapped body line.\n</London>';
+    await page.locator('[aria-label="Entry content"]').fill(wrapped);
+    await expect(page.locator('[aria-label="Entry content"]')).toHaveValue(wrapped);
+
+    const exported = await exportWorldInfo(page);
+    const out = exported.json as {
+      entries: Record<string, Record<string, unknown>>;
+    };
+
+    // Exactly one entry carries the wrapped content, byte for byte.
+    const contented = Object.values(out.entries).filter((entry) => entry['content'] === wrapped);
+    expect(contented).toHaveLength(1);
+
+    // Re-importing the export keeps the wrapper untouched in the editor.
+    const reimportChooser = page.waitForEvent('filechooser');
+    await page.locator('[aria-label="Projects menu"]').click();
+    await page.getByText('Open .json / .stproj').click();
+    await (await reimportChooser).setFiles(await exported.download.path());
+    await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
+    await expect(page.locator('.entries-sidenav')).toBeAttached();
+
+    await openFirstEntryOptions(page);
+    await expect(page.locator('[aria-label="Entry content"]')).toHaveValue(wrapped);
+  });
+
   test('welcome screen offers the theme menu before any project exists', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('app-welcome-screen')).toBeVisible();
@@ -199,9 +232,7 @@ test.describe('touch scrolling in the entry list (mobile fix)', () => {
     // Material's `auto` tooltips stamp `touch-action: none` on every host,
     // which made any touch starting on a row unable to scroll the list.
     const blocked = await page.evaluate(() => {
-      const hosts = document.querySelectorAll<HTMLElement>(
-        '.entry-item .mat-mdc-tooltip-trigger',
-      );
+      const hosts = document.querySelectorAll<HTMLElement>('.entry-item .mat-mdc-tooltip-trigger');
       return [...hosts].filter((el) => getComputedStyle(el).touchAction === 'none').length;
     });
     expect(blocked, 'tooltip hosts with touch-action: none inside rows').toBe(0);
