@@ -72,6 +72,8 @@ openResponsive<T, D, R>(component: ComponentType<T>, config: {
 
 ### 3.3 Mobile FAB navigation (collapsible)
 
+> **⚠ AMENDMENT (2026-09-18, implementation):** the FAB was **replaced by a bottom action bar** (`features/shell/mobile-bottom-bar/`) after real-device testing showed the fixed FAB covering the entry editor's bottom-right accordion toggle, and the user elected Google's M3 bottom-bar pattern over a FAB. The bar mounts as a normal flex child of app-root (topbar / workspace / bar — never fixed-positioned), hosts five labeled actions (New entry, Search, Export menu, Batch edit, History — the last moved off the mobile topbar to free topbar space), hides while overlays or drawers are open, and pads `env(safe-area-inset-bottom)`. The overlay-count addition to `ResponsiveOverlayService` (`anyOverlayOpen`) landed as designed. Details in `02-PROGRESS.md` and the `feat(shell)` commits. The original FAB design below is kept for the record.
+
 - Visible only when `layout.viewport() === 'mobile'` and a project is open; anchored bottom-end with `env(safe-area-inset-bottom)` offset (PWA install/iOS gesture bar).
 - Collapsed: single M3 FAB (`menu` icon, `aria-expanded`, `aria-controls`). Expanded: vertical stack of small-FAB/button actions with labels — **New Entry**, **Search & Replace**, **Export**, **Batch Operations** — mirroring the desktop topbar's desktop-only icon set so no core action requires a keyboard or a hidden menu.
 - Behavior details: Escape collapses; selecting an entry list row or opening a drawer collapses; z-index above sidenav-over overlay; must not cover the entry-list batch bar (bottom sheet region) — position above safe area with 16px inset, and hide while any overlay/sheet is open.

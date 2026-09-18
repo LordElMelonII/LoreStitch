@@ -5,7 +5,7 @@ Planning documents for the four MEDIUM PRIORITY items in `ROADMAP.md`. **Plannin
 | # | Plan | ROADMAP Item | Primary Agents |
 |---|------|--------------|----------------|
 | 01 | [delimiters-edge-cases.md](./01-delimiters-edge-cases.md) ✅ Completed 2026-09-18 | Delimiters testing and edge cases | core-engine → ui-specialist → qa-auditor → ts-reviewer |
-| 02 | [mobile-ergonomics.md](./02-mobile-ergonomics.md) | Mobile Ergonomics & Responsive Viewport Guardrails | ui-specialist → qa-auditor → ts-reviewer |
+| 02 | [mobile-ergonomics.md](./02-mobile-ergonomics.md) ✅ Completed 2026-09-18 | Mobile Ergonomics & Responsive Viewport Guardrails | ui-specialist → qa-auditor → ts-reviewer |
 | 03 | [lorebook-linter.md](./03-lorebook-linter.md) | Lorebook Health Linter & Validator | core-engine → ui-specialist → qa-auditor → ts-reviewer |
 | 04 | [regex-key-sandbox.md](./04-regex-key-sandbox.md) | Regex Key Testing Sandbox | core-engine → ui-specialist → qa-auditor → ts-reviewer |
 
@@ -18,7 +18,7 @@ Planning documents for the four MEDIUM PRIORITY items in `ROADMAP.md`. **Plannin
 04 (Sandbox)     ── depends on 03 Phase 1 (shared regex modules)
 ```
 
-Recommended sequence: **02 → 03 → 04** (01 completed 2026-09-18).
+Recommended sequence: **03 → 04** (01 and 02 completed 2026-09-18).
 Rationale:
 
 - Task 02 establishes the reusable dialog→bottom-sheet conversion pattern; the ROADMAP explicitly requires the (not-yet-built) Linter modal to be a bottom sheet on narrow screens, so 02 should land first.
