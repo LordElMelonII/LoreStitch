@@ -8,10 +8,19 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env['CI'],
-  retries: process.env['CI'] ? 1 : 0,
+  // One retry everywhere: the three-project suite saturates an 8-core dev
+  // box (ng serve + browser workers), which starves Playwright's WebKit
+  // actionability poll ("waiting for element to be … stable" past a static,
+  // fully-rendered page). CI already retried once; local parity keeps a
+  // single contention stall from turning the whole run red.
+  retries: 1,
 
-  // Prevents CI runners from running out of memory while Angular dev server is running
-  workers: process.env['CI'] ? 1 : undefined,
+  // Prevents CI runners from running out of memory while Angular dev server is running.
+  // Locally, cap below the default (cpus/2 = 4): with four workers plus the
+  // dev server the WebKit project's actionability checks stall under CPU
+  // contention far more often (see the retry note above), so local runs
+  // trade a little runtime for stability.
+  workers: process.env['CI'] ? 1 : 2,
 
   // Clean console output locally, plus inspectable HTML artifact on CI
   reporter: process.env['CI']

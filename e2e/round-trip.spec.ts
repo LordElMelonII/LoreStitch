@@ -69,6 +69,14 @@ test.describe('native lorebook round trip', () => {
   // assertion is healthy.
   test.describe.configure({ timeout: 90_000 });
   test.use({ viewport: { width: 1920, height: 1080 } });
+  // Project gate (plan §3.5.5): the round trip pins a 1920px desktop viewport
+  // (its file download / re-import flow never varies by breakpoint), so the
+  // mobile projects would only replay it under a phone UA. The touch-specific
+  // mobile fix lives in the describe below on the mobile projects.
+  test.skip(
+    () => test.info().project.name.startsWith('mobile-'),
+    'desktop-pinned round trip runs on the desktop project only',
+  );
 
   test('import, edit, export: stlo, every attribute and the edits survive', async ({ page }) => {
     await page.goto('/');
@@ -220,6 +228,13 @@ test.describe('touch scrolling in the entry list (mobile fix)', () => {
   // would force a new worker; the project is already pinned to Chromium.)
   const { defaultBrowserType: _browser, ...pixel7 } = devices['Pixel 7'];
   test.use(pixel7);
+  // Project gate (plan §3.5.5): a mobile-device leg by design — the Android
+  // UA/touch flags are the point, so the desktop project would only weaken
+  // them; both mobile projects keep it (WebKit parity).
+  test.skip(
+    () => test.info().project.name === 'desktop-chrome',
+    'touch-scrolling fix runs on the mobile projects only',
+  );
 
   test('no tooltip host inside an entry row blocks native panning', async ({ page }) => {
     await page.goto('/');

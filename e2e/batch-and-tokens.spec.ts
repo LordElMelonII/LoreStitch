@@ -7,6 +7,12 @@ import { expect, type Page, test } from '@playwright/test';
  * features: the top-bar always-active token meter + inspector, the sidebar
  * batch selection bar with bulk operations, and the "export selected entries
  * as lorebook" split dialog.
+ *
+ * No project gate (plan §3.5.5 audit): every flow here is breakpoint-
+ * sensitive by design — the helpers stage the off-canvas drawer on phones
+ * and nothing on docked sidebars — so all three projects run all five tests
+ * and the phone paths stay pinned on both engines. (There is no separate
+ * token-meter spec; the meter is covered by the first and fourth tests.)
  */
 
 const FATE_PATH = join(
@@ -26,8 +32,21 @@ async function importLorebook(page: Page, path: string): Promise<void> {
   await expect(page.locator('.entries-sidenav')).toBeAttached();
 }
 
-/** Checks the selection checkboxes of the first two visible entry rows. */
+/**
+ * Checks the selection checkboxes of the first two visible entry rows.
+ *
+ * Viewport-aware: below the shell's 768px breakpoint the entries sidenav is
+ * an off-canvas `over` drawer, so the rows (and their checkboxes) are not
+ * visible until the drawer is toggled open. The batch toolbar lives inside
+ * the drawer too, so the whole selection flow stays within it — which is why
+ * the bottom action bar hiding while the drawer is open is irrelevant here.
+ */
 async function selectFirstTwoRows(page: Page): Promise<void> {
+  const viewport = page.viewportSize();
+  if (viewport && viewport.width < 768) {
+    await page.locator('[aria-label="Toggle entries panel"]').click();
+    await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
+  }
   const rows = page.locator('.entry-item');
   await rows.first().locator('.row-select').click();
   await rows.nth(1).locator('.row-select').click();

@@ -49,6 +49,18 @@ function worldInfoItem(page: Page): ReturnType<Page['locator']> {
 
 test.describe('nested menus on touch (phone viewport)', () => {
   test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+  // Cold WebKit boot + import + the two flash windows exceed the default 30s
+  // budget when the whole suite runs at once (observed as the Import button
+  // never settling under worker load) — same allowance as the other mobile
+  // suites (delimiters 75s, round-trip 90s).
+  test.describe.configure({ timeout: 75_000 });
+  // Project gate (plan §3.5.5): a phone + touch leg by design — mobile-chrome
+  // and mobile-safari cover both engines with real device descriptors, so a
+  // desktop-project run would only duplicate mobile-chrome.
+  test.skip(
+    () => test.info().project.name === 'desktop-chrome',
+    'touch flash regression runs on the mobile projects only',
+  );
 
   test('a tapped nested submenu stays open instead of flashing shut', async ({ page }) => {
     await page.goto('/');
@@ -82,6 +94,13 @@ test.describe('nested menus on touch (phone viewport)', () => {
 
 test.describe('nested menus keep desktop parity (mouse, no touch)', () => {
   test.use({ hasTouch: false, viewport: { width: 1280, height: 800 } });
+  // Project gate (plan §3.5.5): pins a mouse-driven desktop viewport, so the
+  // mobile projects would only replay the desktop interaction under a phone
+  // UA; desktop-chrome already covers it.
+  test.skip(
+    () => test.info().project.name.startsWith('mobile-'),
+    'desktop parity leg runs on the desktop project only',
+  );
 
   test('clicking the nested Export trigger opens its submenu', async ({ page }) => {
     await page.goto('/');

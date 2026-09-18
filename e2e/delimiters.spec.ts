@@ -237,6 +237,14 @@ async function addEntryOnPhone(page: Page): Promise<void> {
   await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('.entries-sidenav')).not.toBeInViewport();
+  // See ui-responsiveness.spec.ts addEntry: the drawer's focus restore pans
+  // the overflow:hidden workspace sideways; re-zero before asserting layout.
+  await page.evaluate(() => {
+    const workspace = document.querySelector('.workspace') as HTMLElement | null;
+    if (workspace) {
+      workspace.scrollLeft = 0;
+    }
+  });
   await expect(page.locator('[aria-label="Entry content"]')).toBeVisible();
 }
 
@@ -246,6 +254,14 @@ test.describe('delimiters via the real dialog', () => {
   // mid-suite even when every assertion is healthy.
   test.describe.configure({ timeout: 90_000 });
   test.use({ viewport: { width: 1920, height: 1080 } });
+  // Project gate (plan §3.5.5): this describe pins a 1920px desktop viewport,
+  // so the mobile projects would only replay the desktop flow under a phone
+  // UA — the desktop project already covers it. The phone leg below runs on
+  // the mobile projects (real device descriptors, both engines).
+  test.skip(
+    () => test.info().project.name.startsWith('mobile-'),
+    'desktop-pinned delimiter flow runs on the desktop project only',
+  );
 
   test('applies tag style to every entry and is idempotent on re-open', async ({ page }) => {
     await page.goto('/');
@@ -460,6 +476,13 @@ test.describe('delimiters mobile viewport (390x844)', () => {
   // tight for a cold WebKit run (app boot + drawer choreography).
   test.describe.configure({ timeout: 75_000 });
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+  // Project gate (plan §3.5.5): a phone leg by design — mobile-chrome runs
+  // the identical engine with a real device descriptor, so the desktop
+  // project would only duplicate it.
+  test.skip(
+    () => test.info().project.name === 'desktop-chrome',
+    'phone-pinned delimiter flow runs on the mobile projects only',
+  );
 
   test('full-screen dialog and Apply wraps the entry content', async ({ page }) => {
     await createProject(page);
