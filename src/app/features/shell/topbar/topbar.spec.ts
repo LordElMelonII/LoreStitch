@@ -1,7 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { DomSanitizer } from '@angular/platform-browser';
 import { By } from '@angular/platform-browser';
-import { MatBottomSheet } from '@angular/material/bottom-sheet';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconRegistry } from '@angular/material/icon';
 import { MatMenuTrigger } from '@angular/material/menu';
@@ -15,6 +14,7 @@ import { StorageService } from '../../../core/services/storage.service';
 import { ImportExportService } from '../../../core/services/import-export.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { LayoutService } from '../../../shared/services/layout.service';
+import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
 import { GITHUB_ICON } from '../../../shared/constants/github';
 import {
   DESKTOP_BREAKPOINT_QUERY,
@@ -73,7 +73,7 @@ describe('Topbar', () => {
   let workspace: WorkspaceService;
   let importer: ImportExportService;
   let dialogOpen: ReturnType<typeof vi.fn>;
-  let sheetOpen: ReturnType<typeof vi.fn>;
+  let overlayOpen: ReturnType<typeof vi.fn>;
   let desktop: { setDesktop: (matches: boolean) => void; setMobile: (matches: boolean) => void };
   let fixture: import('@angular/core/testing').ComponentFixture<Topbar>;
 
@@ -86,15 +86,20 @@ describe('Topbar', () => {
   beforeEach(async () => {
     desktop = installMatchMediaStub();
     dialogOpen = vi.fn().mockReturnValue({ afterClosed: () => of(undefined) });
-    sheetOpen = vi.fn().mockReturnValue({ afterDismissed: () => of(undefined) });
+    overlayOpen = vi.fn();
     await TestBed.configureTestingModule({
       imports: [Topbar],
     }).compileComponents();
     // overrideProvider (not a module-level providers list): the imported
-    // Material ng-modules provide the real MatDialog/MatBottomSheet closer to
-    // the component, and only overrides win at every injector level.
+    // Material ng-modules provide the real MatDialog closer to the component,
+    // and only overrides win at every injector level.
     TestBed.overrideProvider(MatDialog, { useValue: { open: dialogOpen } });
-    TestBed.overrideProvider(MatBottomSheet, { useValue: { open: sheetOpen } });
+    // The About pane's viewport branching lives in ResponsiveOverlayService
+    // (covered by its own spec); here its opener is stubbed so the top bar's
+    // responsibility — the exact call shape — stays the assertion target.
+    TestBed.overrideProvider(ResponsiveOverlayService, {
+      useValue: { openResponsive: overlayOpen },
+    });
     // The top bar renders the inlined GitHub mark; unit tests bypass the app
     // initializer that registers it (see app.spec.ts).
     TestBed.inject(MatIconRegistry).addSvgIconLiteral(
@@ -301,42 +306,30 @@ describe('Topbar', () => {
     }
   });
 
-  it('opens the About dialog on desktop viewports', async () => {
+  it('routes the About pane through the responsive overlay', async () => {
     await createTopbar();
-    desktop.setDesktop(true);
-    // The CDK observer throttles breakpoint emissions (auditTime).
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    fixture.detectChanges();
 
     (fixture.nativeElement as HTMLElement)
       .querySelector('[aria-label="About LoreStitch"]')
       ?.dispatchEvent(new Event('click'));
     // The about pane is lazy-loaded; the open lands after the import.
-    await vi.waitFor(() => expect(dialogOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
-    const call = dialogOpen.mock.calls.at(-1);
+    await vi.waitFor(() => expect(overlayOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
+    const call = overlayOpen.mock.calls.at(-1);
     assert(call);
-    const options = call[1] as { panelClass: string | string[] };
-    expect(options.panelClass).toContain('app-about-dialog');
-    expect(sheetOpen).not.toHaveBeenCalled();
-  });
-
-  it('opens the About pane as a bottom sheet on phones', async () => {
-    await createTopbar();
-    desktop.setMobile(true);
-    // The CDK observer throttles breakpoint emissions (auditTime).
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    fixture.detectChanges();
-
-    (fixture.nativeElement as HTMLElement)
-      .querySelector('[aria-label="About LoreStitch"]')
-      ?.dispatchEvent(new Event('click'));
-    await vi.waitFor(() => expect(sheetOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
-    const call = sheetOpen.mock.calls.at(-1);
-    assert(call);
-    const [component, options] = call as [object, { panelClass: string | string[] }];
+    const [component, config] = call as [object, Record<string, unknown>];
     // The lazy import resolves to the same class the spec imports statically.
     expect(component).toBe(AboutDialog);
-    expect(options.panelClass).toBe('app-about-sheet');
+    // Tablet/desktop dialog styling plus the phone sheet panel class; the
+    // viewport branching itself belongs to ResponsiveOverlayService.
+    expect(config).toEqual({
+      dialog: {
+        width: '100%',
+        maxWidth: 'min(94vw, 680px)',
+        panelClass: 'app-about-dialog',
+      },
+      sheetPanelClass: 'app-about-sheet',
+    });
+    // The About pane must not bypass the responsive service.
     expect(dialogOpen).not.toHaveBeenCalled();
   });
 
@@ -345,9 +338,7 @@ describe('Topbar', () => {
     await createTopbar();
     fixture.detectChanges();
 
-    const triggerDebug = fixture.debugElement.query(
-      By.css('[aria-label="More actions menu"]'),
-    );
+    const triggerDebug = fixture.debugElement.query(By.css('[aria-label="More actions menu"]'));
     assert(triggerDebug);
     triggerDebug.injector.get(MatMenuTrigger).openMenu();
     fixture.detectChanges();
@@ -400,7 +391,10 @@ describe('TokenMeter', () => {
     };
   }
 
-  function constantEntry(id: number, content: string): ProjectWorkspace['activeBook']['entries'][number] {
+  function constantEntry(
+    id: number,
+    content: string,
+  ): ProjectWorkspace['activeBook']['entries'][number] {
     return { ...createEmptyEntry(id), content, constant: true, comment: `C${id}` };
   }
 
