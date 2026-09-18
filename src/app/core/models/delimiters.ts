@@ -9,6 +9,16 @@
  *   tag:       <London>\ncontent\n</London>
  *   bracket:   [London=\ncontent]
  *   separator: content\n\n---
+ *
+ * Every operation is pure and total (no throws). `wrap` -> `unwrap` is
+ * byte-lossless for non-blank payloads under `tag`/`bracket` (the wrapper's
+ * own structural newlines are consumed while the payload — padding, CRLF,
+ * quotes, `<>[]=`, regex metacharacters, Unicode/emoji/CJK — is captured
+ * verbatim) and under `separator` for payloads that do not themselves end in
+ * a blank line (a body that does is unavoidably indistinguishable from the
+ * marker run; `rewrap` still fixes it to an idempotent canonical form).
+ * Blank payloads are a no-op for every style, so no phantom wrapper is ever
+ * written into an entry.
  */
 
 export type DelimiterStyle = 'tag' | 'bracket' | 'separator' | 'none';
@@ -19,9 +29,18 @@ export interface DetectedDelimiter {
   name: string;
 }
 
-const TAG_RE = /^\s*<([^<>\n]{1,80})>[ \t]*\r?\n?([\s\S]*?)\r?\n?[ \t]*<\/\1>[ \t]*$/;
-const BRACKET_RE = /^\s*\[([^\]\n=]{1,80})=[ \t]*\r?\n?([\s\S]*?)\r?\n?[ \t]*\][ \t]*$/;
-const SEPARATOR_RE = /^([\s\S]+?)\r?\n[ \t]*-{3,}[ \t]*$/;
+/**
+ * Wrapper regexes. Each consumes at most one structural newline directly
+ * inside the wrapper on either side; everything else is captured verbatim.
+ * The tag backreference makes mismatched (`<foo>…</bar>`) and unclosed tags
+ * fall through to `'none'`. Names are capped at 80 characters.
+ */
+const TAG_RE = /^\s*<([^<>\n]{1,80})>\r?\n?([\s\S]*?)\r?\n?<\/\1>\s*$/;
+const BRACKET_RE = /^\s*\[([^\]\n=]{1,80})=\r?\n?([\s\S]*?)\r?\n?\]\s*$/;
+/** Trailing `---` preceded by one structural newline (optionally a blank line). */
+const SEPARATOR_RE = /^([\s\S]+?)\r?\n(?:\r?\n)?[ \t]*-{3,}[ \t]*$/;
+/** A separator marker with no payload — already wrapped, never re-wrapped. */
+const BARE_SEPARATOR_RE = /^\s*-{3,}\s*$/;
 
 /** Recognizes which delimiter (if any) wraps the given content. */
 export function detectDelimiter(content: string): DetectedDelimiter {
@@ -40,51 +59,136 @@ export function detectDelimiter(content: string): DetectedDelimiter {
   return { style: 'none', name: '' };
 }
 
-/** Wraps already-delimiter-free content in the given style. */
+/**
+ * Collapses characters that would break the wrapping syntax to spaces,
+ * collapses whitespace runs, and caps the result at 80 code points.
+ *
+ * Quotes, regex metacharacters (`* + ? | { }`), and Unicode/emoji pass
+ * through unchanged. The cap counts code points (not UTF-16 units), so a
+ * surrogate pair is never split in half. An empty (or fully sanitized-away)
+ * name stays empty; callers substitute their own fallback where one is
+ * required.
+ */
+export function sanitizeDelimiterName(name: string): string {
+  const collapsed = (name ?? '')
+    .replace(/[<>=[\]\n\r]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return [...collapsed].slice(0, 80).join('');
+}
+
+/**
+ * Case-insensitive, sanitized name match used by name-matched stripping.
+ * Both sides are normalized with `sanitizeDelimiterName` before comparing,
+ * so `'a=b'` and `'a[b'` compare equal.
+ */
+export function delimiterNameMatches(name: string, expectedNames: readonly string[]): boolean {
+  const normalized = sanitizeDelimiterName(name).toLowerCase();
+  return expectedNames.some(
+    (expected) => sanitizeDelimiterName(expected).toLowerCase() === normalized,
+  );
+}
+
+/**
+ * Wraps already-delimiter-free content in the given style. The payload is
+ * embedded verbatim (never trimmed); only blank payloads short-circuit.
+ *
+ * The wrapper name is sanitized (`sanitizeDelimiterName`), falling back to
+ * `'entry'` when nothing usable remains. The `separator` style returns a bare
+ * marker unchanged: `---` already is the separator form, so appending another
+ * one would accumulate on every re-apply.
+ */
 export function wrapContent(
   content: string,
   style: Exclude<DelimiterStyle, 'none'>,
   name = '',
 ): string {
-  const body = (content ?? '').trim();
-  const safeName = (name ?? '').trim() || 'entry';
+  const body = content ?? '';
+  // Blank payloads are a no-op: emitting a wrapper around nothing would add
+  // phantom tokens and make re-apply non-idempotent.
+  if (body.trim() === '') {
+    return body;
+  }
+  const safeName = sanitizeDelimiterName(name) || 'entry';
   switch (style) {
     case 'tag':
       return `<${safeName}>\n${body}\n</${safeName}>`;
     case 'bracket':
       return `[${safeName}=\n${body}]`;
     case 'separator':
-      return body ? `${body}\n\n---` : '---';
+      return BARE_SEPARATOR_RE.test(body) ? body : `${body}\n\n---`;
   }
 }
 
-/** Strips a recognized delimiter and returns the inner content. */
-export function unwrapContent(content: string): string {
+/** Options for name-matched delimiter stripping (see `unwrapContent`). */
+export interface UnwrapOptions {
+  /**
+   * Accepted tag/bracket wrapper names (case-insensitive, sanitized before
+   * comparison). When omitted, any detected wrapper is stripped (legacy).
+   */
+  expectedNames?: readonly string[];
+  /**
+   * Whether a detected trailing separator may be stripped. Defaults to
+   * `expectedNames === undefined` (conservative when the caller names
+   * wrappers).
+   */
+  stripSeparator?: boolean;
+}
+
+/**
+ * Strips a recognized delimiter and returns the inner content verbatim (no
+ * trim; a non-blank payload survives byte-for-byte).
+ *
+ * With `expectedNames`, tag/bracket wrappers whose name does not match any of
+ * the expected names are treated as payload and returned unchanged — this is
+ * what keeps prose such as `<note>x</note>` from being deleted by mistake.
+ * Separator stripping is conservative by default whenever the caller names
+ * wrappers, because a trailing `---` is indistinguishable from a scene break.
+ */
+export function unwrapContent(content: string, options: UnwrapOptions = {}): string {
   const text = content ?? '';
   const detected = detectDelimiter(text);
+  const { expectedNames, stripSeparator = expectedNames === undefined } = options;
   switch (detected.style) {
     case 'tag':
-      return (TAG_RE.exec(text)?.[2] ?? text).trim();
+      if (expectedNames && !delimiterNameMatches(detected.name, expectedNames)) {
+        return text;
+      }
+      return TAG_RE.exec(text)?.[2] ?? text;
     case 'bracket':
-      return (BRACKET_RE.exec(text)?.[2] ?? text).trim();
+      if (expectedNames && !delimiterNameMatches(detected.name, expectedNames)) {
+        return text;
+      }
+      return BRACKET_RE.exec(text)?.[2] ?? text;
     case 'separator':
-      return (SEPARATOR_RE.exec(text)?.[1] ?? text).trim();
+      return stripSeparator ? (SEPARATOR_RE.exec(text)?.[1] ?? text) : text;
     default:
       return text;
   }
 }
 
 /**
- * Applies `style` to content that may already carry another delimiter:
- * the existing wrapper is stripped first, so switching between styles and
- * removing delimiters are all safe, idempotent operations.
+ * Applies `style` to content that may already carry another delimiter.
+ *
+ * The existing wrapper is stripped first when the caller accepts its name
+ * (`expectedNames`). Separator handling is deliberate:
+ * - targeting `'separator'`/`'none'` strips a detected trailing `---`
+ *   (explicit removal / re-apply);
+ * - targeting `'tag'`/`'bracket'` keeps a trailing `---` as payload, because
+ *   a scene break must never be silently deleted by re-wrapping.
+ *
+ * Malformed or unrecognized input degrades to additive wrapping, never
+ * truncation; re-applying a wrapping style is a fixed point.
  */
-export function rewrapContent(content: string, style: DelimiterStyle, name = ''): string {
-  const inner = unwrapContent(content);
-  if (style === 'none') {
-    return inner;
-  }
-  return wrapContent(inner, style, name);
+export function rewrapContent(
+  content: string,
+  style: DelimiterStyle,
+  name = '',
+  expectedNames?: readonly string[],
+): string {
+  const stripSeparator = style === 'none' || style === 'separator';
+  const inner = unwrapContent(content, { expectedNames, stripSeparator });
+  return style === 'none' ? inner : wrapContent(inner, style, name);
 }
 
 /** Options metadata for delimiter style selectors. */
@@ -99,15 +203,6 @@ export const DELIMITER_STYLE_OPTIONS: readonly {
   { value: 'none', label: 'None — remove delimiters', hint: 'Strip any recognized wrapper' },
 ];
 
-/** Collapses characters that would break the wrapping syntax to spaces. */
-function cleanDelimiterName(raw: string): string {
-  return raw
-    .replace(/[<>=[\]\n\r]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80);
-}
-
 /**
  * Default delimiter name for an entry: comment, then name, then first key.
  */
@@ -118,7 +213,7 @@ export function entryDelimiterName(entry: {
 }): string {
   const raw =
     entry.comment?.trim() || entry.name?.trim() || entry.keys?.find((k) => k.trim())?.trim() || '';
-  return cleanDelimiterName(raw) || 'entry';
+  return sanitizeDelimiterName(raw) || 'entry';
 }
 
 /**
@@ -131,7 +226,7 @@ export function entryDelimiterNameFromKey(entry: {
   keys?: string[];
 }): string {
   const key = entry.keys?.find((k) => k.trim()) ?? '';
-  return cleanDelimiterName(key) || entryDelimiterName(entry);
+  return sanitizeDelimiterName(key) || entryDelimiterName(entry);
 }
 
 /** Compact badge label for a detected delimiter (e.g. `<London>`, `---`). */
