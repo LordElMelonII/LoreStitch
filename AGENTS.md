@@ -35,6 +35,7 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 - Unit test suite: `npm test`
 - Code coverage: `ng test --coverage`
 - E2E & fidelity: `npx playwright test`
+- E2E spec typecheck: `npm run typecheck:e2e`
 - Linting: `npm run lint`
 
 ## Environment & Session Notes
@@ -45,6 +46,7 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 - Playwright filters by spec-name substring (`npx playwright test delimiters round-trip`); a large "skipped" count is by design — phone-pinned tests skip on desktop projects, mobile-chrome/mobile-safari run them. Entry editor assertions must scope to the active tab body (`.mat-mdc-tab-body-active`) — inactive mat-tabs keep their inputs in the DOM.
 - Material Symbols render from a self-hosted pre-subsetted woff2 (`public/fonts/material-symbols-outlined.woff2`) built by `scripts/refresh-icons.mjs` scanning `src/`; after adding a new icon ligature run `npm run icons:refresh` or the ligature renders as raw text. Stage the regenerated font with the feature commit.
 - Repo-wide prettier drift is pre-existing and `format:check` is not a maintained gate — format only the files you touch; a repo-wide format commit is a user decision, not a drive-by.
+- Shared spec fixtures: unit specs reuse `src/testing/` (`projectOf`, `severityFixture`, `installMatchMediaStub`) and e2e specs reuse `e2e/helpers.ts` (`importLorebook`, `exportWorldInfo`, `selectFirstTwoRows`) instead of copy-pasting helpers into each spec (root `TEST-REPORT.md` traces the duplication this removed).
 - Task branches: every task executes on a `feature/<nn>-<slug>` branch created off `develop`; all of its phase commits land there. When the work completes, push the branch to origin and stop — never merge it back automatically. `git merge --ff-only` into `develop` happens only after the user has manually tested the branch and given the go.
 - History is linear: merge with fast-forward only, no merge commits. Releases: `chore(release): vX.Y.Z` touching `package.json`, both `lore-stitch` version fields in `package-lock.json`, and `CHANGELOG.md` (writer-facing voice; no git tags).
 - Check `git status --short` before each phase commit; unrelated local edits (e.g. `.gitignore`) may appear mid-session — keep them out of atomic phase commits.
