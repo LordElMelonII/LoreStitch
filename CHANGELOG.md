@@ -3,6 +3,25 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.1.1 — September 19, 2026
+
+A quiet repair for the delimiter tools. Wrappers that don't line up — an opening
+`<test>` closed by a `</universe>`, or a tag left hanging — used to be invisible,
+and applying a style could nest a second wrapper around them. Now they're
+spotted, flagged, and cleaned up in the same previewed flow as before.
+
+### Fixed
+
+- **Mismatched and unclosed delimiters are recognized** — the entry editor's
+  delimiter badge now flags content whose tags don't match or whose closing tag
+  never arrives, instead of staying silent.
+- **No more wrappers inside wrappers** — applying a style to such an entry
+  replaces the broken pair with one clean wrapper, and the None style removes
+  it. The preview shows the repair before anything is written.
+- **The dialog says what it found** — affected entries get a "mismatched" or
+  "unclosed" chip, a row hint naming the broken tags, and a banner counting the
+  entries that will change.
+
 ## 1.1.0 — September 19, 2026
 
 The phone release. LoreStitch now feels at home under your thumb: every core
