@@ -67,3 +67,5 @@ node_modules/
 /playwright/.auth/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
+
+PERSONAL_NOTES.md
