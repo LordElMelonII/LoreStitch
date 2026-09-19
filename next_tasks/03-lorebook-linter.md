@@ -131,6 +131,8 @@ Recompute cadence matches the `TokenMeter` precedent (a full-book pure pass per 
 - More menu gains "Health check…" (universal — phones reach it there), mirroring how Search & replace is mirrored. No project open ⇒ neither control renders (project-gated row).
 - Optional nicety (only if cheap): warning dot on entry-list rows that appear in any error/warning diagnostic.
 
+**Visual design is checkpointed before code**: P3a (§4) produces an annotated design spec + baseline screenshots and waits for user approval; P3b implements only the approved design. Lesson from Task 02 — its FAB design was implemented unreviewed and replaced by the M3 bottom bar after real-device feedback.
+
 ### 3.4 Test plan
 
 - **`st-regex.spec.ts` / `st-key-match.spec.ts`** (Tier 1, core-engine): table-driven against the vendored ST source behavior — valid/invalid flags, unescaped inner slash, `\\/` unescaping, case folding, whole-word single vs multi-word, regex keys overriding options.
@@ -138,22 +140,31 @@ Recompute cadence matches the `TokenMeter` precedent (a full-book pure pass per 
 - **`linter-state.spec.ts` + `linter-dialog.spec.ts` + `topbar.spec.ts` additions** (Tier 2, ui-specialist): seeding per test conventions, severity grouping render, jump-to-entry wiring via `openEntry`, badge visibility/hiding at 0, sheet-mode instantiation (dual optional refs), More-menu item on mobile layout.
 - **`e2e/linter.spec.ts`** (Tier 3, qa-auditor): fixture `example_card/linter-demo.lorebook.json` (ST-native format so it exercises the real import path) containing all five defect classes; import → open linter from topbar → assert counts/messages → click-through selects the entry in the editor → fix one invalid regex via the entry editor → badge count drops on recompute. One `mobile-chrome` run asserting the bottom-sheet variant via the More menu.
 
+### 3.5 Visual baseline & comparison protocol (P3a → P3b)
+
+No automated visual-diff exists in this repo, so the UI phase carries a manual one:
+
+- **Before (P3a, prior to any UI code)**: full-page screenshots of every surface P3b touches — topbar with a project open at desktop (≥1280), tablet (768–1279), and mobile (390×844) widths; More menu open; one existing dual-container pane (About: dialog on desktop, sheet on mobile) as the pattern reference; the entry editor. Stored under `__screenshots/linter/before/` (already gitignored).
+- **After (P3b close)**: the same set — unchanged surfaces must be pixel-comparable, proving the change is additive (only the new linter affordance appears) — plus the new surfaces: badge states (0, n), linter dialog with seeded defects, sheet on mobile, empty state. Stored under `__screenshots/linter/after/`.
+- **Comparison**: side-by-side before/after posted to the user in the P3b phase report. The baseline doubles as design-input: P3a's spec is drawn against the real current chrome, not memory.
+
 ## 4. Implementation Plan
 
 | Phase | Files | Work |
 |-------|-------|------|
 | **P1 — Shared semantics modules** (core-engine) | `core/models/st-regex.ts` + spec, `core/models/st-key-match.ts` + spec | §3.1, fidelity-tested against `sillytaver-world-info-doc/world-info.js` |
 | **P2 — Linter core** (core-engine) | `core/services/linter.ts` + spec | §3.2 rules (incl. `malformed-wrapper` via `core/models/delimiters.ts`), recursion graph, perf guard, immutability test |
-| **P3 — Diagnostic UI** (ui-specialist) | `features/linter/linter-state.ts` + spec, `features/linter/linter-dialog.ts/.html/.scss/.spec.ts` (new), `features/shell/topbar/topbar.ts/.html/.scss/.spec.ts`, global overlay stylesheet (`app-linter-dialog` / `app-linter-sheet`) | §3.3 state service + modal + entry point + badge |
+| **P3a — UI design proposal + baseline** (ui-specialist) | no `src/` changes; design spec + `__screenshots/linter/before/` | §3.3 visual design as an annotated spec (dialog + sheet layouts, severity icon/color mapping on `--mat-sys-*` tokens, badge treatment, row anatomy, complete copy incl. empty state) drawn against the §3.5 baseline screenshots; **user approval checkpoint** |
+| **P3b — Diagnostic UI** (ui-specialist) | `features/linter/linter-state.ts` + spec, `features/linter/linter-dialog.ts/.html/.scss/.spec.ts` (new), `features/shell/topbar/topbar.ts/.html/.scss/.spec.ts`, global overlay stylesheet (`app-linter-dialog` / `app-linter-sheet`) | §3.3 implementation of the approved design only; closes with the §3.5 after-set + comparison |
 | **P4 — Review** (ts-reviewer) | all touched | `extensions: Record<string, unknown>` access discipline (typed guards per `entry-activation.ts`, no `any`), computed purity, lint |
 | **P5 — E2E + fixture** (qa-auditor) | `e2e/linter.spec.ts`, `example_card/linter-demo.lorebook.json` | §3.4 E2E incl. desktop + one mobile-chrome sheet run |
 
-P1→P2 sequential; P3 can start once P2's interface (§3.2) is frozen — parallelize P3 with P2's tail if desired. Suggested phase commits: `feat(core): add ST regex and key-matching semantics modules`, `feat(linter): add lorebook health linter core`, `feat(linter): add health-check modal and topbar entry point`, `test(e2e): cover lorebook linter flows`; close-out `docs(next_tasks): mark task 03 completed`.
+P1→P2 sequential; P3a can start once P2's interface (§3.2) is frozen — parallelize P3a with P2's tail if desired; **P3b starts only after P3a's design is user-approved**. Suggested phase commits: `feat(core): add ST regex and key-matching semantics modules`, `feat(linter): add lorebook health linter core`, `docs(next_tasks): record approved linter UI design` (P3a close — the approved spec is appended to this file, the Task 02 amendment precedent, so it survives the session), `feat(linter): add health-check modal and topbar entry point`, `test(e2e): cover lorebook linter flows`; close-out `docs(next_tasks): mark task 03 completed`.
 
 ## 5. Orchestration
 
 1. **`core-engine`** (skills: `typescript-advanced-types`, `angular-developer`) — P1+P2. Hard constraints: pure functions, no UI imports in `core/`, never drop/mutate vendor fields, `world-info.js` is the semantic oracle (cite line refs in comments). *Gate: `npm test` green; spec suite covers every rule + suppression + the immutability guard.*
-2. **`ui-specialist`** (skills: `angular-developer`, `material-3`, `frontend-design`) — P3. Standalone OnPush, signals/computed only, M3 tokens, dual container strictly via `openResponsive`, 44px touch floors; lint-rule wording and severity surfaces follow the frontend-design copy rules. *Gate: `npm test` + `npm run build`.*
+2. **`ui-specialist`** (skills: `frontend-design`, `material-3`, `angular-developer`) — P3a, then P3b. **P3a**: capture the §3.5 baseline, author the design spec, post it to the user, stop. *Gate: explicit user approval of the design — the pipeline does not advance on an unreviewed visual design.* **P3b**: build the approved design — standalone OnPush, signals/computed only, M3 tokens, dual container strictly via `openResponsive`, 44px touch floors, frontend-design copy rules; close with the after-set and before/after comparison. *Gate: `npm test` + `npm run build` + comparison delivered.*
 3. **`ts-reviewer`** (skills: `typescript-advanced-types`) — P4. *Gate: `npm run lint`, zero new `any`/non-null assertions.*
 4. **`qa-auditor`** (skills: `playwright-cli`) — P5. Three-tier matrix, coverage thresholds, E2E on desktop + mobile projects; its pre-handoff checklist is the final gate. *Gate: `npx playwright test linter`, `ng test --coverage`.*
 
@@ -161,7 +172,7 @@ The orchestrator freezes the §3.2 public interface before dispatching P3 (it is
 
 ## 6. Verification Gates
 
-`npm run build` · `npm test` · `ng test --coverage` (st-regex, st-key-match, linter, linter-state, linter-dialog, topbar additions all covered) · `npx playwright test linter round-trip` (round-trip must stay green — proof the feature didn't touch serialization) · `npm run lint`.
+`npm run build` · `npm test` · `ng test --coverage` (st-regex, st-key-match, linter, linter-state, linter-dialog, topbar additions all covered) · `npx playwright test linter round-trip` (round-trip must stay green — proof the feature didn't touch serialization) · `npm run lint` · §3.5 before/after screenshot comparison delivered at P3b close.
 
 ## 7. Risks & Open Questions
 
@@ -171,3 +182,4 @@ The orchestrator freezes the §3.2 public interface before dispatching P3 (it is
 4. **Perf on large books**: graph rules are O(V·E) key-tests worst case; the 1,500-entry threshold skip + 5,000-char match cap bound it. Badge recompute runs per project mutation — same cadence as the existing `TokenMeter` full-book pass, and a single memoized computed shared by badge + dialog avoids double work. Catastrophic user regexes remain the residual risk (same caveat as Task 04's ReDoS note) — acceptable at offline-lint scale.
 5. ~~**`entryIds` stability**~~ **Resolved at re-grounding**: `normalizeImportedBook` (lorebook.model.ts:793) assigns ids to every imported entry and `WorkspaceService` assigns ids on creation; the `id ?? index` fallback stays purely as type defense.
 6. **Malformed-wrapper double surfacing**: the entry editor badge (Task 05) and the linter both report it — by design (inline vs book-wide). Both call `detectMalformedWrapper` with the identical hint chain, so they can never disagree; the linter adds no repair path (cleanup stays in the delimiter flow).
+7. **Manual visual regression**: the §3.5 protocol is human-reviewed evidence, not an enforced gate — no automated image diff exists in the repo. If the project later adopts Playwright `toHaveScreenshot`, the `__screenshots__/` baseline can graduate into real snapshot tests.
