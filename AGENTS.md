@@ -9,6 +9,7 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
   - Never drop unknown vendor keys during import/export.
   - No `::ng-deep` or legacy CSS overrides.
   - Angular 22 reactivity: use Signals (`signal()`, `computed()`, `input()`, `output()`) over RxJS state.
+  - Dual-container panes (dialog on tablet/desktop, bottom sheet on phones) open only through `ResponsiveOverlayService.openResponsive` (`src/app/shared/services/responsive-overlay.service.ts`); viewport branching never appears at call sites.
 - **Pipeline Order**: implementation agents first (`core-engine` → `ui-specialist`), then `ts-reviewer` (typing/lint review) **before** `qa-auditor`; `qa-auditor`'s pre-handoff checklist is the final verification gate.
 - **Gate Failures Fix Forward**: a red gate means the responsible subagent fixes and re-runs its own phase; the pipeline never advances on a red gate. After two consecutive failed fix attempts, stop and escalate to the user with the failing output.
 - **Human Sign-off on Contract Changes**: any change that alters exported bytes, entry `content` output, or behavior pinned by existing tests requires a user checkpoint — post the old-vs-new contract with a minimal repro after planning, and dispatch the changing phase only after approval.
