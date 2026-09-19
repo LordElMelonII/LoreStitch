@@ -6,7 +6,7 @@ Planning documents for the four MEDIUM PRIORITY items in `ROADMAP.md` (plus urge
 |---|------|--------------|----------------|
 | 01 | [delimiters-edge-cases.md](./01-delimiters-edge-cases.md) ✅ Completed 2026-09-18 | Delimiters testing and edge cases | core-engine → ui-specialist → qa-auditor → ts-reviewer |
 | 02 | [mobile-ergonomics.md](./02-mobile-ergonomics.md) ✅ Completed 2026-09-18 | Mobile Ergonomics & Responsive Viewport Guardrails | ui-specialist → qa-auditor → ts-reviewer |
-| 03 | [lorebook-linter.md](./03-lorebook-linter.md) | Lorebook Health Linter & Validator | core-engine → ui-specialist → ts-reviewer → qa-auditor |
+| 03 | [lorebook-linter.md](./03-lorebook-linter.md) ✅ Completed 2026-09-19 | Lorebook Health Linter & Validator | core-engine → ui-specialist → ts-reviewer → qa-auditor |
 | 04 | [regex-key-sandbox.md](./04-regex-key-sandbox.md) | Regex Key Testing Sandbox | core-engine → ui-specialist → ts-reviewer → qa-auditor |
 | 05 | [urgent-mismatched-delimiters.md](./05-urgent-mismatched-delimiters.md) ✅ Completed 2026-09-19 | Bug report 2026-09-19 — reopens ROADMAP "Asymmetric Delimiters" (`<foo>…</bar>`) | core-engine → ui-specialist → ts-reviewer → qa-auditor |
 
@@ -16,9 +16,10 @@ Planning documents for the four MEDIUM PRIORITY items in `ROADMAP.md` (plus urge
 01 (Delimiters)  ── completed 2026-09-18
 02 (Mobile)      ── completed 2026-09-18
 05 (Urgent)      ── completed 2026-09-19 (mismatched/malformed delimiter detection & cleanup)
-03 (Linter)      ── produces shared st-regex/matcher modules consumed by 04;
-                   should adopt 05's detectMalformedWrapper as a lint rule
-04 (Sandbox)     ── depends on 03 Phase 1 (shared regex modules)
+03 (Linter)      ── completed 2026-09-19 (shared st-regex/matcher modules landed for 04;
+                   adopted 05's detectMalformedWrapper as a lint rule; user-amended with
+                   per-issue ignore + rule mute persisted in .stproj archives)
+04 (Sandbox)     ── depends on 03 Phase 1 (shared regex modules — landed)
 ```
 
 Recommended sequence: **05 → 03 → 04** (01 and 02 completed 2026-09-18).
@@ -44,6 +45,6 @@ Rationale:
 | Task | Grounded at | Notes |
 |------|-------------|-------|
 | 01, 02 | `4120bb9` (01 landed `a5f4c34`..`109061d`) | Completed 2026-09-18 |
-| 03 | `329509b` (re-grounded 2026-09-19) | Pending — plan refreshed for Task 02 (`openResponsive`, topbar badge anatomy) and Task 05 (`detectMalformedWrapper` adopted as a lint rule); core file renamed `linter.ts` per the pure-module convention |
+| 03 | `329509b` (re-grounded 2026-09-19) | Completed 2026-09-19 — landed `552a6cc`..`37865dc`; owns `core/models/st-regex.*`, `core/models/st-key-match.*`, `core/services/linter.*`, `features/linter/**`, the topbar linter entry, `e2e/linter.spec.ts`, `example_card/linter-demo.lorebook.json`; design recorded in plan §3.6 (user-approved, incl. the ignore/mute `.stproj` amendment); 04 consumes `st-regex`/`st-key-match` |
 | 04 | `4120bb9` | Pending — re-ground before dispatch (consumes 03's shared modules; `entry-keys.*` untouched since the audit, but re-check at HEAD) |
 | 05 | `c003bce` (05 landed `ba8b753`..`ca41d39`) | Completed 2026-09-19 — owns `core/models/delimiters.*`, `features/delimiters/**`, `entry-content-field.*`, `e2e/delimiters.spec.ts`; disjoint from 03/04 |
