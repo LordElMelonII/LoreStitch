@@ -52,7 +52,9 @@ test.describe('about dialog (tablet/desktop)', () => {
     }
   });
 
-  test('changelog tab renders the 1.0.0 release with its Highlights', async ({ page }) => {
+  test('changelog tab renders the release history with its Highlights sections', async ({
+    page,
+  }) => {
     await openAboutFromTopbar(page);
     const pane = aboutDialogPane(page);
     await expect(pane).toBeVisible();
@@ -60,8 +62,16 @@ test.describe('about dialog (tablet/desktop)', () => {
     await pane.getByRole('tab', { name: 'Changelog' }).click();
     // The changelog is fetched from /CHANGELOG.md when the dialog opens;
     // toBeVisible waits out the loading spinner.
+    //
+    // The oldest release is a permanent part of the history; the newest one
+    // moves with every release and is only pinned by its semver shape.
     await expect(pane.locator('.release-version', { hasText: '1.0.0' })).toBeVisible();
-    await expect(pane.locator('.section-title', { hasText: 'Highlights' })).toBeVisible();
+    await expect(pane.locator('.release-version').first()).toContainText(SEMVER);
+    // Every release documents a "Highlights" section, so the title matches
+    // several elements by design — take the newest (rendered first) rather
+    // than handing strict mode a multiplicity it must reject.
+    await expect(pane.locator('.section-title', { hasText: 'Highlights' }).first()).toBeVisible();
+    await expect(pane.locator('.release-section').first()).toBeVisible();
   });
 
   test('open source tab credits Angular under the MIT license', async ({ page }) => {
