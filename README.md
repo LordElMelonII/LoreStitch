@@ -10,7 +10,7 @@ Everything runs entirely in your browser — projects are stored locally in Inde
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org) `^22.22.3`, `^24.15.0`, or `^26.0.0` ([Angular 22 requirement](https://angular.dev/reference/versions))
+- [Node.js](https://nodejs.org) `^22.22.3`, `^24.15.0`, or `>=26.0.0` ([Angular 22 requirement](https://angular.dev/reference/versions))
 - npm (bundled with Node.js)
 
 ### Install and run
@@ -20,7 +20,7 @@ npm install
 npm start
 ```
 
-Then open `http://localhost:4200/` in your browser. The dev server reloads automatically when you change any source file.
+Then open `http://localhost:4321/` in your browser (the port is pinned in `angular.json`). The dev server reloads automatically when you change any source file.
 
 ### Other scripts
 
@@ -31,6 +31,7 @@ Then open `http://localhost:4200/` in your browser. The dev server reloads autom
 | `npm run e2e`    | End-to-end tests (Playwright)                   |
 | `npm run lint`   | ESLint (`npm run lint:fix` to auto-fix)         |
 | `npm run format` | Prettier (`npm run format:check` to check only) |
+| `npm run icons:refresh` | Re-subset the self-hosted Material Symbols font from the icons used in `src/` |
 
 ## Features
 
@@ -72,6 +73,12 @@ The editor mirrors SillyTavern's World Info fields one-to-one, so nothing is los
 - **Search & replace** across entry contents, keys, and names, with regex mode, whole-word and case-sensitive matching (filter chips), and a per-entry hit preview before applying.
 - **Delimiter tools** to add, change, or remove content delimiters (`<tag>…</tag>`, `[name=…]`, `---` separators, or none) for a single entry or the whole book, using each entry's own name, its first primary key, or a fixed one — with a live diff preview before applying.
 - Per-entry actions: add, duplicate, delete, and drag-and-drop reordering (kept in sync with SillyTavern's display index).
+
+### Health check
+
+- One click on the topbar shield (or "Health check…" in the More menu) scans the whole lorebook and groups what it finds into errors, warnings, and notes, each naming the entry it concerns — duplicate keys, ignored secondary keys, entries that can never activate, recursion loops, invalid regex keys, and malformed whole-content wrappers, detected with the same matching rules SillyTavern itself applies. A count badge on the shield shows how much is waiting.
+- Every finding's buttons jump straight to the offending entry; when several entries share a finding, each gets its own named button.
+- **You decide what matters** — mute a whole kind of check with the filter chips, or mark a single finding "not an issue". Both are remembered in the saved project, and "Undo all" brings everything back.
 
 ### Interface
 

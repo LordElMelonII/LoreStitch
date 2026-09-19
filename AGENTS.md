@@ -40,6 +40,7 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 ## Environment & Session Notes
 
 - One-shot unit run: `CI=true npm test -- --watch=false` (plain `npm test` may watch); add `--coverage` for the coverage run.
+- Dev-server ports: `npm start` serves on **4321** (pinned in `angular.json` → `projects.lore-stitch.architect.serve.options.port`); Playwright boots its own dev server on **4301** (`playwright.config.ts` `webServer`). Neither uses Angular's default 4200.
 - Coverage thresholds (statements/functions/lines ≥ 80, branches ≥ 75) are enforced inside the test run — a threshold regression fails `npm test` itself.
 - Playwright filters by spec-name substring (`npx playwright test delimiters round-trip`); a large "skipped" count is by design — phone-pinned tests skip on desktop projects, mobile-chrome/mobile-safari run them. Entry editor assertions must scope to the active tab body (`.mat-mdc-tab-body-active`) — inactive mat-tabs keep their inputs in the DOM.
 - Material Symbols render from a self-hosted pre-subsetted woff2 (`public/fonts/material-symbols-outlined.woff2`) built by `scripts/refresh-icons.mjs` scanning `src/`; after adding a new icon ligature run `npm run icons:refresh` or the ligature renders as raw text. Stage the regenerated font with the feature commit.
