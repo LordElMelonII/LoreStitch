@@ -3,10 +3,13 @@ import {
   delimiterLabel,
   delimiterNameMatches,
   detectDelimiter,
+  detectMalformedWrapper,
   entryDelimiterName,
   entryDelimiterNameFromKey,
+  malformedWrapperLabel,
   rewrapContent,
   sanitizeDelimiterName,
+  stripMalformedWrapper,
   unwrapContent,
   wrapContent,
   type DelimiterStyle,
@@ -658,5 +661,268 @@ describe('delimiters', () => {
         'none',
       ]);
     });
+  });
+});
+
+describe('detectMalformedWrapper', () => {
+  describe('mismatched pairs', () => {
+    it('classifies a whole-content mismatched pair without hints', () => {
+      expect(detectMalformedWrapper('<test>\nlore\n</universe>')).toEqual({
+        kind: 'mismatched',
+        openingName: 'test',
+        closingName: 'universe',
+      });
+    });
+
+    it('classifies the reverse mismatch direction', () => {
+      expect(detectMalformedWrapper('<universe>\nlore\n</test>')).toEqual({
+        kind: 'mismatched',
+        openingName: 'universe',
+        closingName: 'test',
+      });
+    });
+
+    it('classifies case-difference names the well-formed backreference hides', () => {
+      const content = '<Test>\nlore\n</test>';
+      expect(detectDelimiter(content)).toEqual({ style: 'none', name: '' });
+      expect(detectMalformedWrapper(content)).toEqual({
+        kind: 'mismatched',
+        openingName: 'Test',
+        closingName: 'test',
+      });
+    });
+
+    it('classifies a single-line mismatched pair (structural newlines optional)', () => {
+      expect(detectMalformedWrapper('<test>lore</universe>')).toEqual({
+        kind: 'mismatched',
+        openingName: 'test',
+        closingName: 'universe',
+      });
+    });
+
+    it('tolerates padding and CRLF like the well-formed tag shape', () => {
+      expect(detectMalformedWrapper('\n  <test>\nlore\n</universe>')).toEqual({
+        kind: 'mismatched',
+        openingName: 'test',
+        closingName: 'universe',
+      });
+      expect(detectMalformedWrapper('<test>\nlore\n</universe>   ')).toEqual({
+        kind: 'mismatched',
+        openingName: 'test',
+        closingName: 'universe',
+      });
+      expect(detectMalformedWrapper('<test>\r\nlore\r\n</universe>')).toEqual({
+        kind: 'mismatched',
+        openingName: 'test',
+        closingName: 'universe',
+      });
+    });
+
+    it('ignores hints: a mismatched pair fires regardless of the name chain', () => {
+      expect(detectMalformedWrapper('<test>\nlore\n</universe>', ['universe'])).toEqual({
+        kind: 'mismatched',
+        openingName: 'test',
+        closingName: 'universe',
+      });
+      expect(detectMalformedWrapper('<test>\nlore\n</universe>', ['unrelated'])).toEqual({
+        kind: 'mismatched',
+        openingName: 'test',
+        closingName: 'universe',
+      });
+    });
+
+    it('returns null for names over 80 characters on either side', () => {
+      expect(detectMalformedWrapper(`<${'a'.repeat(81)}>\nlore\n</universe>`)).toBeNull();
+      expect(detectMalformedWrapper(`<test>\nlore\n</${'a'.repeat(81)}>`)).toBeNull();
+    });
+
+    it('accepts names of exactly 80 characters', () => {
+      expect(detectMalformedWrapper(`<${'a'.repeat(80)}>\nlore\n</universe>`)).toEqual({
+        kind: 'mismatched',
+        openingName: 'a'.repeat(80),
+        closingName: 'universe',
+      });
+    });
+
+    it('returns null for a blank payload', () => {
+      expect(detectMalformedWrapper('<test>\n\n</universe>')).toBeNull();
+      expect(detectMalformedWrapper('<test>   </universe>')).toBeNull();
+      expect(detectMalformedWrapper('<test></universe>')).toBeNull();
+    });
+
+    it('returns null when a captured name would sanitize away', () => {
+      expect(detectMalformedWrapper('<  >\nlore\n</universe>')).toBeNull();
+      expect(detectMalformedWrapper('<test>\nlore\n</  >')).toBeNull();
+    });
+
+    it('returns null for well-formed wrappers and separators', () => {
+      expect(detectMalformedWrapper('<b>\nx\n</b>')).toBeNull();
+      expect(detectMalformedWrapper('<b>x</b>')).toBeNull();
+      expect(detectDelimiter('<b>\nx\n</b>')).toEqual({ style: 'tag', name: 'b' });
+      expect(detectMalformedWrapper('[b=\nx]')).toBeNull();
+      expect(detectMalformedWrapper('lore\n\n---')).toBeNull();
+    });
+  });
+
+  describe('orphan openers and closers', () => {
+    it('fires for an orphan opener only with a matching hint', () => {
+      expect(detectMalformedWrapper('<universe>\nlore')).toBeNull();
+      expect(detectMalformedWrapper('<universe>\nlore', [])).toBeNull();
+      expect(detectMalformedWrapper('<universe>\nlore', ['universe'])).toEqual({
+        kind: 'orphan-open',
+        name: 'universe',
+      });
+      expect(detectMalformedWrapper('<universe>\nlore', ['UNIVERSE'])).toEqual({
+        kind: 'orphan-open',
+        name: 'universe',
+      });
+    });
+
+    it('tolerates padding and CRLF on the opener line', () => {
+      expect(detectMalformedWrapper('  <universe>  \r\nlore', ['universe'])).toEqual({
+        kind: 'orphan-open',
+        name: 'universe',
+      });
+    });
+
+    it('keeps a lone non-matching tag in code-ish prose as payload', () => {
+      expect(detectMalformedWrapper('<div>\ncode sample', ['universe'])).toBeNull();
+    });
+
+    it('keeps an opener with payload on the same line unclassified', () => {
+      expect(detectMalformedWrapper('<tag>unclosed', ['tag'])).toBeNull();
+    });
+
+    it('fires for an orphan closer only with a matching hint', () => {
+      expect(detectMalformedWrapper('lore\n</universe>')).toBeNull();
+      expect(detectMalformedWrapper('lore\n</universe>', [])).toBeNull();
+      expect(detectMalformedWrapper('lore\n</universe>', ['universe'])).toEqual({
+        kind: 'orphan-close',
+        name: 'universe',
+      });
+      expect(detectMalformedWrapper('lore\n</universe>', ['UNIVERSE'])).toEqual({
+        kind: 'orphan-close',
+        name: 'universe',
+      });
+    });
+
+    it('keeps a lone closer without preceding payload unclassified', () => {
+      expect(detectMalformedWrapper('</universe>', ['universe'])).toBeNull();
+      expect(detectMalformedWrapper('\n</universe>', ['universe'])).toBeNull();
+    });
+
+    it('fires for an unclosed bracket orphan with a matching hint', () => {
+      expect(detectMalformedWrapper('[Name=\nlore')).toBeNull();
+      expect(detectMalformedWrapper('[Name=\nlore', ['Name'])).toEqual({
+        kind: 'orphan-open',
+        name: 'Name',
+      });
+      expect(detectMalformedWrapper('[Name=\nlore', ['name'])).toEqual({
+        kind: 'orphan-open',
+        name: 'Name',
+      });
+    });
+
+    it('returns null when a closed shape belongs to the well-formed guards', () => {
+      expect(detectMalformedWrapper('<universe>\nlore\n</universe>', ['universe'])).toBeNull();
+      expect(detectMalformedWrapper('[Name=\nlore]', ['Name'])).toBeNull();
+    });
+  });
+});
+
+describe('malformedWrapperLabel', () => {
+  it('labels a mismatched pair with both names', () => {
+    expect(
+      malformedWrapperLabel({ kind: 'mismatched', openingName: 'test', closingName: 'universe' }),
+    ).toBe('<test> ? </universe>');
+  });
+
+  it('labels an orphan opener with its name', () => {
+    expect(malformedWrapperLabel({ kind: 'orphan-open', name: 'universe' })).toBe('<universe> ?');
+  });
+
+  it('labels an orphan closer with its name', () => {
+    expect(malformedWrapperLabel({ kind: 'orphan-close', name: 'universe' })).toBe(
+      '? </universe>',
+    );
+  });
+});
+
+describe('stripMalformedWrapper', () => {
+  it('strips one mismatched shell in either direction', () => {
+    expect(stripMalformedWrapper('<test>\nlore\n</universe>')).toBe('lore');
+    expect(stripMalformedWrapper('<universe>\nlore\n</test>')).toBe('lore');
+  });
+
+  it('keeps the payload byte-for-byte (padding, CRLF, wrapper syntax)', () => {
+    expect(stripMalformedWrapper('  <test>\n  lore  \n</universe>  ')).toBe('  lore  ');
+    expect(stripMalformedWrapper('\n  <test>\nlore\n</universe>')).toBe('lore');
+    expect(stripMalformedWrapper('<test>\r\nlore\r\n</universe>')).toBe('lore');
+    expect(stripMalformedWrapper('<test>\na\r\nb\n</universe>')).toBe('a\r\nb');
+    expect(stripMalformedWrapper('<test>\n<a> [b=] =c\n</universe>')).toBe('<a> [b=] =c');
+  });
+
+  it('strips orphan shells structurally, without hints', () => {
+    // Detection without hints returns null, but stripping is hint-free by
+    // design: callers strip only rows that classified.
+    expect(detectMalformedWrapper('<universe>\nlore')).toBeNull();
+    expect(stripMalformedWrapper('<universe>\nlore')).toBe('lore');
+    expect(stripMalformedWrapper('lore\n</universe>')).toBe('lore');
+    expect(stripMalformedWrapper('[Name=\nlore')).toBe('lore');
+  });
+
+  it('keeps orphan payloads verbatim (no trim)', () => {
+    expect(stripMalformedWrapper('<universe>\n  lore  ')).toBe('  lore  ');
+    expect(stripMalformedWrapper('[Name=\n  lore  ')).toBe('  lore  ');
+    expect(stripMalformedWrapper('  lore  \n  </universe>  ')).toBe('  lore  ');
+  });
+
+  it('removes only the outer shell around a nested well-formed wrapper', () => {
+    const stripped = stripMalformedWrapper('<test>\n<Universe>\nlore\n</Universe>\n</universe>');
+    expect(stripped).toBe('<Universe>\nlore\n</Universe>');
+    expect(detectDelimiter(stripped)).toEqual({ style: 'tag', name: 'Universe' });
+  });
+
+  it('is idempotent for the matrix shapes', () => {
+    const CASES: readonly string[] = [
+      '<test>\nlore\n</universe>',
+      '<test>\r\nlore\r\n</universe>',
+      '  <test>\n  lore  \n</universe>  ',
+      '<universe>\nlore',
+      'lore\n</universe>',
+      '[Name=\nlore',
+      '<test>\n<Universe>\nlore\n</Universe>\n</universe>',
+    ];
+    for (const input of CASES) {
+      const once = stripMalformedWrapper(input);
+      expect(stripMalformedWrapper(once)).toBe(once);
+    }
+  });
+
+  it('is identity for nullish input, well-formed delimiters and prose', () => {
+    expect(stripMalformedWrapper(null as unknown as string)).toBe('');
+    expect(stripMalformedWrapper(undefined as unknown as string)).toBe('');
+    expect(stripMalformedWrapper('<b>\nx\n</b>')).toBe('<b>\nx\n</b>');
+    expect(stripMalformedWrapper('[b=\nx]')).toBe('[b=\nx]');
+    expect(stripMalformedWrapper('lore\n\n---')).toBe('lore\n\n---');
+    expect(stripMalformedWrapper('plain prose')).toBe('plain prose');
+  });
+});
+
+describe('malformed delimiters U1 regression', () => {
+  it('detects the blind spot and rewraps into a single clean wrapper', () => {
+    const malformed = '<test>\nlore\n</universe>';
+    // U1: the mismatched pair is invisible to the well-formed detector and
+    // used to be silently nested inside a fresh wrapper.
+    expect(detectDelimiter(malformed)).toEqual({ style: 'none', name: '' });
+    expect(detectMalformedWrapper(malformed)).toEqual({
+      kind: 'mismatched',
+      openingName: 'test',
+      closingName: 'universe',
+    });
+    // Strip + rewrap yields exactly one wrapper pair, zero nesting.
+    expect(rewrapContent(stripMalformedWrapper(malformed), 'tag', 'Universe')).toBe(
+      '<Universe>\nlore\n</Universe>',
+    );
   });
 });
