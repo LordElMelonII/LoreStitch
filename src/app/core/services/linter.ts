@@ -39,6 +39,9 @@ import { matchStKey, type StMatchOptions } from '../models/st-key-match';
  * - Malformed wrappers reuse the exact `detectMalformedWrapper` hint chain of
  *   the `entry-content-field` badge, so the two surfaces can never disagree
  *   (§7.6); the linter only diagnoses — repair stays in the delimiter flow.
+ * - Per-issue ignores and rule mutes (plan 03 §3.6.5) ride the `LintOptions`
+ *   argument of `lintBook`; the no-options call keeps producing exactly the
+ *   pre-options output (pinned in linter.spec.ts).
  */
 
 export type LintSeverity = 'error' | 'warning' | 'info';
@@ -62,6 +65,51 @@ export interface LintDiagnostic {
   message: string;
   /** e.g. the duplicated key, the cycle path `A → B → A`, or the wrapper label. */
   details?: string;
+}
+
+/**
+ * Options for `lintBook` (plan 03 §3.6.5.1). Both fields are optional;
+ * passing no options — or `{}` — reproduces the plain `lintBook(book)`
+ * output exactly (pinned in linter.spec.ts).
+ */
+export interface LintOptions {
+  /**
+   * Signatures (see `lintDiagnosticSignature`) of diagnostics to suppress.
+   * Suppression is exact: a signature matches exactly one emitted finding,
+   * so near-misses — the same rule on other entries, or the same entries
+   * with different details — stay visible.
+   */
+  ignored?: ReadonlySet<string>;
+  /**
+   * Rules to skip at emission: their checks do not run at all (cheap
+   * short-circuit — muting the O(V·E) recursion rules also skips the graph
+   * build). Muting `recursion-cycle` also silences the book-level
+   * large-book skip note, which ships with that rule id — coherent and
+   * intended (plan 03 §3.6.5.1, pinned in linter.spec.ts).
+   */
+  mutedRules?: ReadonlySet<LintRuleId>;
+}
+
+/**
+ * Deterministic persistence key for one diagnostic (plan 03 §3.6.5.1), the
+ * format `` `${rule}|${entryIds.join(',')}|${details ?? ''}` ``.
+ *
+ * - Derived only from the diagnostic's own fields, so it is stable across
+ *   runs and app restarts for the same book.
+ * - `entryIds` resolve as `entry.id ?? array index`; ids are assigned by
+ *   `normalizeImportedBook` (lorebook.model.ts:793) and `WorkspaceService`,
+ *   so signatures are stable for id-carrying — i.e. normalized — books.
+ * - Book-level diagnostics (the large-book skip note) carry `entryIds: []`
+ *   and no `details` → the `` `rule||` `` shape; diagnostics without
+ *   `details` end with a trailing `|`.
+ * - Distinct findings produce distinct signatures: per-entry rules emit at
+ *   most one diagnostic per cause (e.g. `secondary-keys-ignored` picks
+ *   either the constant or the non-selective message, never both), and
+ *   multi-entry diagnostics disambiguate through `details` — one pair
+ *   colliding on two keys yields two signatures.
+ */
+export function lintDiagnosticSignature(diagnostic: LintDiagnostic): string {
+  return `${diagnostic.rule}|${diagnostic.entryIds.join(',')}|${diagnostic.details ?? ''}`;
 }
 
 /**
@@ -221,8 +269,15 @@ interface Collected {
  * (error → warning → info) then entry order (the book's entry array index;
  * multi-entry diagnostics anchor on their lowest member). The emission
  * sequence breaks remaining ties so the output is deterministic.
+ *
+ * With options (plan 03 §3.6.5.1): `mutedRules` short-circuits before a
+ * rule's checks run; `ignored` drops exactly the diagnostics whose
+ * signature is in the set. Filtering precedes the sort, so the surviving
+ * output keeps the plain pass's severity→entry-order order. The call stays
+ * pure, read-only and deterministic with options passed; `lintBook(book)`
+ * and `lintBook(book, {})` produce exactly the pre-options output.
  */
-export function lintBook(book: CharacterBook): LintDiagnostic[] {
+export function lintBook(book: CharacterBook, options?: LintOptions): LintDiagnostic[] {
   const entries = book.entries;
   const collected: Collected[] = [];
   let sequence = 0;
@@ -231,17 +286,51 @@ export function lintBook(book: CharacterBook): LintDiagnostic[] {
     sequence += 1;
   };
 
-  for (const [index, entry] of entries.entries()) {
-    lintInvalidRegexKeys(entry, index, emit);
-    lintMalformedWrapper(entry, index, emit);
-    lintIgnoredSecondaryKeys(entry, index, emit);
-    lintSelectiveWithoutSecondary(entry, index, emit);
-    lintNeverActivatable(entry, index, emit);
-  }
-  lintDuplicateKeys(entries, emit);
-  lintRecursion(entries, emit);
+  // Muted rules are skipped before their checks run (plan 03 §3.6.5.1) —
+  // muting is an emission-level short-circuit, not a post-filter, so a
+  // muted rule's cost (e.g. the O(V·E) recursion graph) is never paid.
+  const muted = options?.mutedRules;
+  const runInvalidRegex = !muted?.has('invalid-regex');
+  const runMalformedWrapper = !muted?.has('malformed-wrapper');
+  const runIgnoredSecondaryKeys = !muted?.has('secondary-keys-ignored');
+  const runSelectiveWithoutSecondary = !muted?.has('selective-without-secondary');
+  const runNeverActivatable = !muted?.has('never-activatable');
+  const runDuplicateKeys = !muted?.has('duplicate-key');
+  // Both graph rules share one graph: it is built while either is unmuted.
+  const runRecursionGraph = !muted?.has('recursion-cycle') || !muted?.has('self-trigger');
 
+  for (const [index, entry] of entries.entries()) {
+    if (runInvalidRegex) {
+      lintInvalidRegexKeys(entry, index, emit);
+    }
+    if (runMalformedWrapper) {
+      lintMalformedWrapper(entry, index, emit);
+    }
+    if (runIgnoredSecondaryKeys) {
+      lintIgnoredSecondaryKeys(entry, index, emit);
+    }
+    if (runSelectiveWithoutSecondary) {
+      lintSelectiveWithoutSecondary(entry, index, emit);
+    }
+    if (runNeverActivatable) {
+      lintNeverActivatable(entry, index, emit);
+    }
+  }
+  if (runDuplicateKeys) {
+    lintDuplicateKeys(entries, emit);
+  }
+  if (runRecursionGraph) {
+    lintRecursion(entries, emit, muted);
+  }
+
+  // Ignored signatures suppress exactly the matching diagnostics (near-misses
+  // stay); filtering precedes the sort, so the survivors keep the plain
+  // pass's severity→entry-order order (plan 03 §3.6.5.1).
+  const ignored = options?.ignored;
   return collected
+    .filter(
+      (item) => ignored === undefined || !ignored.has(lintDiagnosticSignature(item.diagnostic)),
+    )
     .sort(
       (a, b) =>
         SEVERITY_RANK[a.diagnostic.severity] - SEVERITY_RANK[b.diagnostic.severity] ||
@@ -540,20 +629,33 @@ interface RecursionNode {
  * one `info` diagnostic notes the skip.
  *
  * The skip note reuses the `recursion-cycle` rule id because the frozen
- * §3.2 rule union has no book-level id; the message disambiguates.
+ * §3.2 rule union has no book-level id; the message disambiguates. Muting
+ * that rule therefore silences the note too — coherent by design (plan 03
+ * §3.6.5.1, pinned in linter.spec.ts). Either rule muted alone keeps the
+ * graph running for the other.
  */
-function lintRecursion(entries: readonly CharacterBookEntry[], emit: Emit): void {
+function lintRecursion(
+  entries: readonly CharacterBookEntry[],
+  emit: Emit,
+  muted: ReadonlySet<LintRuleId> | undefined,
+): void {
+  const reportCycles = !muted?.has('recursion-cycle');
+  const reportSelfTriggers = !muted?.has('self-trigger');
   if (entries.length > LARGE_BOOK_THRESHOLD) {
-    emit(
-      {
-        rule: 'recursion-cycle',
-        severity: 'info',
-        // Book-level diagnostic — it addresses no single entry.
-        entryIds: [],
-        message: `Lorebook has ${entries.length} entries — the recursion cycle and self-trigger checks are skipped above ${LARGE_BOOK_THRESHOLD} for performance.`,
-      },
-      0,
-    );
+    // The skip note ships with rule 'recursion-cycle' — muting that rule
+    // silences it (plan 03 §3.6.5.1).
+    if (reportCycles) {
+      emit(
+        {
+          rule: 'recursion-cycle',
+          severity: 'info',
+          // Book-level diagnostic — it addresses no single entry.
+          entryIds: [],
+          message: `Lorebook has ${entries.length} entries — the recursion cycle and self-trigger checks are skipped above ${LARGE_BOOK_THRESHOLD} for performance.`,
+        },
+        0,
+      );
+    }
     return;
   }
 
@@ -595,7 +697,7 @@ function lintRecursion(entries: readonly CharacterBookEntry[], emit: Emit): void
         continue;
       }
       source.successors.push(target);
-      if (source === target) {
+      if (source === target && reportSelfTriggers) {
         // Self-edge: reported separately as `self-trigger`, never as a cycle.
         emit(
           {
@@ -611,6 +713,9 @@ function lintRecursion(entries: readonly CharacterBookEntry[], emit: Emit): void
     }
   }
 
+  if (!reportCycles) {
+    return;
+  }
   for (const component of stronglyConnectedComponents(nodes)) {
     if (component.length < 2) {
       continue;

@@ -1,7 +1,9 @@
 import {
   LARGE_BOOK_THRESHOLD,
   lintBook,
+  lintDiagnosticSignature,
   type LintDiagnostic,
+  type LintOptions,
   type LintRuleId,
 } from './linter';
 import type { CharacterBook, CharacterBookEntry } from '../models/lorebook.model';
@@ -782,6 +784,254 @@ describe('linter', () => {
       ]);
       // Both duplicate groups sort after the single-entry warnings on 1 and 2.
       expect(diagnostics.slice(0, 2).every((d) => d.rule === 'never-activatable')).toBe(true);
+    });
+  });
+
+  describe('diagnostic signatures & options (plan 03 §3.6.5)', () => {
+    /** A book carrying findings from several rules, for options tests. */
+    function makeFindingsBook(): CharacterBook {
+      return makeBook([
+        makeEntry(1, { keys: ['/bad1[/i'] }),
+        makeEntry(2, { keys: ['/bad2[/i', '/bad3[/i'] }),
+        makeEntry(3, { keys: ['/bad4[/i'] }),
+        makeEntry(4),
+        makeEntry(5),
+        makeEntry(6, { keys: ['rose'] }),
+        makeEntry(7, { keys: ['rose'] }),
+      ]);
+    }
+
+    describe('lintDiagnosticSignature', () => {
+      it('derives the documented `rule|entryIds|details` format', () => {
+        expect(
+          lintDiagnosticSignature({
+            rule: 'duplicate-key',
+            severity: 'warning',
+            entryIds: [1, 2],
+            message: '',
+            details: 'rose',
+          }),
+        ).toBe('duplicate-key|1,2|rose');
+        // No details → trailing `|`.
+        expect(
+          lintDiagnosticSignature({
+            rule: 'invalid-regex',
+            severity: 'error',
+            entryIds: [7],
+            message: '',
+          }),
+        ).toBe('invalid-regex|7|');
+      });
+
+      it('is deterministic across runs and app restarts', () => {
+        const book = makeFindingsBook();
+        const firstPass = lintBook(book).map(lintDiagnosticSignature);
+        const secondPass = lintBook(book).map(lintDiagnosticSignature);
+        expect(firstPass).toEqual(secondPass);
+        expect(firstPass.length).toBeGreaterThan(0);
+      });
+
+      it('gives the book-level perf-guard note the empty entryIds shape', () => {
+        const skip = singleOf(lintBook(makeLargeBook(LARGE_BOOK_THRESHOLD + 1)), 'recursion-cycle');
+        expect(skip.entryIds).toEqual([]);
+        expect(lintDiagnosticSignature(skip)).toBe('recursion-cycle||');
+      });
+
+      it('keeps distinct findings distinct', () => {
+        const diagnostics = lintBook(makeFindingsBook());
+        const signatures = diagnostics.map(lintDiagnosticSignature);
+        expect(new Set(signatures).size).toBe(signatures.length);
+      });
+
+      it('distinguishes same-entry findings by details', () => {
+        const diagnostics = lintBook(makeBook([makeEntry(1, { keys: ['/a[/i', '/b[/i'] })]));
+        expect(diagnostics).toHaveLength(2);
+        const first = diagnostics[0];
+        const second = diagnostics[1];
+        assert(first && second);
+        expect(lintDiagnosticSignature(first)).toBe('invalid-regex|1|/a[/i');
+        expect(lintDiagnosticSignature(second)).toBe('invalid-regex|1|/b[/i');
+      });
+    });
+
+    describe('option: ignored', () => {
+      it('suppresses exactly the diagnostic whose signature matches', () => {
+        const book = makeFindingsBook();
+        const plain = lintBook(book);
+        const target = plain[0];
+        assert(target);
+        const signature = lintDiagnosticSignature(target);
+
+        const filtered = lintBook(book, { ignored: new Set([signature]) });
+        expect(filtered).toHaveLength(plain.length - 1);
+        // The remaining diagnostics are exactly the plain output minus the
+        // ignored one, in the same order.
+        expect(filtered).toEqual(plain.filter((d) => lintDiagnosticSignature(d) !== signature));
+      });
+
+      it('keeps near-misses: the same rule on other entries', () => {
+        const book = makeBook([
+          makeEntry(1, { keys: ['/a[/i'] }),
+          makeEntry(2, { keys: ['/b[/i'] }),
+        ]);
+        const plain = lintBook(book);
+        const first = plain[0];
+        assert(first);
+        const filtered = lintBook(book, {
+          ignored: new Set([lintDiagnosticSignature(first)]),
+        });
+        expect(ruleOf(filtered, 'invalid-regex')).toHaveLength(1);
+        expect(singleOf(filtered, 'invalid-regex').entryIds).toEqual([2]);
+      });
+
+      it('keeps near-misses: the same entries with different details', () => {
+        const book = makeBook([makeEntry(1, { keys: ['/a[/i', '/b[/i'] })]);
+        const plain = lintBook(book);
+        const first = plain[0];
+        assert(first);
+        const filtered = lintBook(book, {
+          ignored: new Set([lintDiagnosticSignature(first)]),
+        });
+        const remaining = ruleOf(filtered, 'invalid-regex');
+        expect(remaining).toHaveLength(1);
+        expect(remaining[0]?.details).toBe('/b[/i');
+      });
+
+      it('can suppress the book-level skip note by its signature', () => {
+        const book = makeLargeBook(LARGE_BOOK_THRESHOLD + 1);
+        const skip = singleOf(lintBook(book), 'recursion-cycle');
+        const filtered = lintBook(book, {
+          ignored: new Set([lintDiagnosticSignature(skip)]),
+        });
+        expect(filtered).toHaveLength(0);
+      });
+    });
+
+    describe('option: mutedRules', () => {
+      it('skips a muted rule while the rest still run', () => {
+        const diagnostics = lintBook(makeFindingsBook(), {
+          mutedRules: new Set<LintRuleId>(['invalid-regex']),
+        });
+        expect(ruleOf(diagnostics, 'invalid-regex')).toHaveLength(0);
+        expect(ruleOf(diagnostics, 'duplicate-key')).toHaveLength(1);
+        expect(ruleOf(diagnostics, 'never-activatable')).toHaveLength(2);
+      });
+
+      it('mutes every rule into an empty report', () => {
+        const allRules: LintRuleId[] = [
+          'invalid-regex',
+          'duplicate-key',
+          'secondary-keys-ignored',
+          'selective-without-secondary',
+          'never-activatable',
+          'recursion-cycle',
+          'self-trigger',
+          'malformed-wrapper',
+        ];
+        expect(
+          lintBook(makeFindingsBook(), { mutedRules: new Set(allRules) }),
+        ).toEqual([]);
+      });
+
+      it('silences the perf-guard skip note when recursion-cycle is muted (pinned interaction)', () => {
+        const diagnostics = lintBook(makeLargeBook(LARGE_BOOK_THRESHOLD + 1), {
+          mutedRules: new Set<LintRuleId>(['recursion-cycle']),
+        });
+        expect(diagnostics).toHaveLength(0);
+      });
+
+      it('keeps the graph running for self-trigger when only cycles are muted', () => {
+        const diagnostics = lintBook(
+          makeBook([makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'alpha knows alpha' })]),
+          { mutedRules: new Set<LintRuleId>(['recursion-cycle']) },
+        );
+        expect(ruleOf(diagnostics, 'self-trigger')).toHaveLength(1);
+      });
+
+      it('keeps cycles when only self-trigger is muted', () => {
+        const diagnostics = lintBook(
+          makeBook([
+            makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
+            makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
+          ]),
+          { mutedRules: new Set<LintRuleId>(['self-trigger']) },
+        );
+        expect(ruleOf(diagnostics, 'recursion-cycle')).toHaveLength(1);
+      });
+
+      it('mutes self-trigger without losing it from an otherwise empty report', () => {
+        const diagnostics = lintBook(
+          makeBook([makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'alpha knows alpha' })]),
+          { mutedRules: new Set<LintRuleId>(['self-trigger']) },
+        );
+        expect(diagnostics).toHaveLength(0);
+      });
+    });
+
+    describe('options invariants', () => {
+      it('stays identical to the no-options call for {} and empty sets', () => {
+        const book = makeFindingsBook();
+        const plain = lintBook(book);
+        expect(lintBook(book, {})).toEqual(plain);
+        expect(
+          lintBook(book, { ignored: new Set<string>(), mutedRules: new Set<LintRuleId>() }),
+        ).toEqual(plain);
+      });
+
+      it('preserves the severity→entry-order sort after filtering', () => {
+        const book = makeBook([
+          makeEntry(1, { keys: ['/bad[/i'] }), // error
+          makeEntry(2), // warning: never-activatable
+          makeEntry(3), // warning: never-activatable
+        ]);
+        const plain = lintBook(book);
+        const error = plain[0];
+        assert(error);
+        const filtered = lintBook(book, {
+          ignored: new Set([lintDiagnosticSignature(error)]),
+        });
+        expect(filtered.map((d) => [d.severity, d.rule, d.entryIds])).toEqual([
+          ['warning', 'never-activatable', [2]],
+          ['warning', 'never-activatable', [3]],
+        ]);
+      });
+
+      it('applies ignored and mutedRules together', () => {
+        const book = makeFindingsBook();
+        const plain = lintBook(book);
+        const warning = plain.find((d) => d.rule === 'never-activatable');
+        assert(warning);
+        const diagnostics = lintBook(book, {
+          ignored: new Set([lintDiagnosticSignature(warning)]),
+          mutedRules: new Set<LintRuleId>(['invalid-regex']),
+        });
+        expect(ruleOf(diagnostics, 'invalid-regex')).toHaveLength(0);
+        expect(ruleOf(diagnostics, 'never-activatable')).toHaveLength(1);
+        expect(ruleOf(diagnostics, 'duplicate-key')).toHaveLength(1);
+      });
+
+      it('never mutates a deep-frozen book with options and repeats deterministically', () => {
+        const book = deepFreeze(
+          makeBook([
+            makeEntry(1, { keys: ['/bad[/i'] }),
+            makeEntry(2),
+            makeEntry(3, { keys: ['rose'] }),
+            makeEntry(4, { keys: ['rose'] }),
+          ]),
+        );
+        const before = JSON.stringify(book);
+        const options: LintOptions = {
+          ignored: new Set([lintDiagnosticSignature(singleOf(lintBook(book), 'invalid-regex'))]),
+          mutedRules: new Set<LintRuleId>(['duplicate-key']),
+        };
+
+        const firstRun = lintBook(book, options);
+        expect(JSON.stringify(book)).toBe(before);
+        expect(lintBook(book, options)).toEqual(firstRun);
+        // The options object itself is not consumed destructively.
+        expect(firstRun.every((d) => d.rule !== 'duplicate-key')).toBe(true);
+        expect(options.ignored?.size).toBe(1);
+      });
     });
   });
 
