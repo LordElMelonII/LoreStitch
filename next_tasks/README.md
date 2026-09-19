@@ -11,11 +11,11 @@ Completed plans live in [archive/](./archive/).
 | 04 | [regex-key-sandbox.md](./04-regex-key-sandbox.md) | Regex Key Testing Sandbox | core-engine → ui-specialist → ts-reviewer → qa-auditor |
 
 Task 04 depends on Task 03 Phase 1 (the shared `st-regex` / `st-key-match`
-core modules — landed 2026-09-19); the dependency is satisfied. **Re-ground
-the plan at current HEAD before dispatch**: plans are point-in-time audits,
-and `entry-keys.*`, the shared modules, and the editor wiring have all moved
-since the `4120bb9` grounding (Tasks 01–03, 05 and the 2026-09-19/20
-test-suite audit all touched this code).
+core modules — landed 2026-09-19); the dependency is satisfied. The plan was
+**fully re-grounded 2026-09-20 at `af244ba`** (the original `4120bb9` audit
+was stale after Tasks 01–03, 05 and the test-suite audit), so only the
+standard pre-dispatch re-check applies: verify each phase's file list at the
+HEAD the task starts from.
 
 ## Shared Conventions (apply to every task)
 
