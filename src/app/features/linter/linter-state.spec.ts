@@ -1,13 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { MatChipSelectionChange } from '@angular/material/chips';
-import {
-  CharacterBookEntry,
-  LintPrefs,
-  ProjectWorkspace,
-  createEmptyEntry,
-} from '../../core/models/lorebook.model';
+import { CharacterBookEntry, LintPrefs, createEmptyEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { LinterState } from './linter-state';
+import { projectOf, severityFixture } from '../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for linter tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
@@ -19,31 +15,13 @@ function chipChange(selected: boolean, isUserInput = true): MatChipSelectionChan
   return { isUserInput, selected } as MatChipSelectionChange;
 }
 
-function projectOf(entries: CharacterBookEntry[], lintPrefs?: LintPrefs): ProjectWorkspace {
-  return {
+/** Seeds the linter-state workspace, optionally with project lint prefs. */
+function seededProject(entries: CharacterBookEntry[], lintPrefs?: LintPrefs) {
+  return projectOf(entries, {
     id: 'linter-state-project',
     title: 'Linter',
-    createdAt: 1,
-    updatedAt: 1,
-    targetType: 'standalone_lorebook',
-    activeBook: { name: 'Linter', extensions: {}, entries },
-    headCommitId: null,
-    commits: [],
     ...(lintPrefs ? { lintPrefs } : {}),
-  };
-}
-
-/**
- * One entry per severity: an invalid regex key (error), a keyless entry with
- * no alternate activation source (warning), a selective entry with a key but
- * no secondary keys (info — keyed so `never-activatable` stays quiet).
- */
-function severityFixture(): CharacterBookEntry[] {
-  return [
-    entry(0, { comment: 'Broken regex', keys: ['/servant(/'] }),
-    entry(1, { comment: 'Keyless', keys: [] }),
-    entry(2, { comment: 'Selective', keys: ['paris'], selective: true, secondary_keys: [] }),
-  ];
+  });
 }
 
 describe('LinterState', () => {
@@ -66,7 +44,7 @@ describe('LinterState', () => {
   });
 
   it('lints the active book once and memoizes across reads', () => {
-    workspace.activeProject.set(projectOf(severityFixture()));
+    workspace.activeProject.set(seededProject(severityFixture()));
 
     const diagnostics = state.diagnostics();
     expect(state.diagnostics()).toBe(diagnostics); // same reference: memoized
@@ -78,21 +56,21 @@ describe('LinterState', () => {
   });
 
   it('counts only errors and warnings for the badge — info never lights it', () => {
-    workspace.activeProject.set(projectOf(severityFixture()));
+    workspace.activeProject.set(seededProject(severityFixture()));
     expect(state.issueCount()).toBe(2);
 
     workspace.activeProject.set(
-      projectOf([entry(0, { keys: ['paris'], selective: true, secondary_keys: [] })]),
+      seededProject([entry(0, { keys: ['paris'], selective: true, secondary_keys: [] })]),
     );
     expect(state.issueCount()).toBe(0);
   });
 
   it('recomputes when the project signal changes', () => {
-    workspace.activeProject.set(projectOf(severityFixture()));
+    workspace.activeProject.set(seededProject(severityFixture()));
     const before = state.diagnostics().length;
 
     workspace.activeProject.set(
-      projectOf([
+      seededProject([
         entry(0, { comment: 'Clean', keys: ['paris'], content: 'Something else entirely.' }),
       ]),
     );
@@ -102,7 +80,7 @@ describe('LinterState', () => {
 
   it('applies the project prefs: muted rules and ignored signatures never surface', () => {
     workspace.activeProject.set(
-      projectOf(severityFixture(), {
+      seededProject(severityFixture(), {
         ignoredSignatures: ['invalid-regex|0|/servant(/'],
         mutedRules: ['never-activatable'],
       }),
@@ -114,7 +92,7 @@ describe('LinterState', () => {
   });
 
   it('exposes the rules present in an unfiltered pass for the mute-chip row', () => {
-    workspace.activeProject.set(projectOf(severityFixture()));
+    workspace.activeProject.set(seededProject(severityFixture()));
 
     const rules = state.unfilteredRules();
     expect(rules.has('invalid-regex')).toBe(true);
@@ -122,7 +100,7 @@ describe('LinterState', () => {
     expect(rules.has('selective-without-secondary')).toBe(true);
     // Muted rules stay in the unfiltered set so their chips remain visible.
     workspace.activeProject.set(
-      projectOf(severityFixture(), {
+      seededProject(severityFixture(), {
         ignoredSignatures: [],
         mutedRules: ['never-activatable'],
       }),
@@ -131,7 +109,7 @@ describe('LinterState', () => {
   });
 
   it('ignoreDiagnostic appends the signature through the workspace and drops the row', () => {
-    workspace.activeProject.set(projectOf(severityFixture()));
+    workspace.activeProject.set(seededProject(severityFixture()));
     const target = state.diagnostics()[0];
     assert(target);
 
@@ -146,7 +124,7 @@ describe('LinterState', () => {
   });
 
   it('ignoreDiagnostic is idempotent and writes nothing when already ignored', () => {
-    workspace.activeProject.set(projectOf(severityFixture()));
+    workspace.activeProject.set(seededProject(severityFixture()));
     const target = state.diagnostics()[0];
     assert(target);
     state.ignoreDiagnostic(target);
@@ -159,7 +137,7 @@ describe('LinterState', () => {
   });
 
   it('undoAllIgnored clears ignored signatures and keeps mutes', () => {
-    workspace.activeProject.set(projectOf(severityFixture()));
+    workspace.activeProject.set(seededProject(severityFixture()));
     const target = state.diagnostics()[0];
     assert(target);
     state.ignoreDiagnostic(target);
@@ -176,7 +154,7 @@ describe('LinterState', () => {
 
   it('unmuteAll clears muted rules and keeps ignored signatures', () => {
     workspace.activeProject.set(
-      projectOf(severityFixture(), {
+      seededProject(severityFixture(), {
         ignoredSignatures: ['invalid-regex|0|/servant(/'],
         mutedRules: ['recursion-cycle', 'self-trigger'],
       }),
@@ -191,7 +169,7 @@ describe('LinterState', () => {
   });
 
   it('setRuleMuted maps a user chip selection onto mutedRules', () => {
-    workspace.activeProject.set(projectOf(severityFixture()));
+    workspace.activeProject.set(seededProject(severityFixture()));
 
     // Deselected chip = muted.
     state.setRuleMuted('never-activatable', chipChange(false));
@@ -210,7 +188,7 @@ describe('LinterState', () => {
   });
 
   it('setRuleMuted writes nothing when the chip state already matches or is not user input', () => {
-    workspace.activeProject.set(projectOf(severityFixture()));
+    workspace.activeProject.set(seededProject(severityFixture()));
     state.setRuleMuted('never-activatable', chipChange(false));
     const projectAfterMute = workspace.activeProject();
 

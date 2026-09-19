@@ -200,21 +200,9 @@ describe('EntryUpdatesService', () => {
       expect(currentEntry().extensions['character_filter']).toBeNull();
     });
 
-    it('normalizes the legacy verbatim native filter shape', () => {
-      const entry = setEntry({
-        extensions: {
-          ...createEmptyEntry(0).extensions,
-          characterFilter: { isExclude: true, names: ['Saber'], tags: ['noble'] },
-          character_filter: null,
-        },
-      });
-
-      expect(updates.characterFilter(entry)).toEqual({
-        is_exclude: true,
-        names: ['Saber'],
-        tags: ['noble'],
-      });
-    });
+    // The legacy verbatim native filter shape is pinned in lorebook.model.spec
+    // ('entryCharacterFilter falls back to the legacy verbatim shape');
+    // characterFilter() is a pure delegate, so it is not re-tested here.
 
     it('inverts exclude mode while preserving names and tags', () => {
       const entry = setEntry({
@@ -243,33 +231,13 @@ describe('EntryUpdatesService', () => {
   });
 
   describe('trigger strategy', () => {
-    it('switches to constant and clears the vectorized mirror', () => {
+    // The constant/vectorized mirror mapping is pinned exhaustively in
+    // lorebook.model.spec's triggerStatePatch describe; one switch here proves
+    // the service routes that patch through the workspace unchanged.
+    it('routes a strategy switch through triggerStatePatch into the workspace', () => {
       const entry = setEntry({
         constant: true,
-        extensions: { ...createEmptyEntry(0).extensions, vectorized: true },
-      });
-
-      updates.setTriggerState(entry, 'constant');
-
-      const stored = currentEntry();
-      expect(stored.constant).toBe(true);
-      expect(stored.extensions['vectorized']).toBe(false);
-    });
-
-    it('switches to vectorized, leaving constant off', () => {
-      const entry = setEntry({ constant: true });
-
-      updates.setTriggerState(entry, 'vectorized');
-
-      const stored = currentEntry();
-      expect(stored.constant).toBe(false);
-      expect(stored.extensions['vectorized']).toBe(true);
-    });
-
-    it('switches back to normal, clearing both mirrors', () => {
-      const entry = setEntry({
-        constant: true,
-        extensions: { ...createEmptyEntry(0).extensions, vectorized: true },
+        extensions: { ...createEmptyEntry(0).extensions, vectorized: true, triggers: ['quiet'] },
       });
 
       updates.setTriggerState(entry, 'normal');
@@ -277,18 +245,9 @@ describe('EntryUpdatesService', () => {
       const stored = currentEntry();
       expect(stored.constant).toBe(false);
       expect(stored.extensions['vectorized']).toBe(false);
-    });
-
-    it('preserves unrelated extensions across a strategy switch', () => {
-      const entry = setEntry({
-        extensions: { ...createEmptyEntry(0).extensions, triggers: ['quiet'] },
-      });
-
-      updates.setTriggerState(entry, 'constant');
-
-      const ext = currentEntry().extensions;
-      expect(ext['probability']).toBe(100);
-      expect(ext['triggers']).toEqual(['quiet']);
+      // Unrelated extensions ride along untouched.
+      expect(stored.extensions['triggers']).toEqual(['quiet']);
+      expect(stored.extensions['probability']).toBe(100);
     });
   });
 });

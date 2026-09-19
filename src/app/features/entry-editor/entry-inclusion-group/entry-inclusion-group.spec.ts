@@ -4,6 +4,7 @@ import { MatChipOption } from '@angular/material/chips';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { EntryInclusionGroup } from './entry-inclusion-group';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('EntryInclusionGroup', () => {
   let workspace: WorkspaceService;
@@ -18,20 +19,9 @@ describe('EntryInclusionGroup', () => {
   async function createPane(
     overrides: Partial<CharacterBookEntry> = {},
   ): Promise<EntryInclusionGroup> {
-    workspace.activeProject.set({
-      id: 'inclusion-project',
-      title: 'Inclusion',
-      createdAt: 1,
-      updatedAt: 1,
-      targetType: 'standalone_lorebook',
-      activeBook: {
-        name: 'Inclusion',
-        extensions: {},
-        entries: [{ ...createEmptyEntry(0), ...overrides }],
-      },
-      headCommitId: null,
-      commits: [],
-    });
+    workspace.activeProject.set(
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'inclusion-project', title: 'Inclusion' }),
+    );
     fixture = TestBed.createComponent(EntryInclusionGroup);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
     fixture.detectChanges();

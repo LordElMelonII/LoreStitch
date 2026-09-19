@@ -4,6 +4,7 @@ import { MatChipOption } from '@angular/material/chips';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { EntryRecursionTiming } from './entry-recursion-timing';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('EntryRecursionTiming', () => {
   let workspace: WorkspaceService;
@@ -18,20 +19,9 @@ describe('EntryRecursionTiming', () => {
   async function createPane(
     overrides: Partial<CharacterBookEntry> = {},
   ): Promise<EntryRecursionTiming> {
-    workspace.activeProject.set({
-      id: 'recursion-project',
-      title: 'Recursion',
-      createdAt: 1,
-      updatedAt: 1,
-      targetType: 'standalone_lorebook',
-      activeBook: {
-        name: 'Recursion',
-        extensions: {},
-        entries: [{ ...createEmptyEntry(0), ...overrides }],
-      },
-      headCommitId: null,
-      commits: [],
-    });
+    workspace.activeProject.set(
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'recursion-project', title: 'Recursion' }),
+    );
     fixture = TestBed.createComponent(EntryRecursionTiming);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
     fixture.detectChanges();

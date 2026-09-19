@@ -5,6 +5,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { EntryContentField } from './entry-content-field';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('EntryContentField', () => {
   let workspace: WorkspaceService;
@@ -19,20 +20,9 @@ describe('EntryContentField', () => {
   async function createPane(
     overrides: Partial<CharacterBookEntry> = {},
   ): Promise<EntryContentField> {
-    workspace.activeProject.set({
-      id: 'content-project',
-      title: 'Content',
-      createdAt: 1,
-      updatedAt: 1,
-      targetType: 'standalone_lorebook',
-      activeBook: {
-        name: 'Content',
-        extensions: {},
-        entries: [{ ...createEmptyEntry(0), ...overrides }],
-      },
-      headCommitId: null,
-      commits: [],
-    });
+    workspace.activeProject.set(
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'content-project', title: 'Content' }),
+    );
     fixture = TestBed.createComponent(EntryContentField);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
     fixture.detectChanges();

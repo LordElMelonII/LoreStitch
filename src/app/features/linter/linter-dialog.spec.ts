@@ -4,41 +4,14 @@ import { MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatChipOption } from '@angular/material/chips';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatDialogRef } from '@angular/material/dialog';
-import {
-  CharacterBookEntry,
-  LintPrefs,
-  ProjectWorkspace,
-  createEmptyEntry,
-} from '../../core/models/lorebook.model';
+import { CharacterBookEntry, LintPrefs, createEmptyEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { LinterDialog } from './linter-dialog';
+import { projectOf, severityFixture } from '../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for linter tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
   return { ...createEmptyEntry(id), ...overrides };
-}
-
-function projectOf(entries: CharacterBookEntry[], lintPrefs?: LintPrefs): ProjectWorkspace {
-  return {
-    id: 'linter-dialog-project',
-    title: 'Linter',
-    createdAt: 1,
-    updatedAt: 1,
-    targetType: 'standalone_lorebook',
-    activeBook: { name: 'Linter', extensions: {}, entries },
-    headCommitId: null,
-    commits: [],
-    ...(lintPrefs ? { lintPrefs } : {}),
-  };
-}
-
-/** One entry per severity: invalid regex (error), keyless (warning), selective but keyed (info). */
-function severityFixture(): CharacterBookEntry[] {
-  return [
-    entry(0, { comment: 'Broken regex', keys: ['/servant(/'] }),
-    entry(1, { comment: 'Keyless', keys: [] }),
-    entry(2, { comment: 'Selective', keys: ['paris'], selective: true, secondary_keys: [] }),
-  ];
 }
 
 describe('LinterDialog', () => {
@@ -67,7 +40,13 @@ describe('LinterDialog', () => {
     workspace = TestBed.inject(WorkspaceService);
     // Allow the workspace's async init() to settle before seeding.
     await new Promise((resolve) => setTimeout(resolve, 0));
-    workspace.activeProject.set(projectOf(entries, options.prefs));
+    workspace.activeProject.set(
+      projectOf(entries, {
+        id: 'linter-dialog-project',
+        title: 'Linter',
+        ...(options.prefs ? { lintPrefs: options.prefs } : {}),
+      }),
+    );
     fixture = TestBed.createComponent(LinterDialog);
     await fixture.whenStable();
     fixture.detectChanges();
@@ -242,7 +221,8 @@ describe('LinterDialog', () => {
     expect(
       [...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim()),
     ).toEqual(['Errors (1)', 'Notes (1)']);
-    expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual(['never-activatable']);
+    // setRuleMuted's prefs write is pinned in linter-state.spec; the dialog
+    // test pins the affordance behavior around it.
     const muted = muteChips().find((entry) => entry.native.textContent?.includes('Never activatable'));
     assert(muted);
     // Muted = NOT selected — the editor chip's outlined/deselected state.
@@ -255,7 +235,6 @@ describe('LinterDialog', () => {
     // Select again: the rule re-enables and its section returns.
     muted.chip.toggleSelected(true);
     fixture.detectChanges();
-    expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual([]);
     expect(
       [...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim()),
     ).toEqual(['Errors (1)', 'Warnings (1)', 'Notes (1)']);
@@ -287,10 +266,6 @@ describe('LinterDialog', () => {
     fixture.detectChanges();
     expect(el().querySelectorAll('.diagnostic-row')).toHaveLength(1);
     expect(el().querySelector('.empty-state')).toBeNull();
-    expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual([
-      'never-activatable',
-      'selective-without-secondary',
-    ]);
   });
 
   it('ignores a row through the not-an-issue affordance and offers Undo all', async () => {
@@ -303,9 +278,8 @@ describe('LinterDialog', () => {
     fixture.detectChanges();
 
     expect(el().querySelectorAll('.diagnostic-row')).toHaveLength(2);
-    expect(workspace.activeProject()?.lintPrefs?.ignoredSignatures).toEqual([
-      'invalid-regex|0|/servant(/',
-    ]);
+    // ignoreDiagnostic's signature write is pinned in linter-state.spec; this
+    // test pins the footer affordance around it.
     const footer = el().querySelector('.ignored-footer');
     expect(footer?.textContent).toContain('1 issue marked not-an-issue');
     expect(footer?.textContent).toContain('Undo all');
@@ -313,7 +287,6 @@ describe('LinterDialog', () => {
     el().querySelector('.ignored-footer button')?.dispatchEvent(new Event('click'));
     fixture.detectChanges();
 
-    expect(workspace.activeProject()?.lintPrefs?.ignoredSignatures).toEqual([]);
     expect(el().querySelector('.ignored-footer')).toBeNull();
     expect(el().querySelectorAll('.diagnostic-row')).toHaveLength(3);
   });

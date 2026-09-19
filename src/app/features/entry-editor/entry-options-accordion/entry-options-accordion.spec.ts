@@ -8,7 +8,8 @@ import { EntryOptionsAccordion } from './entry-options-accordion';
 /**
  * Focused spec for the accordion's viewport wiring: the host `mobile` class
  * must track `LayoutService.isMobile` (the single source of viewport truth).
- * The panel sections have their own specs; this one only smoke-renders.
+ * The trigger strip's composition is covered by the parent entry-editor spec;
+ * the panel sections have their own specs.
  */
 describe('EntryOptionsAccordion', () => {
   /** Configures the module once around a writable viewport signal. */
@@ -34,14 +35,6 @@ describe('EntryOptionsAccordion', () => {
     fixture.detectChanges();
     return fixture;
   }
-
-  it('renders the always-visible trigger strip', async () => {
-    const fixture = await mount(signal<ViewportClass>('desktop'));
-
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('.trigger-card')).toBeTruthy();
-    expect(el.querySelector('[aria-label="Toggle entry options"]')).toBeTruthy();
-  });
 
   it('binds the host mobile class to LayoutService.isMobile', async () => {
     const viewport = signal<ViewportClass>('mobile');

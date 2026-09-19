@@ -4,6 +4,7 @@ import { MatChipOption } from '@angular/material/chips';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { EntryMatchingSources } from './entry-matching-sources';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('EntryMatchingSources', () => {
   let workspace: WorkspaceService;
@@ -18,20 +19,9 @@ describe('EntryMatchingSources', () => {
   async function createPane(
     overrides: Partial<CharacterBookEntry> = {},
   ): Promise<EntryMatchingSources> {
-    workspace.activeProject.set({
-      id: 'matching-project',
-      title: 'Matching',
-      createdAt: 1,
-      updatedAt: 1,
-      targetType: 'standalone_lorebook',
-      activeBook: {
-        name: 'Matching',
-        extensions: {},
-        entries: [{ ...createEmptyEntry(0), ...overrides }],
-      },
-      headCommitId: null,
-      commits: [],
-    });
+    workspace.activeProject.set(
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'matching-project', title: 'Matching' }),
+    );
     fixture = TestBed.createComponent(EntryMatchingSources);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
     fixture.detectChanges();

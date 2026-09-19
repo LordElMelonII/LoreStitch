@@ -8,6 +8,7 @@ import {
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { EntryUpdatesService } from '../entry-updates.service';
 import { EntryKeys } from './entry-keys';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('EntryKeys', () => {
   let workspace: WorkspaceService;
@@ -27,20 +28,12 @@ describe('EntryKeys', () => {
   }
 
   async function createPane(entry: Partial<CharacterBookEntry> = {}): Promise<EntryKeys> {
-    workspace.activeProject.set({
-      id: 'keys-project',
-      title: 'Keys',
-      createdAt: 1,
-      updatedAt: 1,
-      targetType: 'standalone_lorebook',
-      activeBook: {
-        name: 'Keys',
-        extensions: {},
-        entries: [{ ...createEmptyEntry(0), keys: [], secondary_keys: [], ...entry }],
-      },
-      headCommitId: null,
-      commits: [],
-    });
+    workspace.activeProject.set(
+      projectOf([{ ...createEmptyEntry(0), keys: [], secondary_keys: [], ...entry }], {
+        id: 'keys-project',
+        title: 'Keys',
+      }),
+    );
     fixture = TestBed.createComponent(EntryKeys);
     bindEntry(currentEntry());
     await fixture.whenStable();
@@ -276,32 +269,12 @@ describe('EntryKeys', () => {
       expect(editor?.getAttribute('aria-label')).toBe('Edit primary key saber');
     });
 
-    it('focuses the secondary key box unless an edit is pending', async () => {
-      await createPane({
+    it('focuses the add-key box on click and never steals focus mid-edit', async () => {
+      const component = await createPane({
         keys: ['saber'],
         secondary_keys: ['artoria'],
         selective: true,
       });
-      const component = fixture.componentInstance;
-      const element = fixture.nativeElement as HTMLElement;
-      const fields = element.querySelectorAll('.keys-field');
-      const secondaryInput = element.querySelector<HTMLInputElement>(
-        'input[aria-label="Add secondary key"]',
-      );
-      assert(secondaryInput);
-
-      (fields[1] as HTMLElement).click();
-      expect(document.activeElement).toBe(secondaryInput);
-
-      // With a pending in-place edit, clicking must not steal focus.
-      component['editingKey'].set({ field: 'keys', index: 0 });
-      secondaryInput.blur();
-      (fields[1] as HTMLElement).click();
-      expect(document.activeElement).not.toBe(secondaryInput);
-    });
-
-    it('never steals focus for the chip box while a key is being edited', async () => {
-      const component = await createPane({ keys: ['saber'] });
       const element = fixture.nativeElement as HTMLElement;
 
       // Focusing the outlined box moves the caret into its input.
@@ -311,6 +284,14 @@ describe('EntryKeys', () => {
       assert(primaryInput);
       (element.querySelector('.keys-field') as HTMLElement).click();
       expect(document.activeElement).toBe(primaryInput);
+
+      // The secondary field routes its field click to its own box.
+      const secondaryInput = element.querySelector<HTMLInputElement>(
+        'input[aria-label="Add secondary key"]',
+      );
+      assert(secondaryInput);
+      (element.querySelectorAll('.keys-field')[1] as HTMLElement).click();
+      expect(document.activeElement).toBe(secondaryInput);
 
       // While an in-place edit is pending, the click-through must not steal
       // focus from the (blurred) chip input.

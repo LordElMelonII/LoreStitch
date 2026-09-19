@@ -3,6 +3,7 @@ import { By } from '@angular/platform-browser';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { EntryPlacement } from './entry-placement';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('EntryPlacement', () => {
   let workspace: WorkspaceService;
@@ -17,20 +18,9 @@ describe('EntryPlacement', () => {
   async function createPane(
     overrides: Partial<CharacterBookEntry> = {},
   ): Promise<EntryPlacement> {
-    workspace.activeProject.set({
-      id: 'placement-project',
-      title: 'Placement',
-      createdAt: 1,
-      updatedAt: 1,
-      targetType: 'standalone_lorebook',
-      activeBook: {
-        name: 'Placement',
-        extensions: {},
-        entries: [{ ...createEmptyEntry(0), ...overrides }],
-      },
-      headCommitId: null,
-      commits: [],
-    });
+    workspace.activeProject.set(
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'placement-project', title: 'Placement' }),
+    );
     fixture = TestBed.createComponent(EntryPlacement);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
     fixture.detectChanges();

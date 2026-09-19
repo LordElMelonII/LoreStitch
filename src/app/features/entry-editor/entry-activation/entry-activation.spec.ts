@@ -9,6 +9,7 @@ import {
 } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { EntryActivation } from './entry-activation';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('EntryActivation', () => {
   let workspace: WorkspaceService;
@@ -23,20 +24,9 @@ describe('EntryActivation', () => {
   async function createPane(
     overrides: Partial<CharacterBookEntry> = {},
   ): Promise<EntryActivation> {
-    workspace.activeProject.set({
-      id: 'activation-project',
-      title: 'Activation',
-      createdAt: 1,
-      updatedAt: 1,
-      targetType: 'standalone_lorebook',
-      activeBook: {
-        name: 'Activation',
-        extensions: {},
-        entries: [{ ...createEmptyEntry(0), ...overrides }],
-      },
-      headCommitId: null,
-      commits: [],
-    });
+    workspace.activeProject.set(
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'activation-project', title: 'Activation' }),
+    );
     fixture = TestBed.createComponent(EntryActivation);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
     fixture.detectChanges();
