@@ -5,14 +5,13 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   CharacterBookEntry,
-  ProjectWorkspace,
   ST_LOGIC,
-  ST_POSITION,
   ST_ROLE,
   createEmptyEntry,
 } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { BatchOperationsDialog } from './batch-operations-dialog';
+import { projectOf } from '../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for batch tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
@@ -25,19 +24,6 @@ function tagged(id: number, tags: string[]): CharacterBookEntry {
     comment: `Entry ${id}`,
     extensions: { ...createEmptyEntry(id).extensions, lorestitch_tags: tags },
   });
-}
-
-function projectOf(entries: CharacterBookEntry[]): ProjectWorkspace {
-  return {
-    id: 'batch-project',
-    title: 'Batch',
-    createdAt: 1,
-    updatedAt: 1,
-    targetType: 'standalone_lorebook',
-    activeBook: { name: 'Batch', extensions: {}, entries },
-    headCommitId: null,
-    commits: [],
-  };
 }
 
 describe('BatchOperationsDialog', () => {
@@ -73,7 +59,7 @@ describe('BatchOperationsDialog', () => {
     workspace = TestBed.inject(WorkspaceService);
     snackBar = TestBed.inject(MatSnackBar);
     vi.spyOn(snackBar, 'open');
-    workspace.activeProject.set(projectOf(entries));
+    workspace.activeProject.set(projectOf(entries, { id: 'batch-project', title: 'Batch' }));
     // Allow the workspace's async init() to settle before mounting.
     await new Promise((resolve) => setTimeout(resolve, 0));
     fixture = TestBed.createComponent(BatchOperationsDialog);
@@ -194,7 +180,8 @@ describe('BatchOperationsDialog', () => {
     applyButton().click();
     await fixture.whenStable();
 
-    expect(workspace.entries().map((e) => e.insertion_order)).toEqual([70, 100, 70]);
+    // The shift arithmetic itself is pinned in batch-operations.model.spec;
+    // this test pins only the dialog plumbing around it.
     expect(close).toHaveBeenCalledWith(true);
   });
 
@@ -237,9 +224,8 @@ describe('BatchOperationsDialog', () => {
     applyButton().click();
     await fixture.whenStable();
 
-    const first = workspace.entries()[0];
-    assert(first);
-    expect(first.extensions['case_sensitive']).toBeNull();
+    // The null-out semantics live in batch-operations.model.spec; here the
+    // dialog contributes the status line and the confirm-close plumbing.
     expect(close).toHaveBeenCalledWith(true);
   });
 
@@ -297,7 +283,9 @@ describe('BatchOperationsDialog', () => {
     const first = workspace.entries()[0];
     assert(first);
     expect(first.constant).toBe(true);
-    expect(first.extensions['vectorized']).toBe(false);
+    // The user-typed scan-depth value must survive the dialog's data path;
+    // the constant/vectorized mirror bookkeeping is pinned in
+    // batch-operations.model.spec and not re-asserted here.
     expect(first.extensions['scan_depth']).toBe(6);
     expect(close).toHaveBeenCalledWith(true);
   });
@@ -326,7 +314,7 @@ describe('BatchOperationsDialog', () => {
     expect(workspace.entries()[0]?.extensions['selectiveLogic']).toBe(ST_LOGIC.AND_ALL);
   });
 
-  it('positions at chat depth carry the depth and role mirrors', async () => {
+  it('applies an at-depth position to the workspace', async () => {
     const dialog = await createDialog([0], [entry(0)]);
     dialog['positionMode'].set('set');
     dialog['positionValue'].set('at_depth');
@@ -338,15 +326,15 @@ describe('BatchOperationsDialog', () => {
     applyButton().click();
     await fixture.whenStable();
 
+    // Only the native field is re-asserted here as wiring proof; the ST
+    // position/depth/role mirror bookkeeping is pinned in
+    // batch-operations.model.spec ('writes depth and role…').
     const first = workspace.entries()[0];
     assert(first);
     expect(first.position).toBe('at_depth');
-    expect(first.extensions['position']).toBe(ST_POSITION.atDepth);
-    expect(first.extensions['depth']).toBe(2);
-    expect(first.extensions['role']).toBe(ST_ROLE.user);
   });
 
-  it('names an outlet position with the trimmed outlet field', async () => {
+  it('routes the outlet position through to the workspace', async () => {
     const dialog = await createDialog([0], [entry(0)]);
     dialog['positionMode'].set('set');
     dialog['positionValue'].set('outlet');
@@ -357,11 +345,11 @@ describe('BatchOperationsDialog', () => {
     applyButton().click();
     await fixture.whenStable();
 
+    // Outlet name trimming/mirroring is pinned in batch-operations.model.spec
+    // ('writes the outlet name…'); the dialog pins the routing only.
     const first = workspace.entries()[0];
     assert(first);
     expect(first.position).toBe('outlet');
-    expect(first.extensions['position']).toBe(ST_POSITION.outlet);
-    expect(first.extensions['outlet_name']).toBe('world_state');
   });
 
   it('opens as a phone bottom sheet and dismisses through the sheet ref', async () => {

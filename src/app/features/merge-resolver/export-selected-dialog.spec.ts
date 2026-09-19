@@ -6,29 +6,21 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSelect } from '@angular/material/select';
 import {
   CharacterBookEntry,
-  ProjectWorkspace,
   createEmptyEntry,
 } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { type ExportSelection } from './export-selected.model';
 import { ExportSelectedDialog, type ExportSelectedDialogData } from './export-selected-dialog';
+import { projectOf } from '../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for export tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
   return { ...createEmptyEntry(id), ...overrides };
 }
 
-function projectOf(entries: CharacterBookEntry[]): ProjectWorkspace {
-  return {
-    id: 'export-project',
-    title: 'Fate',
-    createdAt: 1,
-    updatedAt: 1,
-    targetType: 'standalone_lorebook',
-    activeBook: { name: 'Fate', extensions: {}, entries },
-    headCommitId: null,
-    commits: [],
-  };
+/** Seeds the export workspace the way the dialog opens in production. */
+function seededProject(entries: CharacterBookEntry[]) {
+  return projectOf(entries, { id: 'export-project', title: 'Fate' });
 }
 
 /**
@@ -154,7 +146,7 @@ describe('ExportSelectedDialog', () => {
       ],
     });
     workspace = TestBed.inject(WorkspaceService);
-    workspace.activeProject.set(projectOf(baseEntries()));
+    workspace.activeProject.set(seededProject(baseEntries()));
     // Allow the workspace's async init() to settle before tests touch signals.
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
@@ -216,7 +208,7 @@ describe('ExportSelectedDialog', () => {
 
   it('summarizes several unexported targets behind a "+N more" suffix', async () => {
     workspace.activeProject.set(
-      projectOf([
+      seededProject([
         entry(0, { keys: ['saber'], secondary_keys: ['artoria'], comment: 'Saber', content: 'x' }),
         entry(1, { keys: ['artoria'], comment: 'Artoria', content: 'x' }),
         entry(2, { keys: ['artoria'], comment: 'Artoria Alter', content: 'x' }),

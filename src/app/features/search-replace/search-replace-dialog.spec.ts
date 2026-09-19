@@ -3,29 +3,13 @@ import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { SearchReplaceDialog } from './search-replace-dialog';
-import {
-  CharacterBookEntry,
-  createEmptyEntry,
-  ProjectWorkspace,
-} from '../../core/models/lorebook.model';
+import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { projectOf } from '../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for search tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
   return { ...createEmptyEntry(id), ...overrides };
-}
-
-function projectOf(entries: CharacterBookEntry[]): ProjectWorkspace {
-  return {
-    id: 'test-project',
-    title: 'Test',
-    createdAt: 1,
-    updatedAt: 1,
-    targetType: 'standalone_lorebook',
-    activeBook: { name: 'Test', extensions: {}, entries },
-    headCommitId: null,
-    commits: [],
-  };
 }
 
 describe('SearchReplaceDialog', () => {

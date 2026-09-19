@@ -2,31 +2,15 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import {
-  CharacterBookEntry,
-  createEmptyEntry,
-  ProjectWorkspace,
-} from '../../core/models/lorebook.model';
+import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
 import { estimateTokens, formatTokenCount } from '../../core/services/token-estimator';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { DelimiterDialog } from './delimiter-dialog';
+import { projectOf } from '../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for delimiter tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
   return { ...createEmptyEntry(id), ...overrides };
-}
-
-function projectOf(entries: CharacterBookEntry[]): ProjectWorkspace {
-  return {
-    id: 'delimiter-project',
-    title: 'Delimiters',
-    createdAt: 1,
-    updatedAt: 1,
-    targetType: 'standalone_lorebook',
-    activeBook: { name: 'Delimiters', extensions: {}, entries },
-    headCommitId: null,
-    commits: [],
-  };
 }
 
 describe('DelimiterDialog', () => {
@@ -46,7 +30,7 @@ describe('DelimiterDialog', () => {
     activeEntryId: number | null = 0,
   ): Promise<DelimiterDialog> {
     dialogData.activeEntryId = activeEntryId;
-    workspace.activeProject.set(projectOf(entries));
+    workspace.activeProject.set(projectOf(entries, { id: 'delimiter-project', title: 'Delimiters' }));
     fixture = TestBed.createComponent(DelimiterDialog);
     await fixture.whenStable();
     fixture.detectChanges();

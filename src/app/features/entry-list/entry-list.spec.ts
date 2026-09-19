@@ -5,7 +5,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import {
   CharacterBookEntry,
-  ProjectWorkspace,
   createEmptyEntry,
 } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
@@ -13,23 +12,16 @@ import { ProjectActionsService } from '../shell/project-actions.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
 import { EntryList } from './entry-list';
 import { BatchOperationsDialog } from './batch-operations-dialog';
+import { projectOf } from '../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for list tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
   return { ...createEmptyEntry(id), ...overrides };
 }
 
-function projectOf(entries: CharacterBookEntry[], id = 'test-project'): ProjectWorkspace {
-  return {
-    id,
-    title: 'Test',
-    createdAt: 1,
-    updatedAt: 1,
-    targetType: 'standalone_lorebook',
-    activeBook: { name: 'Test', extensions: {}, entries },
-    headCommitId: null,
-    commits: [],
-  };
+/** Seeds a list workspace; most tests use the default project id. */
+function seededProject(entries: CharacterBookEntry[], id = 'test-project') {
+  return projectOf(entries, { id });
 }
 
 describe('EntryList', () => {
@@ -44,7 +36,7 @@ describe('EntryList', () => {
     entries: CharacterBookEntry[] = [],
     projectId = 'test-project',
   ): Promise<EntryList> {
-    workspace.activeProject.set(projectOf(entries, projectId));
+    workspace.activeProject.set(seededProject(entries, projectId));
     fixture = TestBed.createComponent(EntryList);
     await fixture.whenStable();
     return fixture.componentInstance;
@@ -250,7 +242,7 @@ function itemAt(list: EntryList, index: number) {
     list['toggleRow'](itemAt(list, 0), true);
     list['toggleTagFilter']('servant');
 
-    workspace.activeProject.set(projectOf([entry(0)], 'other-project'));
+    workspace.activeProject.set(seededProject([entry(0)], 'other-project'));
     await settle();
 
     expect(list['selection']().size).toBe(0);

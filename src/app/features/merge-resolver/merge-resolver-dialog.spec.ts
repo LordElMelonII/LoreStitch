@@ -6,29 +6,21 @@ import { MatSelect } from '@angular/material/select';
 import {
   CharacterBook,
   CharacterBookEntry,
-  ProjectWorkspace,
   createEmptyEntry,
 } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { type MergeDialogData, type MergeOutcome } from './merge-resolver.model';
 import { MergeResolverDialog } from './merge-resolver-dialog';
+import { projectOf } from '../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for merge tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
   return { ...createEmptyEntry(id), ...overrides };
 }
 
-function projectOf(entries: CharacterBookEntry[]): ProjectWorkspace {
-  return {
-    id: 'merge-project',
-    title: 'Fate',
-    createdAt: 1,
-    updatedAt: 1,
-    targetType: 'standalone_lorebook',
-    activeBook: { name: 'Fate', extensions: {}, entries },
-    headCommitId: null,
-    commits: [],
-  };
+/** Seeds the merge workspace the way the dialog opens in production. */
+function seededProject(entries: CharacterBookEntry[]) {
+  return projectOf(entries, { id: 'merge-project', title: 'Fate' });
 }
 
 /** Local book: a clash target for uid 0 and an identical-content twin for uid 1. */
@@ -111,7 +103,7 @@ describe('MergeResolverDialog', () => {
       sourceName: 'Fate Extras',
       mode: options.mode,
     };
-    workspace.activeProject.set(projectOf(localEntries()));
+    workspace.activeProject.set(seededProject(localEntries()));
     const fixture = TestBed.createComponent(MergeResolverDialog);
     await settle(fixture);
     return fixture;
