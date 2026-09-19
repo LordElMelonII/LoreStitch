@@ -16,10 +16,12 @@ import {
   extractSubBook,
   withEntryTags,
   isCharacterBook,
+  isLintRuleId,
   isProjectWorkspace,
   isSillyTavernWorldInfo,
   normalizeBookPositions,
   normalizeImportedBook,
+  sanitizeLintPrefs,
   stNativeToCharacterBook,
   stNumberToPosition,
   toSpecCompliantBook,
@@ -542,6 +544,114 @@ describe('lorebook model', () => {
       expect(
         (normalized.entries[0] as unknown as Record<string, unknown>)['vendor_color'],
       ).toBe('#0f0');
+    });
+  });
+
+  describe('workspace lintPrefs (plan 03 §3.6.5)', () => {
+    const WELL_SHAPED = {
+      ignoredSignatures: ['duplicate-key|1,2|rose', 'invalid-regex|7|/bad[/i'],
+      mutedRules: ['never-activatable', 'self-trigger'],
+    };
+
+    it('isProjectWorkspace accepts a workspace carrying well-shaped lintPrefs', () => {
+      expect(
+        isProjectWorkspace({
+          id: 'p1',
+          title: 'Project',
+          createdAt: 1,
+          updatedAt: 2,
+          activeBook: { entries: [] },
+          headCommitId: null,
+          commits: [],
+          lintPrefs: WELL_SHAPED,
+        }),
+      ).toBe(true);
+    });
+
+    it('isProjectWorkspace still accepts malformed lintPrefs — sanitize, never reject', () => {
+      // A hand-edited archive must keep loading; the malformed field is
+      // sanitized on import instead of failing the guard.
+      expect(
+        isProjectWorkspace({
+          id: 'p1',
+          title: 'Project',
+          createdAt: 1,
+          updatedAt: 2,
+          activeBook: { entries: [] },
+          headCommitId: null,
+          commits: [],
+          lintPrefs: 'garbage',
+        }),
+      ).toBe(true);
+    });
+
+    describe('isLintRuleId', () => {
+      it('accepts every rule id and rejects everything else', () => {
+        for (const id of [
+          'invalid-regex',
+          'duplicate-key',
+          'secondary-keys-ignored',
+          'selective-without-secondary',
+          'never-activatable',
+          'recursion-cycle',
+          'self-trigger',
+          'malformed-wrapper',
+        ]) {
+          expect(isLintRuleId(id)).toBe(true);
+        }
+        expect(isLintRuleId('bogus-rule')).toBe(false);
+        expect(isLintRuleId('toString')).toBe(false); // prototype member, not a rule
+        expect(isLintRuleId(42)).toBe(false);
+        expect(isLintRuleId(null)).toBe(false);
+      });
+    });
+
+    describe('sanitizeLintPrefs', () => {
+      it('returns undefined for a missing or non-object value', () => {
+        expect(sanitizeLintPrefs(undefined)).toBeUndefined();
+        expect(sanitizeLintPrefs(null)).toBeUndefined();
+        expect(sanitizeLintPrefs('nope')).toBeUndefined();
+        expect(sanitizeLintPrefs(5)).toBeUndefined();
+        expect(sanitizeLintPrefs(['x'])).toBeUndefined();
+      });
+
+      it('keeps well-shaped values verbatim (order and duplicates preserved)', () => {
+        const value = {
+          ignoredSignatures: ['sig-b', 'sig-a', 'sig-b'],
+          mutedRules: ['self-trigger', 'never-activatable'],
+        };
+        expect(sanitizeLintPrefs(value)).toEqual(value);
+      });
+
+      it('drops empty-string and non-string signature entries, keeping order', () => {
+        expect(
+          sanitizeLintPrefs({
+            ignoredSignatures: ['sig-a', '', '   ', 42, null, 'sig-b'],
+            mutedRules: [],
+          }),
+        ).toEqual({ ignoredSignatures: ['sig-a', 'sig-b'], mutedRules: [] });
+      });
+
+      it('drops unknown or non-string muted rule ids, keeping valid ones in order', () => {
+        expect(
+          sanitizeLintPrefs({
+            ignoredSignatures: [],
+            mutedRules: ['never-activatable', 'bogus-rule', 7, 'recursion-cycle'],
+          }),
+        ).toEqual({ ignoredSignatures: [], mutedRules: ['never-activatable', 'recursion-cycle'] });
+      });
+
+      it('fills missing or wrong-typed keys with empty arrays', () => {
+        expect(sanitizeLintPrefs({})).toEqual({ ignoredSignatures: [], mutedRules: [] });
+        expect(
+          sanitizeLintPrefs({ ignoredSignatures: 'nope', mutedRules: 'also nope' }),
+        ).toEqual({ ignoredSignatures: [], mutedRules: [] });
+        // A partial shape keeps the part that survived.
+        expect(sanitizeLintPrefs({ mutedRules: ['duplicate-key'] })).toEqual({
+          ignoredSignatures: [],
+          mutedRules: ['duplicate-key'],
+        });
+      });
     });
   });
 

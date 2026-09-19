@@ -507,6 +507,142 @@ describe('ImportExportService exports', () => {
     expect(parsed.book).toEqual(project.activeBook);
   });
 
+  it('carries lintPrefs through exportProject and re-imports it verbatim', async () => {
+    const project: ProjectWorkspace = {
+      ...makeProject('Linted Project'),
+      lintPrefs: {
+        ignoredSignatures: ['duplicate-key|1,2|rose', 'invalid-regex|7|/bad[/i'],
+        mutedRules: ['never-activatable', 'self-trigger'],
+      },
+    };
+
+    service.exportProject(project);
+    const capture = downloads[0];
+    assert(capture);
+    // `exportProject` clones the whole workspace, so the field rides along
+    // (plan 03 §3.6.5.2) — no dedicated export code path.
+    const archive = await payloadOf(capture);
+    const workspace = archive['workspace'] as Record<string, unknown>;
+    expect(workspace['lintPrefs']).toEqual(project.lintPrefs);
+
+    // Re-importing the export restores the prefs verbatim (well-shaped values
+    // survive `sanitizeLintPrefs` content-unchanged).
+    const parsed = service.parseImport(archive);
+    assert(parsed);
+    assert(parsed.workspace);
+    expect(parsed.workspace.lintPrefs).toEqual(project.lintPrefs);
+  });
+
+  it('imports an old archive without lintPrefs unchanged', async () => {
+    const project = makeProject('Legacy Project');
+
+    service.exportProject(project);
+    const capture = downloads[0];
+    assert(capture);
+    const archive = await payloadOf(capture);
+    expect(archive['workspace']).toEqual(project); // no lintPrefs key written
+
+    const parsed = service.parseImport(archive);
+    assert(parsed);
+    assert(parsed.workspace);
+    expect(parsed.workspace.lintPrefs).toBeUndefined();
+    expect(Object.hasOwn(parsed.workspace, 'lintPrefs')).toBe(false);
+  });
+
+  it('sanitizes malformed lintPrefs parts on import instead of rejecting', async () => {
+    const base = makeProject('Hand-edited');
+    const archive = {
+      format: 'lorestitch-project',
+      version: LORESTITCH_ARCHIVE_VERSION,
+      exportedAt: new Date().toISOString(),
+      workspace: {
+        ...base,
+        lintPrefs: {
+          ignoredSignatures: ['sig-a', '', '   ', 42, null],
+          mutedRules: ['never-activatable', 'bogus-rule', 7],
+        },
+      },
+    };
+
+    const parsed = service.parseImport(archive);
+    assert(parsed);
+    assert(parsed.workspace);
+    expect(parsed.workspace.lintPrefs).toEqual({
+      ignoredSignatures: ['sig-a'],
+      mutedRules: ['never-activatable'],
+    });
+
+    // A wholly malformed field is dropped, not kept as a type violation.
+    const garbage = {
+      format: 'lorestitch-project',
+      version: LORESTITCH_ARCHIVE_VERSION,
+      workspace: { ...base, lintPrefs: 'garbage' },
+    };
+    const garbageParsed = service.parseImport(garbage);
+    assert(garbageParsed);
+    assert(garbageParsed.workspace);
+    expect(garbageParsed.workspace.lintPrefs).toBeUndefined();
+    expect(Object.hasOwn(garbageParsed.workspace, 'lintPrefs')).toBe(false);
+  });
+
+  it('exports byte-identical ST JSON for a book from a prefs-carrying workspace', async () => {
+    // The pinned contract (plan 03 §3.6.5.2): preferences are workspace
+    // metadata — a book exported from a prefs-carrying workspace must be
+    // byte-for-byte the same ST JSON as from one without.
+    const book: CharacterBook = {
+      name: 'Prefs Book',
+      extensions: { stlo: { vendor: true } },
+      entries: [
+        makeEntry(0, { keys: ['rose'], secondary_keys: ['night'] }),
+        makeEntry(1, { keys: ['lily'], content: '<lily>\nlore\n</lily>' }),
+      ],
+    };
+    const withPrefs: ProjectWorkspace = {
+      ...makeProject('Prefs Carrier'),
+      activeBook: book,
+      lintPrefs: { ignoredSignatures: ['duplicate-key|1,2|rose'], mutedRules: ['self-trigger'] },
+    };
+    const withoutPrefs: ProjectWorkspace = { ...makeProject('Prefs Carrier'), activeBook: book };
+
+    service.exportCharacterBook(withPrefs.activeBook, 'Prefs Carrier');
+    service.exportCharacterBook(withoutPrefs.activeBook, 'Prefs Carrier');
+    service.exportStNative(withPrefs.activeBook, 'Prefs Carrier');
+    service.exportStNative(withoutPrefs.activeBook, 'Prefs Carrier');
+    expect(downloads).toHaveLength(4);
+    const [bookWith, bookWithout, nativeWith, nativeWithout] = downloads;
+    assert(bookWith && bookWithout && nativeWith && nativeWithout);
+    expect(await bookWith.blob.text()).toBe(await bookWithout.blob.text());
+    expect(await nativeWith.blob.text()).toBe(await nativeWithout.blob.text());
+  });
+
+  it('never writes lintPrefs into ProjectCommit snapshots', async () => {
+    const project = makeProject('Committed');
+    project.commits = [
+      {
+        id: 'c1',
+        parentId: null,
+        timestamp: 1,
+        message: 'Initial commit',
+        snapshot: structuredClone(project.activeBook),
+      },
+    ];
+    project.headCommitId = 'c1';
+    project.lintPrefs = { ignoredSignatures: ['never-activatable|1|'], mutedRules: [] };
+
+    service.exportProject(project);
+    const capture = downloads[0];
+    assert(capture);
+    const archive = await payloadOf(capture);
+    const workspace = archive['workspace'] as Record<string, unknown>;
+    // The prefs live on the workspace…
+    expect(workspace['lintPrefs']).toEqual(project.lintPrefs);
+    // …but never inside a commit snapshot (rollbacks must not touch them).
+    const commits = workspace['commits'] as Record<string, unknown>[];
+    const snapshot = commits[0]?.['snapshot'] as Record<string, unknown>;
+    expect(snapshot).toEqual(project.activeBook);
+    expect(Object.hasOwn(snapshot, 'lintPrefs')).toBe(false);
+  });
+
   it('writes a sorted markdown digest and can exclude disabled entries', async () => {
     const book: CharacterBook = {
       name: 'Digest Book',

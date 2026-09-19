@@ -14,6 +14,7 @@ import {
   isSillyTavernWorldInfo,
   normalizeBookPositions,
   normalizeImportedBook,
+  sanitizeLintPrefs,
   stNativeToCharacterBook,
   toSpecCompliantBook,
 } from '../models/lorebook.model';
@@ -29,6 +30,26 @@ export interface ParsedImport {
 
 export interface MarkdownDigestOptions {
   includeDisabled?: boolean;
+}
+
+/**
+ * Import-only normalization for the optional `lintPrefs` field of a `.stproj`
+ * workspace (plan 03 §3.6.5.2): an absent field passes the workspace through
+ * verbatim (old archives load exactly as before); a present field is run
+ * through `sanitizeLintPrefs`, and a wholly malformed one is dropped rather
+ * than kept as a type-violating value.
+ */
+function withSanitizedLintPrefs(workspace: ProjectWorkspace): ProjectWorkspace {
+  if (workspace.lintPrefs === undefined) {
+    return workspace;
+  }
+  const prefs = sanitizeLintPrefs(workspace.lintPrefs);
+  if (prefs === undefined) {
+    // `_malformed` is exempt from no-unused-vars via varsIgnorePattern.
+    const { lintPrefs: _malformed, ...withoutPrefs } = workspace;
+    return withoutPrefs;
+  }
+  return { ...workspace, lintPrefs: prefs };
 }
 
 /**
@@ -86,7 +107,11 @@ export class ImportExportService {
         const workspace: ProjectWorkspace = archive['workspace'];
         return {
           format,
-          workspace,
+          // lintPrefs (plan 03 §3.6.5.2) is LoreStitch-owned workspace
+          // metadata: sanitized resiliently at import — malformed parts are
+          // dropped, never an archive rejection; an absent field passes the
+          // workspace through verbatim (see withSanitizedLintPrefs).
+          workspace: withSanitizedLintPrefs(workspace),
           book: workspace.activeBook,
           suggestedTitle: workspace.title || fallbackTitle,
         };
