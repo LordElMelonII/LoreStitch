@@ -1,6 +1,6 @@
 import { devices, expect, type Locator, type Page, test } from '@playwright/test';
 import { strict as assert } from 'node:assert';
-import { join } from 'node:path';
+import { FATE_PATH, importLorebook, selectFirstTwoRows } from './helpers';
 
 /**
  * Responsive architecture suite for the LoreStitch studio shell.
@@ -13,6 +13,10 @@ import { join } from 'node:path';
  * - Mobile (< 768px): both panels become off-canvas overlay drawers driven by
  *   the hamburger and history buttons, no horizontal overflow anywhere, the
  *   editor scrolls independently of its header and 48px touch targets.
+ *
+ * One viewport per device class replays every contract (1920/1280 and
+ * 390/412 legs were byte-identical replays — see TEST-REPORT.md); the one
+ * assertion that genuinely differs at 1920 has its own test below.
  */
 
 interface Viewport {
@@ -25,11 +29,9 @@ interface Viewport {
 }
 
 const VIEWPORTS: Viewport[] = [
-  { name: 'desktop-1920x1080', width: 1920, height: 1080, kind: 'desktop' },
   { name: 'desktop-1280x800', width: 1280, height: 800, kind: 'desktop' },
   { name: 'tablet-768x1024', width: 768, height: 1024, kind: 'tablet' },
   { name: 'mobile-390x844', width: 390, height: 844, kind: 'mobile', device: 'iPhone 13' },
-  { name: 'mobile-412x915', width: 412, height: 915, kind: 'mobile', device: 'Pixel 7' },
 ];
 
 const LONG_CONTENT = Array.from(
@@ -38,13 +40,6 @@ const LONG_CONTENT = Array.from(
     `Entry line ${i}: Gensokyo is modern but sealed; villagers trade, youkai visit, ` +
     'incidents end over tea, and danmaku can be playful under fragile rules.',
 ).join('\n');
-
-/** Many-entry lorebook used to exercise the virtualized entry list. */
-const EXAMPLE_LOREBOOK = join(
-  process.cwd(),
-  'example_card',
-  'Fate Stay Night - Fuyuki Lorebook(1).json',
-);
 
 /** Creates a project through the welcome screen so the studio shell appears. */
 async function createProject(page: Page): Promise<void> {
@@ -117,37 +112,6 @@ async function openHistory(page: Page): Promise<void> {
 }
 
 /**
- * Imports the many-entry lorebook from the welcome screen. Used by the mobile
- * legs that need real entry rows (virtual list, touch targets, bottom sheets)
- * — a freshly created project has none.
- */
-async function importExample(page: Page): Promise<void> {
-  await page.goto('/');
-  const [chooser] = await Promise.all([
-    page.waitForEvent('filechooser'),
-    page.getByRole('button', { name: 'Import .json / .stproj' }).first().click(),
-  ]);
-  await chooser.setFiles(EXAMPLE_LOREBOOK);
-  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
-  await expect(page.locator('.entries-sidenav')).toBeAttached();
-}
-
-/**
- * Selects the first two visible entry rows, opening the off-canvas entries
- * drawer first on phone viewports (the rows are not on-canvas below 768px).
- */
-async function selectTwoRows(page: Page): Promise<void> {
-  await page.locator('[aria-label="Toggle entries panel"]').click();
-  await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
-  const rows = page.locator('.entry-item');
-  await rows.first().locator('.row-select').click();
-  await rows.nth(1).locator('.row-select').click();
-  await expect(page.getByRole('toolbar', { name: 'Batch actions' })).toContainText(
-    '2 selected',
-  );
-}
-
-/**
  * Mobile bottom-sheet ergonomics contract (plan §3.5.1): the converted pane
  * renders as a `.mat-bottom-sheet-container`, never overflows horizontally,
  * keeps its pinned actions row inside the viewport, and pans overflowing
@@ -168,12 +132,14 @@ async function expectMobileSheetErgonomics(page: Page, pane: Locator, label: str
     overflowY: getComputedStyle(el).overflowY,
     scrollable: el.scrollHeight > el.clientHeight,
   }));
-  if (body.scrollable) {
-    expect(
-      ['auto', 'scroll', 'overlay'].includes(body.overflowY),
-      `${label} sheet: overflowing content must be scrollable, got overflow-y: ${body.overflowY}`,
-    ).toBe(true);
-  }
+  // The pane body is the designated scroll surface at every fill level: an
+  // overflow-y of visible/hidden here would clip long content, so the scroll
+  // regime is asserted unconditionally — not only when the current content
+  // happens to overflow.
+  expect(
+    ['auto', 'scroll', 'overlay'].includes(body.overflowY),
+    `${label} sheet: .pane-body must be the scroll surface, got overflow-y: ${body.overflowY}`,
+  ).toBe(true);
 }
 
 /**
@@ -235,25 +201,10 @@ test.describe('responsive studio shell', () => {
         );
       }
 
-      test('top bar never causes horizontal overflow', async ({ page }) => {
-        await createProject(page);
-        await addEntry(page, vp.kind);
-
-        const overflow = await page.evaluate(() => {
-          const topbar = document.querySelector('.topbar');
-          if (!topbar) {
-            throw new Error('.topbar not rendered');
-          }
-          return {
-            document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-            body: document.body.scrollWidth - document.body.clientWidth,
-            topbar: topbar.scrollWidth - topbar.clientWidth,
-          };
-        });
-        expect(overflow.document, 'document must not scroll horizontally').toBeLessThanOrEqual(0);
-        expect(overflow.body, 'body must not scroll horizontally').toBeLessThanOrEqual(0);
-        expect(overflow.topbar, 'top bar content must not clip sideways').toBeLessThanOrEqual(0);
-      });
+      // The former "top bar never causes horizontal overflow" test is folded
+      // into the whole-DOM overflow scan below (document/body deltas are
+      // subsumed by the per-element scan; the topbar's clip check rides in
+      // the scan's evaluate).
 
       if (vp.kind === 'desktop') {
         test('entries and history dock side-by-side without overlapping the editor', async ({
@@ -295,13 +246,8 @@ test.describe('responsive studio shell', () => {
             .locator('app-entry-editor')
             .evaluate((el) => getComputedStyle(el).maxWidth);
           expect(parseFloat(maxWidth)).toBeLessThanOrEqual(780);
-
-          // Wide windows actually see the pane shrink to that measure.
-          if (vp.width >= 1920) {
-            const box = await page.locator('app-entry-editor').boundingBox();
-            assert(box, 'editor has no bounding box');
-            expect(box.width).toBeLessThanOrEqual(781);
-          }
+          // (Whether the pane physically shrinks to that measure depends on
+          // the window width; the 1920 test below pins the visible shrink.)
 
           // Off: the constraint is lifted.
           await toggle.click();
@@ -472,7 +418,7 @@ test.describe('responsive studio shell', () => {
             page.waitForEvent('filechooser'),
             page.getByRole('button', { name: 'Import .json / .stproj' }).first().click(),
           ]);
-          await chooser.setFiles(EXAMPLE_LOREBOOK);
+          await chooser.setFiles(FATE_PATH);
           await expect(page.locator('.entries-sidenav')).toBeAttached();
           await expect(page.locator('.project-badge', { hasText: 'Fuyuki' })).toBeVisible();
 
@@ -521,8 +467,9 @@ test.describe('responsive studio shell', () => {
         test('batch, export-selected and merge panes open as ergonomic bottom sheets', async ({
           page,
         }) => {
-          await importExample(page);
-          await selectTwoRows(page);
+          await page.goto('/');
+          await importLorebook(page, FATE_PATH);
+          await selectFirstTwoRows(page);
 
           // Batch pane as a sheet (the About pane's sheet variant has its own
           // spec — see about-dialog.spec.ts; this test pins the three
@@ -558,7 +505,7 @@ test.describe('responsive studio shell', () => {
           await page.locator('[aria-label="More actions menu"]').click();
           const chooserPromise = page.waitForEvent('filechooser');
           await page.getByRole('menuitem', { name: 'Merge lorebook…' }).click();
-          await (await chooserPromise).setFiles(EXAMPLE_LOREBOOK);
+          await (await chooserPromise).setFiles(FATE_PATH);
           const mergePane = page.locator('.cdk-overlay-pane.app-merge-sheet');
           await expect(mergePane).toBeVisible();
           await expect(mergePane.getByRole('heading', { name: /Merge/ })).toBeVisible();
@@ -570,7 +517,8 @@ test.describe('responsive studio shell', () => {
         test('rows, batch controls, accordion strip and bar items meet the touch-target floor', async ({
           page,
         }) => {
-          await importExample(page);
+          await page.goto('/');
+          await importLorebook(page, FATE_PATH);
 
           // Bottom action bar items: phone-only surface, so the enhanced 48px
           // mobile target applies to every one of the five items.
@@ -588,7 +536,7 @@ test.describe('responsive studio shell', () => {
 
           // Entry rows and the batch toolbar (Material icon buttons pick up
           // the global 48px mobile rule) inside the drawer.
-          await selectTwoRows(page);
+          await selectFirstTwoRows(page);
           await expectTouchTargets(page, 'app-entry-list .entry-item', 44);
           await expectTouchTargets(page, '.batch-bar button', 48);
         });
@@ -692,6 +640,15 @@ test.describe('responsive studio shell', () => {
           page.evaluate(() => {
             const docWidth = document.documentElement.clientWidth;
             const bad: string[] = [];
+            // The former topbar-only test's unique check: clipped-sideways
+            // topbar content (scrollWidth overflow under a clipping bar).
+            const topbar = document.querySelector('.topbar');
+            if (!topbar) {
+              throw new Error('.topbar not rendered');
+            }
+            if (topbar.scrollWidth - topbar.clientWidth > 0) {
+              bad.push('.topbar (content clipped sideways)');
+            }
             for (const el of document.querySelectorAll<HTMLElement>('body *')) {
               // Closed off-canvas drawers are intentionally outside the viewport.
               if (el.closest('.mat-drawer:not(.mat-drawer-opened)')) continue;
@@ -723,4 +680,30 @@ test.describe('responsive studio shell', () => {
       });
     });
   }
+
+  test.describe('desktop-1920x1080 wide-window leg', () => {
+    // The 1920 replay of the desktop describe was byte-identical to 1280
+    // except for this contract: at >= 1920 the focused editor pane is
+    // actually narrower than the window, so the reading measure is visible
+    // as a physical shrink (TEST-REPORT.md, ui-responsiveness trim).
+    test.use({ viewport: { width: 1920, height: 1080 } });
+    test.skip(
+      () => test.info().project.name.startsWith('mobile-'),
+      'wide-window leg runs on the desktop project only',
+    );
+
+    test('focus mode physically narrows the editor pane at 1920', async ({ page }) => {
+      await createProject(page);
+      await addEntry(page, 'desktop');
+
+      const toggle = page.locator('[aria-label="Toggle focus mode"]');
+      await expect(toggle).toBeVisible();
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+      const box = await page.locator('app-entry-editor').boundingBox();
+      assert(box, 'editor has no bounding box');
+      expect(box.width).toBeLessThanOrEqual(781);
+    });
+  });
 });

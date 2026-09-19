@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { importLorebook } from './helpers';
 
 /**
  * Lorebook health linter acceptance suite (Task 03, plan §3.4 Tier 3):
@@ -45,18 +46,6 @@ const FULL_SUMMARY = '2 errors · 4 warnings · 0 notes';
 /** The topbar health-check button's numeric badge (`matBadge` on the icon). */
 function healthBadge(page: Page): Locator {
   return page.locator('[aria-label="Health check"] .mat-badge-content');
-}
-
-/** Imports a lorebook file through the welcome screen, replacing the project. */
-async function importLorebook(page: Page, path: string): Promise<void> {
-  const importChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Import .json / .stproj' }).click();
-  await (await importChooser).setFiles(path);
-  // Assert the project-open top bar, not merely an attached sidenav: the
-  // welcome state also renders a sidenav, so a silently failed import would
-  // otherwise slip through and every later editor interaction would time out.
-  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
-  await expect(page.locator('.entries-sidenav')).toBeAttached();
 }
 
 /**

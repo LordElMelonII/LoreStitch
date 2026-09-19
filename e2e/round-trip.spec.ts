@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { devices, expect, type Download, type Page, test } from '@playwright/test';
+import { devices, expect, type Page, test } from '@playwright/test';
+import { exportWorldInfo, FATE_PATH, importLorebook } from './helpers';
 
 /**
  * Round-trip acceptance suite for native SillyTavern world-info files (the
@@ -12,8 +12,6 @@ import { devices, expect, type Download, type Page, test } from '@playwright/tes
  * Also covers the two high-priority bug fixes: entry-list scrolling on touch
  * devices and the theme menu on the welcome screen.
  */
-
-const FATE_PATH = join(process.cwd(), 'example_card', 'Fate Stay Night - Fuyuki Lorebook(1).json');
 
 const original = JSON.parse(readFileSync(FATE_PATH, 'utf8')) as {
   stlo: Record<string, unknown>;
@@ -26,18 +24,6 @@ const EDIT = {
   groupWeight: '77',
 };
 
-/** Imports a lorebook file through the welcome screen, replacing the project. */
-async function importLorebook(page: Page, path: string): Promise<void> {
-  const importChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Import .json / .stproj' }).click();
-  await (await importChooser).setFiles(path);
-  // Assert the project-open top bar, not merely an attached sidenav: the
-  // welcome state also renders a sidenav, so a silently failed import would
-  // otherwise slip through and every later editor interaction would time out.
-  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
-  await expect(page.locator('.entries-sidenav')).toBeAttached();
-}
-
 /** Opens the first visible entry and expands its options panel. */
 async function openFirstEntryOptions(page: Page): Promise<void> {
   await page.locator('.entry-item').first().click();
@@ -48,19 +34,6 @@ async function openFirstEntryOptions(page: Page): Promise<void> {
     await page.locator('[aria-label="Toggle entry options"]').click();
   }
   await expect(panel).not.toHaveAttribute('inert');
-}
-
-/** Exports via the top bar menu; resolves with the parsed JSON and its file. */
-async function exportWorldInfo(
-  page: Page,
-): Promise<{ json: Record<string, unknown>; download: Download }> {
-  await page.locator('[aria-label="Export menu"]').click();
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.getByText('World Info JSON').first().click(),
-  ]);
-  const json = JSON.parse(readFileSync(await download.path(), 'utf8')) as Record<string, unknown>;
-  return { json, download };
 }
 
 test.describe('native lorebook round trip', () => {

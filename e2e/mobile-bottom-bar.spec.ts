@@ -1,5 +1,5 @@
-import { join } from 'node:path';
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { FATE_PATH, importLorebook } from './helpers';
 
 /**
  * M3 bottom action bar guardrails (task 02 plan §3.5, re-pointed from the
@@ -21,12 +21,6 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
  * config's three projects cover both sides with focused runs.
  */
 
-const FATE_PATH = join(
-  process.cwd(),
-  'example_card',
-  'Fate Stay Night - Fuyuki Lorebook(1).json',
-);
-
 /** The bar host (always mounted; its content stamps only while visible). */
 function barHost(page: Page): Locator {
   return page.locator('app-mobile-bottom-bar');
@@ -35,18 +29,6 @@ function barHost(page: Page): Locator {
 /** The bar's nav — present in the DOM only while the bar is shown. */
 function barNav(page: Page): Locator {
   return barHost(page).locator('nav[aria-label="Quick actions"]');
-}
-
-/** Opens the app and imports a lorebook file through the welcome screen. */
-async function importLorebook(page: Page, path: string): Promise<void> {
-  await page.goto('/');
-  const importChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Import .json / .stproj' }).click();
-  await (await importChooser).setFiles(path);
-  // Assert the project-open top bar, not merely an attached sidenav: a
-  // silently failed import would otherwise slip through here.
-  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
-  await expect(page.locator('.entries-sidenav')).toBeAttached();
 }
 
 test.describe('mobile bottom action bar (phones)', () => {
@@ -63,6 +45,7 @@ test.describe('mobile bottom action bar (phones)', () => {
     await expect(page.locator('app-welcome-screen')).toBeVisible();
     await expect(barNav(page)).toHaveCount(0);
 
+    await page.goto('/');
     await importLorebook(page, FATE_PATH);
     await expect(barNav(page)).toBeVisible();
     await expect(barHost(page).locator('.bar-item')).toHaveCount(5);
@@ -82,6 +65,7 @@ test.describe('mobile bottom action bar (phones)', () => {
   });
 
   test('the New entry action creates an entry and opens its editor tab', async ({ page }) => {
+    await page.goto('/');
     await importLorebook(page, FATE_PATH);
     const countBefore = Number(await page.locator('.list-header .count').textContent());
     const tabsBefore = await page.locator('.entry-tabs .mat-mdc-tab').count();
@@ -99,6 +83,7 @@ test.describe('mobile bottom action bar (phones)', () => {
   });
 
   test('the Export action opens the shared export menu above the bar', async ({ page }) => {
+    await page.goto('/');
     await importLorebook(page, FATE_PATH);
 
     await barNav(page).getByRole('button', { name: 'Export', exact: true }).click();
@@ -143,6 +128,7 @@ test.describe('mobile bottom action bar (phones)', () => {
   test('the History action opens the drawer and the bar hides while it is open', async ({
     page,
   }) => {
+    await page.goto('/');
     await importLorebook(page, FATE_PATH);
     await expect(barNav(page)).toBeVisible();
 
@@ -168,6 +154,7 @@ test.describe('mobile bottom action bar (phones)', () => {
   });
 
   test('any dialog hides the bar while open and returns it after close', async ({ page }) => {
+    await page.goto('/');
     await importLorebook(page, FATE_PATH);
     await expect(barNav(page)).toBeVisible();
 
@@ -183,24 +170,9 @@ test.describe('mobile bottom action bar (phones)', () => {
     await expect(barNav(page)).toBeVisible();
   });
 
-  test('bar items meet the 48px mobile touch target', async ({ page }) => {
-    await importLorebook(page, FATE_PATH);
-    await expect(barHost(page).locator('.bar-item')).toHaveCount(5);
-
-    const measured = await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>('app-mobile-bottom-bar .bar-item')]
-        .filter((item) => item.checkVisibility())
-        .map((item) => {
-          const box = item.getBoundingClientRect();
-          return { width: box.width, height: box.height };
-        }),
-    );
-    expect(measured).toHaveLength(5);
-    for (const size of measured) {
-      expect(size.width).toBeGreaterThanOrEqual(48);
-      expect(size.height).toBeGreaterThanOrEqual(48);
-    }
-  });
+  // The bar items' 48px touch-target check lives in ui-responsiveness.spec.ts
+  // ("rows, batch controls, accordion strip and bar items…"), which measures
+  // the same five `.bar-item`s alongside the other mobile surfaces.
 });
 
 test.describe('mobile bottom action bar (tablet/desktop absence)', () => {
@@ -212,6 +184,7 @@ test.describe('mobile bottom action bar (tablet/desktop absence)', () => {
   test('no bottom bar while a project is open, and history stays in the topbar', async ({
     page,
   }) => {
+    await page.goto('/');
     await importLorebook(page, FATE_PATH);
 
     // The host may stay mounted (its hidden state is display:none), but the

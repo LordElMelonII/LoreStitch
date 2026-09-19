@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { FATE_PATH, importLorebook, selectFirstTwoRows } from './helpers';
 
 /**
  * Acceptance suite for the ROADMAP's high-priority batch/token/split
@@ -14,46 +14,6 @@ import { expect, type Page, test } from '@playwright/test';
  * and the phone paths stay pinned on both engines. (There is no separate
  * token-meter spec; the meter is covered by the first and fourth tests.)
  */
-
-const FATE_PATH = join(
-  process.cwd(),
-  'example_card',
-  'Fate Stay Night - Fuyuki Lorebook(1).json',
-);
-
-/** Imports a lorebook file through the welcome screen. */
-async function importLorebook(page: Page, path: string): Promise<void> {
-  const importChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Import .json / .stproj' }).click();
-  await (await importChooser).setFiles(path);
-  // Assert the project-open top bar, not merely an attached sidenav: a
-  // silently failed import would otherwise slip through here.
-  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
-  await expect(page.locator('.entries-sidenav')).toBeAttached();
-}
-
-/**
- * Checks the selection checkboxes of the first two visible entry rows.
- *
- * Viewport-aware: below the shell's 768px breakpoint the entries sidenav is
- * an off-canvas `over` drawer, so the rows (and their checkboxes) are not
- * visible until the drawer is toggled open. The batch toolbar lives inside
- * the drawer too, so the whole selection flow stays within it — which is why
- * the bottom action bar hiding while the drawer is open is irrelevant here.
- */
-async function selectFirstTwoRows(page: Page): Promise<void> {
-  const viewport = page.viewportSize();
-  if (viewport && viewport.width < 768) {
-    await page.locator('[aria-label="Toggle entries panel"]').click();
-    await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
-  }
-  const rows = page.locator('.entry-item');
-  await rows.first().locator('.row-select').click();
-  await rows.nth(1).locator('.row-select').click();
-  await expect(page.getByRole('toolbar', { name: 'Batch actions' })).toContainText(
-    '2 selected',
-  );
-}
 
 test.describe('batch operations, token meter & split export', () => {
   test('shows the always-active token meter and opens the inspector', async ({ page }) => {

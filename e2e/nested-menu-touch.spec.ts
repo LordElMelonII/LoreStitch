@@ -1,5 +1,5 @@
-import { join } from 'node:path';
 import { expect, type Page, test } from '@playwright/test';
+import { FATE_PATH, importLorebook } from './helpers';
 
 /**
  * Touch regression suite for the nested menus in the More actions menu
@@ -17,25 +17,8 @@ import { expect, type Page, test } from '@playwright/test';
  * parity).
  */
 
-const FATE_PATH = join(
-  process.cwd(),
-  'example_card',
-  'Fate Stay Night - Fuyuki Lorebook(1).json',
-);
-
 /** The open-then-dismiss flash settles within milliseconds; wait past it. */
 const FLASH_WINDOW_MS = 600;
-
-/** Imports a lorebook file through the welcome screen. */
-async function importLorebook(page: Page, path: string): Promise<void> {
-  const importChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Import .json / .stproj' }).click();
-  await (await importChooser).setFiles(path);
-  // Assert the project-open top bar, not merely an attached sidenav: a
-  // silently failed import would otherwise slip through here.
-  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
-  await expect(page.locator('.entries-sidenav')).toBeAttached();
-}
 
 /** The More menu's nested Export trigger (distinct from the top-bar button). */
 function exportTrigger(page: Page): ReturnType<Page['locator']> {
