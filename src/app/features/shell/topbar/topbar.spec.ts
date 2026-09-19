@@ -5,12 +5,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatIconRegistry } from '@angular/material/icon';
 import { MatMenuTrigger } from '@angular/material/menu';
 import { of } from 'rxjs';
-import {
-  CharacterBookEntry,
-  ProjectWorkspace,
-  createEmptyBook,
-  createEmptyEntry,
-} from '../../../core/models/lorebook.model';
+import { ProjectWorkspace, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { StorageService } from '../../../core/services/storage.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { LayoutService } from '../../../shared/services/layout.service';
@@ -18,58 +13,11 @@ import { ResponsiveOverlayService } from '../../../shared/services/responsive-ov
 import { LinterDialog } from '../../linter/linter-dialog';
 import { ProjectActionsService } from '../project-actions.service';
 import { GITHUB_ICON } from '../../../shared/constants/github';
-import {
-  DESKTOP_BREAKPOINT_QUERY,
-  MOBILE_BREAKPOINT_QUERY,
-} from '../../../shared/constants/breakpoints';
 import { AboutDialog } from '../../about/about-dialog';
 import { Topbar } from './topbar';
 import { TokenMeter } from './token-meter';
-
-/**
- * jsdom has no matchMedia; install a stub whose desktop/mobile answers can be
- * flipped mid-test (the CDK observer reacts to change events, exactly like a
- * browser).
- */
-function installMatchMediaStub(): {
-  setDesktop: (matches: boolean) => void;
-  setMobile: (matches: boolean) => void;
-} {
-  const state = new Map<string, boolean>([
-    [DESKTOP_BREAKPOINT_QUERY, false],
-    [MOBILE_BREAKPOINT_QUERY, false],
-  ]);
-  /** Listeners keyed by the query they observe: flips notify each with its own answer. */
-  const listeners = new Map<string, Set<(event: { matches: boolean }) => void>>();
-  const fake = (query: string) => ({
-    get matches() {
-      return state.get(query) ?? false;
-    },
-    media: query,
-    onchange: null,
-    addListener: (cb: (event: { matches: boolean }) => void) => {
-      const set = listeners.get(query) ?? new Set();
-      set.add(cb);
-      listeners.set(query, set);
-    },
-    removeListener: (cb: unknown) => listeners.get(query)?.delete(cb as never),
-    addEventListener: (_: string, cb: (event: { matches: boolean }) => void) =>
-      listeners.get(query)?.add(cb),
-    removeEventListener: (_: string, cb: unknown) => listeners.get(query)?.delete(cb as never),
-    dispatchEvent: () => false,
-  });
-  Object.defineProperty(window, 'matchMedia', { writable: true, value: fake });
-  const setQuery = (query: string, matches: boolean) => {
-    state.set(query, matches);
-    for (const cb of listeners.get(query) ?? []) {
-      cb({ matches });
-    }
-  };
-  return {
-    setDesktop: (matches) => setQuery(DESKTOP_BREAKPOINT_QUERY, matches),
-    setMobile: (matches) => setQuery(MOBILE_BREAKPOINT_QUERY, matches),
-  };
-}
+import { installMatchMediaStub } from '../../../../testing/match-media-stub';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('Topbar', () => {
   let workspace: WorkspaceService;
@@ -77,20 +25,6 @@ describe('Topbar', () => {
   let overlayOpen: ReturnType<typeof vi.fn>;
   let desktop: { setDesktop: (matches: boolean) => void; setMobile: (matches: boolean) => void };
   let fixture: import('@angular/core/testing').ComponentFixture<Topbar>;
-
-  /** Builds a workspace holding exactly the given entries (badge/linter tests). */
-  function projectOf(entries: CharacterBookEntry[]): ProjectWorkspace {
-    return {
-      id: 'topbar-project',
-      title: 'Topbar',
-      createdAt: 1,
-      updatedAt: 1,
-      targetType: 'standalone_lorebook',
-      activeBook: { name: 'Topbar', extensions: {}, entries },
-      headCommitId: null,
-      commits: [],
-    };
-  }
 
   async function createTopbar(): Promise<Topbar> {
     fixture = TestBed.createComponent(Topbar);
@@ -368,7 +302,7 @@ describe('Topbar', () => {
     expect(dialogOpen).not.toHaveBeenCalled();
   });
 
-  it('lists About and a phones-only Theme submenu in the More actions menu', async () => {
+  it('pins the More actions menu contents, order and the phones-only Theme entry', async () => {
     await workspace.createProject('Fuyuki');
     await createTopbar();
     fixture.detectChanges();
@@ -378,10 +312,18 @@ describe('Topbar', () => {
     triggerDebug.injector.get(MatMenuTrigger).openMenu();
     fixture.detectChanges();
 
-    const menuText = document.querySelector('.mat-mdc-menu-panel')?.textContent ?? '';
-    expect(menuText).toContain('Health check…');
-    expect(menuText).toContain('About LoreStitch…');
-    expect(menuText).toContain('Theme');
+    // Contents: Health check, About and the Theme submenu are all listed.
+    const items = [...document.querySelectorAll('.mat-mdc-menu-panel button')].map(
+      (button) => button.textContent ?? '',
+    );
+    const searchIndex = items.findIndex((text) => text.includes('Search & replace…'));
+    const healthIndex = items.findIndex((text) => text.includes('Health check…'));
+    assert(searchIndex >= 0);
+    assert(healthIndex >= 0);
+    // The two authoring-quality tools sit together (plan 03 §3.6.1).
+    expect(healthIndex).toBe(searchIndex + 1);
+    expect(items.join('\n')).toContain('About LoreStitch…');
+    expect(items.join('\n')).toContain('Theme');
     // The Theme entry is the phones-only duplicate: on >= 768px the direct
     // button is visible and the entry must disappear (mobile-only class).
     const mobileOnly = document.querySelectorAll('.mat-mdc-menu-panel .mobile-only');
@@ -400,7 +342,12 @@ describe('Topbar', () => {
     expect(healthIcon()?.classList.contains('mat-badge-hidden')).toBe(true);
 
     // An invalid regex key is one error — the badge shows the count.
-    workspace.activeProject.set(projectOf([{ ...createEmptyEntry(0), keys: ['/servant(/'] }]));
+    workspace.activeProject.set(
+      projectOf([{ ...createEmptyEntry(0), keys: ['/servant(/'] }], {
+        id: 'topbar-project',
+        title: 'Topbar',
+      }),
+    );
     fixture.detectChanges();
     expect(healthIcon()?.classList.contains('mat-badge-hidden')).toBe(false);
     expect(healthIcon()?.querySelector('.mat-badge-content')?.textContent).toBe('1');
@@ -408,51 +355,13 @@ describe('Topbar', () => {
     // Info-only findings never light the badge (the entry is keyed so it
     // emits exactly one info diagnostic).
     workspace.activeProject.set(
-      projectOf([{ ...createEmptyEntry(0), keys: ['paris'], selective: true, secondary_keys: [] }]),
+      projectOf(
+        [{ ...createEmptyEntry(0), keys: ['paris'], selective: true, secondary_keys: [] }],
+        { id: 'topbar-project', title: 'Topbar' },
+      ),
     );
     fixture.detectChanges();
     expect(healthIcon()?.classList.contains('mat-badge-hidden')).toBe(true);
-  });
-
-  it('mirrors Health check into the More menu, directly after Search & replace', async () => {
-    await workspace.createProject('Fuyuki');
-    await createTopbar();
-    fixture.detectChanges();
-
-    const triggerDebug = fixture.debugElement.query(By.css('[aria-label="More actions menu"]'));
-    assert(triggerDebug);
-    triggerDebug.injector.get(MatMenuTrigger).openMenu();
-    fixture.detectChanges();
-    const items = [...document.querySelectorAll('.mat-mdc-menu-panel button')].map(
-      (button) => button.textContent ?? '',
-    );
-    const searchIndex = items.findIndex((text) => text.includes('Search & replace…'));
-    const healthIndex = items.findIndex((text) => text.includes('Health check…'));
-    assert(searchIndex >= 0);
-    assert(healthIndex >= 0);
-    // The two authoring-quality tools sit together (plan 03 §3.6.1).
-    expect(healthIndex).toBe(searchIndex + 1);
-  });
-
-  it('keeps the More-menu Health check item reachable on phones', async () => {
-    desktop.setMobile(true);
-    await workspace.createProject('Fuyuki');
-    await createTopbar();
-    fixture.detectChanges();
-
-    // The standalone bar button carries the phone-hiding class (the Search
-    // button's exact mechanism — a stylesheet hide, so the node still exists
-    // in the jsdom DOM and the class is what the assertion targets)...
-    const healthButton = fixture.nativeElement.querySelector('[aria-label="Health check"]');
-    expect(healthButton?.classList.contains('desktop-only')).toBe(true);
-
-    // ...and phones reach the pane through the universal More-menu item.
-    const triggerDebug = fixture.debugElement.query(By.css('[aria-label="More actions menu"]'));
-    assert(triggerDebug);
-    triggerDebug.injector.get(MatMenuTrigger).openMenu();
-    fixture.detectChanges();
-    const menuText = document.querySelector('.mat-mdc-menu-panel')?.textContent ?? '';
-    expect(menuText).toContain('Health check…');
   });
 
   it('opens the health check through the responsive overlay', async () => {
@@ -511,19 +420,6 @@ describe('TokenMeter', () => {
   let workspace: WorkspaceService;
   let dialogOpen: ReturnType<typeof vi.fn>;
 
-  function projectOf(entries: ProjectWorkspace['activeBook']['entries']): ProjectWorkspace {
-    return {
-      id: 'meter-project',
-      title: 'Meter',
-      createdAt: 1,
-      updatedAt: 1,
-      targetType: 'standalone_lorebook',
-      activeBook: { name: 'Meter', extensions: {}, token_budget: 15, entries },
-      headCommitId: null,
-      commits: [],
-    };
-  }
-
   function constantEntry(
     id: number,
     content: string,
@@ -548,48 +444,18 @@ describe('TokenMeter', () => {
     expect(fixture.nativeElement.querySelector('.token-meter')).toBeNull();
   });
 
-  it('shows the always-active footprint of enabled constant entries', async () => {
-    workspace.activeProject.set(
-      projectOf([
-        constantEntry(0, 'a'.repeat(40)), // ~10 tokens
-        constantEntry(1, 'b'.repeat(20)), // ~5 tokens
-        { ...createEmptyEntry(2), content: 'triggered only', constant: false },
-        { ...constantEntry(3, 'c'.repeat(400)), enabled: false }, // disabled: excluded
-      ]),
-    );
-    const fixture = TestBed.createComponent(TokenMeter);
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const meter = fixture.nativeElement.querySelector('.token-meter');
-    expect(meter).toBeTruthy();
-    expect(meter?.textContent).toContain('~15');
-
-    const tooltip = fixture.componentInstance['tooltip']();
-    expect(tooltip).toContain('Always active: ~15 tokens across 2 constant entries');
-    expect(tooltip).toContain('of 15 budget (100%)');
-    expect(tooltip).not.toContain('over budget');
-  });
-
-  it('marks the meter and tooltip when the budget is exceeded', async () => {
-    workspace.activeProject.set(
-      projectOf([
-        constantEntry(0, 'a'.repeat(40)),
-        constantEntry(1, 'b'.repeat(40)), // 20 total > 15 budget
-      ]),
-    );
-    const fixture = TestBed.createComponent(TokenMeter);
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(fixture.componentInstance['footprint']()?.overBudget).toBe(true);
-    expect(fixture.nativeElement.querySelector('.token-meter')?.className).toContain('over-budget');
-    expect(fixture.componentInstance['tooltip']()).toContain('over budget');
-    expect(fixture.nativeElement.querySelectorAll('.warn-icon').length).toBeGreaterThan(0);
-  });
+  // The meter's footprint arithmetic, over-budget marking and budget-segment
+  // tooltip are pinned by token-estimator.spec and token-inspector-dialog.spec;
+  // only the topbar-composition wiring stays here.
 
   it('opens the token inspector on click', async () => {
-    workspace.activeProject.set(projectOf([constantEntry(0, 'a'.repeat(40))]));
+    workspace.activeProject.set(
+      projectOf([constantEntry(0, 'a'.repeat(40))], {
+        id: 'meter-project',
+        title: 'Meter',
+        tokenBudget: 15,
+      }),
+    );
     const fixture = TestBed.createComponent(TokenMeter);
     await fixture.whenStable();
     fixture.detectChanges();
@@ -597,18 +463,5 @@ describe('TokenMeter', () => {
     fixture.nativeElement.querySelector('.token-meter')?.dispatchEvent(new Event('click'));
     // openInspector lazy-loads the inspector dialog module first.
     await vi.waitFor(() => expect(dialogOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
-  });
-
-  it('omits the budget segment when the book has no token_budget', async () => {
-    workspace.activeProject.set({
-      ...projectOf([]),
-      activeBook: { ...createEmptyBook('No budget'), entries: [constantEntry(0, 'a'.repeat(40))] },
-    });
-    const fixture = TestBed.createComponent(TokenMeter);
-    await fixture.whenStable();
-
-    expect(fixture.componentInstance['tooltip']()).toBe(
-      'Always active: ~10 tokens across 1 constant entry. Click to inspect.',
-    );
   });
 });

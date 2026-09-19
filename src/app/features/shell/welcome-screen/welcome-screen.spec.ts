@@ -89,26 +89,20 @@ describe('WelcomeScreen', () => {
     expect(items[0]?.getAttribute('aria-label')).toBe('Open project Fuyuki');
   });
 
-  it('opens a recent project on click', async () => {
+  it('opens a recent project on click and on Enter', async () => {
     workspace.savedProjects.set([savedProject('p1', 'Fuyuki', 3)]);
     const openSpy = vi.spyOn(actions, 'openProject').mockResolvedValue(undefined);
     const { element } = await createScreen();
 
-    element.querySelector<HTMLElement>('.recent-item')?.dispatchEvent(new Event('click'));
-
+    // Both activation paths route through the same open handler.
+    const item = element.querySelector<HTMLElement>('.recent-item');
+    assert(item);
+    item.dispatchEvent(new Event('click'));
     expect(openSpy).toHaveBeenCalledWith('p1');
-  });
 
-  it('opens a recent project with the Enter key', async () => {
-    workspace.savedProjects.set([savedProject('p1', 'Fuyuki', 3)]);
-    const openSpy = vi.spyOn(actions, 'openProject').mockResolvedValue(undefined);
-    const { element } = await createScreen();
-
-    element
-      .querySelector<HTMLElement>('.recent-item')
-      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-
-    expect(openSpy).toHaveBeenCalledWith('p1');
+    item.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(openSpy).toHaveBeenCalledTimes(2);
+    expect(openSpy).toHaveBeenLastCalledWith('p1');
   });
 
   it('deletes a project from the row without opening it', async () => {

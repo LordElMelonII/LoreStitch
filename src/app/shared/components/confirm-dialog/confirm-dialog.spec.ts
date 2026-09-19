@@ -42,14 +42,13 @@ describe('ConfirmDialog', () => {
     expect(el.querySelector('.message')?.textContent).toContain('This cannot be undone.');
   });
 
-  it('labels the confirm action "Confirm" when no custom label is given', () => {
+  it('falls back to "Confirm" and honors a custom confirm label', () => {
     createDialog({ title: 'Rebuild index', message: 'All caches are dropped.' });
 
     expect(button('Confirm')).toBeTruthy();
     expect(button('Cancel')).toBeTruthy();
-  });
 
-  it('renders a custom confirm label when provided', () => {
+    TestBed.resetTestingModule();
     createDialog({
       title: 'Discard draft',
       message: 'Uncommitted changes are lost.',

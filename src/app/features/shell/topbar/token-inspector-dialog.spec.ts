@@ -2,11 +2,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialogRef } from '@angular/material/dialog';
 import {
   CharacterBookEntry,
-  ProjectWorkspace,
   createEmptyEntry,
 } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { TokenInspectorDialog } from './token-inspector-dialog';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for inspector tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
@@ -21,22 +21,13 @@ function constantEntry(id: number, comment: string, chars: number): CharacterBoo
   return entry(id, { comment, constant: true, content: 'a'.repeat(chars) });
 }
 
-function projectOf(entries: CharacterBookEntry[], tokenBudget?: number): ProjectWorkspace {
-  return {
+/** Seeds the inspector workspace, optionally with a token budget. */
+function seededProject(entries: CharacterBookEntry[], tokenBudget?: number) {
+  return projectOf(entries, {
     id: 'inspector-project',
     title: 'Inspector',
-    createdAt: 1,
-    updatedAt: 1,
-    targetType: 'standalone_lorebook',
-    activeBook: {
-      name: 'Inspector',
-      extensions: {},
-      entries,
-      ...(tokenBudget === undefined ? {} : { token_budget: tokenBudget }),
-    },
-    headCommitId: null,
-    commits: [],
-  };
+    ...(tokenBudget === undefined ? {} : { tokenBudget }),
+  });
 }
 
 describe('TokenInspectorDialog', () => {
@@ -54,7 +45,7 @@ describe('TokenInspectorDialog', () => {
       providers: [{ provide: MatDialogRef, useValue: { close } }],
     });
     workspace = TestBed.inject(WorkspaceService);
-    workspace.activeProject.set(projectOf(entries, tokenBudget));
+    workspace.activeProject.set(seededProject(entries, tokenBudget));
     // Allow the workspace's async init() to settle before mounting.
     await new Promise((resolve) => setTimeout(resolve, 0));
     fixture = TestBed.createComponent(TokenInspectorDialog);
