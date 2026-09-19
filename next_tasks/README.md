@@ -8,14 +8,14 @@ Planning documents for the four MEDIUM PRIORITY items in `ROADMAP.md` (plus urge
 | 02 | [mobile-ergonomics.md](./02-mobile-ergonomics.md) ✅ Completed 2026-09-18 | Mobile Ergonomics & Responsive Viewport Guardrails | ui-specialist → qa-auditor → ts-reviewer |
 | 03 | [lorebook-linter.md](./03-lorebook-linter.md) | Lorebook Health Linter & Validator | core-engine → ui-specialist → ts-reviewer → qa-auditor |
 | 04 | [regex-key-sandbox.md](./04-regex-key-sandbox.md) | Regex Key Testing Sandbox | core-engine → ui-specialist → ts-reviewer → qa-auditor |
-| 05 | [urgent-mismatched-delimiters.md](./05-urgent-mismatched-delimiters.md) 🔴 Urgent | Bug report 2026-09-19 — reopens ROADMAP "Asymmetric Delimiters" (`<foo>…</bar>`) | core-engine → ui-specialist → ts-reviewer → qa-auditor |
+| 05 | [urgent-mismatched-delimiters.md](./05-urgent-mismatched-delimiters.md) ✅ Completed 2026-09-19 | Bug report 2026-09-19 — reopens ROADMAP "Asymmetric Delimiters" (`<foo>…</bar>`) | core-engine → ui-specialist → ts-reviewer → qa-auditor |
 
 ## Execution Order & Dependencies
 
 ```
 01 (Delimiters)  ── completed 2026-09-18
 02 (Mobile)      ── completed 2026-09-18
-05 (Urgent)      ── mismatched/malformed delimiter detection & cleanup; PREEMPTS 03/04
+05 (Urgent)      ── completed 2026-09-19 (mismatched/malformed delimiter detection & cleanup)
 03 (Linter)      ── produces shared st-regex/matcher modules consumed by 04;
                    should adopt 05's detectMalformedWrapper as a lint rule
 04 (Sandbox)     ── depends on 03 Phase 1 (shared regex modules)
@@ -44,4 +44,4 @@ Rationale:
 |------|-------------|-------|
 | 01, 02 | `4120bb9` (01 landed `a5f4c34`..`109061d`) | Completed 2026-09-18 |
 | 03, 04 | `4120bb9` | Pending — re-read `topbar.*` at current HEAD (Task 02 P1 / Task 03 P3 both touch it) |
-| 05 | `c003bce` | Pending (urgent) — owns `core/models/delimiters.*`, `features/delimiters/**`, `entry-content-field.*`, `e2e/delimiters.spec.ts`; disjoint from 03/04 |
+| 05 | `c003bce` (05 landed `ba8b753`..`ca41d39`) | Completed 2026-09-19 — owns `core/models/delimiters.*`, `features/delimiters/**`, `entry-content-field.*`, `e2e/delimiters.spec.ts`; disjoint from 03/04 |

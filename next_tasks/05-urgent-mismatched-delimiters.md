@@ -4,7 +4,9 @@
 > sub-bullet (`<foo>…</bar>`, unclosed `<tag>`) that Task 01 deliberately left conservative.
 > **Type**: Urgent defect fix + hardening (detection, previewed cleanup, regression tests)
 > **Suggested agents**: `core-engine` (lead) → `ui-specialist` → `ts-reviewer` → `qa-auditor`
-> **Status**: 🔴 **Planned — urgent; dispatch before 03/04.** Grounded against `develop` @ `c003bce`.
+> **Status**: ✅ **Completed** (2026-09-19) — P1 core classifier `ba8b753`, P2 dialog & badge `2f31fb8`,
+> P3 review refactor `9c3f43c`, P4 E2E & coverage `ca41d39` (grounded against `develop` @ `c003bce`).
+> All verification gates green (build, unit, coverage, Playwright delimiters/round-trip, lint).
 
 ---
 
