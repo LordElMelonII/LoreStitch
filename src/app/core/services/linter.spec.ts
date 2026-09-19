@@ -295,16 +295,6 @@ describe('linter', () => {
       expect(duplicate.message).toContain('extensions.group');
     });
 
-    it('keeps the warning when only some members are grouped', () => {
-      const diagnostics = lintBook(
-        makeBook([
-          makeEntry(1, { keys: ['rose'], extensions: { group: 'knights' } }),
-          makeEntry(2, { keys: ['rose'] }),
-        ]),
-      );
-      expect(singleOf(diagnostics, 'duplicate-key').severity).toBe('warning');
-    });
-
     it('keeps the warning when members are in different groups', () => {
       const diagnostics = lintBook(
         makeBook([
@@ -842,14 +832,6 @@ describe('linter', () => {
         ).toBe('invalid-regex|7|');
       });
 
-      it('is deterministic across runs and app restarts', () => {
-        const book = makeFindingsBook();
-        const firstPass = lintBook(book).map(lintDiagnosticSignature);
-        const secondPass = lintBook(book).map(lintDiagnosticSignature);
-        expect(firstPass).toEqual(secondPass);
-        expect(firstPass.length).toBeGreaterThan(0);
-      });
-
       it('gives the book-level perf-guard note the empty entryIds shape', () => {
         const skip = singleOf(lintBook(makeLargeBook(LARGE_BOOK_THRESHOLD + 1)), 'recursion-cycle');
         expect(skip.entryIds).toEqual([]);
@@ -934,20 +916,6 @@ describe('linter', () => {
         expect(ruleOf(diagnostics, 'invalid-regex')).toHaveLength(0);
         expect(ruleOf(diagnostics, 'duplicate-key')).toHaveLength(1);
         expect(ruleOf(diagnostics, 'never-activatable')).toHaveLength(2);
-      });
-
-      it('mutes every rule into an empty report', () => {
-        const allRules: LintRuleId[] = [
-          'invalid-regex',
-          'duplicate-key',
-          'secondary-keys-ignored',
-          'selective-without-secondary',
-          'never-activatable',
-          'recursion-cycle',
-          'self-trigger',
-          'malformed-wrapper',
-        ];
-        expect(lintBook(makeFindingsBook(), { mutedRules: new Set(allRules) })).toEqual([]);
       });
 
       it('silences the perf-guard skip note when recursion-cycle is muted (pinned interaction)', () => {

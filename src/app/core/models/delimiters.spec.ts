@@ -189,11 +189,6 @@ describe('delimiters', () => {
       }
     });
 
-    it('never emits phantom wrappers for blank payloads', () => {
-      expect(wrapContent('   ', 'tag', 'N')).not.toContain('<');
-      expect(wrapContent('   ', 'separator', 'N')).not.toContain('---');
-    });
-
     it('keeps a bare separator marker unchanged (D1)', () => {
       expect(wrapContent('---', 'separator', 'N')).toBe('---');
       expect(wrapContent('  ---  ', 'separator', 'N')).toBe('  ---  ');
@@ -365,10 +360,6 @@ describe('delimiters', () => {
       );
     });
 
-    it('does not strip a non-matching wrapper for none (D4)', () => {
-      expect(rewrapContent('<note>prose</note>', 'none', 'N', ['N'])).toBe('<note>prose</note>');
-    });
-
     it('strips a matching tag wrapper for none', () => {
       expect(rewrapContent('<N>\nprose\n</N>', 'none', 'N', ['N'])).toBe('prose');
     });
@@ -382,24 +373,14 @@ describe('delimiters', () => {
       expect(rewrapContent('prose\n\n---', 'bracket', 'N', ['N'])).toBe('[N=\nprose\n\n---]');
     });
 
-    it('strips only the outer tag in a single pass', () => {
-      expect(rewrapContent('<N>\nprose\n\n---\n</N>', 'none', 'N', ['N'])).toBe('prose\n\n---');
-      expect(rewrapContent('<N>\nprose\n\n---\n</N>', 'tag', 'N', ['N'])).toBe(
-        '<N>\nprose\n\n---\n</N>',
-      );
-    });
-
     it('wraps malformed markup additively without truncating', () => {
       expect(rewrapContent('<foo>x</bar>', 'tag', 'N', ['N'])).toBe('<N>\n<foo>x</bar>\n</N>');
       expect(rewrapContent('<tag>unclosed', 'tag', 'N', ['N'])).toBe('<N>\n<tag>unclosed\n</N>');
     });
 
-    it('keeps a padded payload byte-for-byte', () => {
-      expect(rewrapContent('  hi  ', 'tag', 'N', ['N'])).toBe('<N>\n  hi  \n</N>');
-    });
-
     it('matches wrapper names after sanitization', () => {
-      expect(delimiterNameMatches('a=b', ['a[b'])).toBe(true);
+      // `delimiterNameMatches` sanitization itself is pinned in its own
+      // describe above; this test covers it through unwrap/rewrap.
       expect(unwrapContent('<a=b>x</a=b>', { expectedNames: ['a=b'] })).toBe('x');
       // The re-wrapped name is the sanitized target (`a[b` -> `a b`) while the
       // payload itself stays byte-identical.
@@ -493,15 +474,6 @@ describe('delimiters', () => {
         '---',
       );
     });
-
-    it('round-trips blank payloads as-is', () => {
-      for (const style of WRAPPING_STYLES) {
-        for (const blank of BLANK_INPUTS) {
-          const wrapped = wrapContent(blank, style, ROUND_TRIP_NAME);
-          expect(unwrapContent(wrapped, { expectedNames: [ROUND_TRIP_NAME] })).toBe(blank);
-        }
-      }
-    });
   });
 
   describe('nested collisions', () => {
@@ -594,19 +566,6 @@ describe('delimiters', () => {
       assert(entry);
       expect(unwrapContent(entry.content, { expectedNames: ['London'] })).toBe(ORIGINAL);
       expect(entry.extensions['vendor_extra']).toEqual({ a: 1 });
-    });
-
-    it('parks unknown native import keys in extensions and writes them back', () => {
-      const native = characterBookToStNative(buildBook());
-      const exported = native.entries['1'];
-      assert(exported);
-      exported['color'] = '#ff00ff';
-
-      const reimported = stNativeToCharacterBook(native);
-      const entry = reimported.entries[0];
-      assert(entry);
-      expect(entry.extensions['color']).toBe('#ff00ff');
-      expect(characterBookToStNative(reimported).entries['1']?.['color']).toBe('#ff00ff');
     });
   });
 

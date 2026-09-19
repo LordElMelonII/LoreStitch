@@ -121,8 +121,8 @@ describe('st-regex', () => {
       '/a',
       'a/',
       '\\/foo\\/',
-      '/a/d',
-      '/a/v',
+      // '/a/d' and '/a/v' are pinned in the UNACCEPTED_FLAG_KEYS loop above,
+      // which also shows their parseStRegex outcome.
     ];
 
     for (const key of NOT_SHAPED_KEYS) {
@@ -133,25 +133,14 @@ describe('st-regex', () => {
   });
 
   describe('isValidStRegex', () => {
-    const CASES: readonly [key: string, valid: boolean][] = [
-      ['/a/', true],
-      ['/a\\/b/', true],
-      ['/foo\nbar/i', true],
-      ['/a[/i', false],
-      ['/a/ii', false],
-      ['/a//', false],
-      ['///', false],
-      ['/a/d', false],
-      ['plain', false],
-      ['//', false],
-    ];
-
-    for (const [key, valid] of CASES) {
-      it(`classifies ${JSON.stringify(key)} as ${valid ? 'valid' : 'invalid'}`, () => {
-        expect(isValidStRegex(key)).toBe(valid);
-        expect(parseStRegex(key) !== null).toBe(valid);
-      });
-    }
+    // st-regex.ts implements isValidStRegex as `parseStRegex(key) !== null`,
+    // so the parse tables above already pin every classification case; only
+    // the public delegation contract is pinned here.
+    it('delegates to parseStRegex success', () => {
+      expect(isValidStRegex('/a/')).toBe(true);
+      expect(isValidStRegex('/a[/i')).toBe(false);
+      expect(isValidStRegex('plain')).toBe(false);
+    });
   });
 
   describe('matchStRegex', () => {

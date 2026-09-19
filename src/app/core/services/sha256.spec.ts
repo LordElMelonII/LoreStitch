@@ -25,25 +25,24 @@ describe('sha256 fallback', () => {
   });
 
   it('handles inputs spanning multiple 64-byte blocks', () => {
-    const long = 'x'.repeat(500);
-    expect(sha256Hex(long)).toHaveLength(64);
-    // Same algorithm as WebCrypto, so the digests must be identical.
-    expect(sha256Hex(long)).toBe(sha256Hex(long));
+    // Standard NIST two-block (112-byte) test vector.
+    const twoBlocks =
+      'abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno' +
+      'ijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu';
+    expect(sha256Hex(twoBlocks)).toBe(
+      'cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1',
+    );
   });
 
-  it('agrees with WebCrypto (when this environment provides it)', async () => {
-    if (typeof crypto === 'undefined' || !crypto.subtle) {
-      return; // nothing to compare against here
-    }
+  it('agrees with WebCrypto', async () => {
+    // No capability guard: if subtle crypto were absent, subtleDigestHex
+    // throws and this test fails instead of vacuously passing.
     const payload = `${'root'}\u0000${JSON.stringify({ entries: [1, 2, 3] })}`;
     const expected = await subtleDigestHex(payload);
     expect(sha256Hex(payload)).toBe(expected);
   });
 
   it('agrees with WebCrypto for multi-byte UTF-8 input', async () => {
-    if (typeof crypto === 'undefined' || !crypto.subtle) {
-      return;
-    }
     // CJK + emoji exercise the TextEncoder path beyond ASCII.
     const payload = '上海 — 🎲 lorebook entry';
     expect(sha256Hex(payload)).toBe(await subtleDigestHex(payload));

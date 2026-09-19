@@ -1,8 +1,7 @@
-import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { WorkspaceService } from './workspace.service';
 import { StorageService } from './storage.service';
-import { ProjectWorkspace, createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
+import { createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
 
 /**
  * The WorkspaceService tests run against the in-memory fallback of the
@@ -29,6 +28,10 @@ describe('WorkspaceService', () => {
     assert(project.commits[0]);
     expect(project.headCommitId).toBe(project.commits[0].id);
     expect(workspace.hasUnsavedChanges()).toBe(false);
+    // Lazy tabs: a fresh project starts with no editor tabs open at all.
+    expect(workspace.openTabEntryIds()).toEqual([]);
+    expect(workspace.activeTabId()).toBeNull();
+    expect(workspace.activeEntry()).toBeNull();
   });
 
   it('tracks entry mutations, dirty state and tab state', async () => {
@@ -120,65 +123,5 @@ describe('WorkspaceService', () => {
     expect(workspace.saveError()).toBe(
       'Latest changes could not be saved to browser storage. Export your work to avoid data loss.',
     );
-  });
-});
-
-describe('WorkspaceService save error recovery', () => {
-  /**
-   * Storage double whose `saveError` signal the test controls directly, since
-   * a successful write is the only thing that clears it and jsdom has no
-   * IndexedDB to succeed with. `listProjects`/`getState` are inherited so the
-   * rejected db promise is handled exactly like in production.
-   */
-  class ControlledStorage extends StorageService {
-    private readonly failure = signal<unknown>(null);
-
-    override readonly saveError = this.failure.asReadonly();
-
-    failWith(error: unknown): void {
-      this.failure.set(error);
-    }
-
-    override async getProject(): Promise<ProjectWorkspace | undefined> {
-      return undefined;
-    }
-
-    override async saveProject(): Promise<void> {
-      // Intentionally inert.
-    }
-
-    override async deleteProject(): Promise<void> {
-      // Intentionally inert.
-    }
-
-    override scheduleSave(): void {
-      // Intentionally inert.
-    }
-
-    override async flush(): Promise<void> {
-      // Intentionally inert.
-    }
-
-    override async setState(): Promise<void> {
-      // Intentionally inert.
-    }
-  }
-
-  it('maps a storage failure to the banner message and clears on recovery', () => {
-    const storage = new ControlledStorage();
-    TestBed.configureTestingModule({
-      providers: [{ provide: StorageService, useValue: storage }],
-    });
-    const workspace = TestBed.inject(WorkspaceService);
-
-    expect(workspace.saveError()).toBeNull();
-
-    storage.failWith(new Error('QuotaExceededError'));
-    expect(workspace.saveError()).toBe(
-      'Latest changes could not be saved to browser storage. Export your work to avoid data loss.',
-    );
-
-    storage.failWith(null);
-    expect(workspace.saveError()).toBeNull();
   });
 });

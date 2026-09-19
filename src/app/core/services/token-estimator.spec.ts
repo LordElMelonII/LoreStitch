@@ -46,7 +46,10 @@ describe('TokenEstimator', () => {
   describe('estimateEntryTokens', () => {
     it('estimates only the content (keys and memos are never injected)', () => {
       const entry = createEmptyEntry(1);
-      entry.content = 'a'.repeat(40);
+      entry.content = 'a'.repeat(40); // 10 tokens
+      // Enough mass to change the total if keys or the memo were summed in.
+      entry.keys = ['b'.repeat(20)]; // would add 5 tokens
+      entry.comment = 'c'.repeat(40); // would add 10 tokens
       expect(estimateEntryTokens(entry)).toBe(10);
     });
   });

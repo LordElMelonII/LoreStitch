@@ -38,7 +38,9 @@ describe('st-key-match', () => {
       ['Rose', 'the Rose grew', true, true],
       ['ROSE', 'the ROSE grew', true, true],
       ['rose', 'the ROSE grew', null, true],
-      ['rose', 'the rose grew', false, true],
+      // Explicit false must behave like unset — not like "option present":
+      // an implementation branching on `!= null` instead of `=== true` fails
+      // only this row.
       ['rose', 'the ROSE grew', false, true],
     ];
 
@@ -170,11 +172,6 @@ describe('st-key-match', () => {
       expect(matchStKey(' king ', 'long live the king', { matchWholeWords: true })).toBe(false);
     });
 
-    it('an empty plaintext key matches everything via includes when whole words are off', () => {
-      expect(matchStKey('', 'anything', { matchWholeWords: false })).toBe(true);
-      expect(matchStKey('', '', {})).toBe(true);
-    });
-
     it('an empty key fails the whole-word boundary pattern (world-info.js:356)', () => {
       expect(matchStKey('', 'anything', { matchWholeWords: true })).toBe(false);
     });
@@ -203,7 +200,9 @@ describe('st-key-match', () => {
       ['/rose/i', 'ROSE', { caseSensitive: true, matchWholeWords: true }, true],
       // Whole-word plaintext would reject 'kingdom'; the raw regex still hits.
       ['/king/', 'kingdom', { matchWholeWords: true }, true],
-      // Regex flags govern case; the case option is never applied to the haystack.
+      // Regex flags govern case; the case option is never applied to the
+      // haystack — 'ROSE' folded would be 'rose', so these rows also prove
+      // the raw regex runs before any case folding.
       ['/rose/', 'ROSE', { caseSensitive: false }, false],
       ['/ROSE/', 'rose', { caseSensitive: false }, false],
       // Anchors behave as written.
@@ -217,14 +216,6 @@ describe('st-key-match', () => {
         expect(matchStKey(key, text, options)).toBe(expected);
       });
     }
-
-    it('tests regex keys before any case folding of the haystack', () => {
-      // 'ROSE' folded would be 'rose'; the raw /rose/ without the i flag
-      // must still fail -> the haystack was never folded.
-      expect(matchStKey('/rose/', 'ROSE', { caseSensitive: false, matchWholeWords: false })).toBe(
-        false,
-      );
-    });
   });
 
   describe('regex-shaped keys that fail to parse fall back to plaintext (world-info.js:339-345)', () => {

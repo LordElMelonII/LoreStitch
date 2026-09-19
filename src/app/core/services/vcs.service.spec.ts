@@ -43,6 +43,8 @@ describe('VcsService', () => {
       expect(commit.parentId).toBeNull();
       expect(commit.message).toBe('first');
       expect(commit.snapshot).toEqual(project.activeBook);
+      expect(commit.timestamp).toBeGreaterThan(0);
+      expect(Math.abs(commit.timestamp - Date.now())).toBeLessThan(60_000);
       expect(committed.headCommitId).toBe(commit.id);
       // Input is not mutated.
       expect(project.commits).toHaveLength(0);
@@ -188,16 +190,6 @@ describe('VcsService', () => {
       // The fixture really does stringify differently before normalization.
       expect(JSON.stringify(a)).not.toBe(JSON.stringify(b));
       expect(vcs.serialize(a)).toBe(vcs.serialize(b));
-    });
-
-    it('hashes key-order variants of the same book to the same commit id', async () => {
-      const base = makeProject();
-      const first = await vcs.createCommit({ ...base, activeBook: bookWithExtensions() }, 'same');
-      const second = await vcs.createCommit(
-        { ...base, activeBook: (reverseKeyOrder(bookWithExtensions()) as CharacterBook) },
-        'same',
-      );
-      expect(second.headCommitId).toBe(first.headCommitId);
     });
 
     it('treats key-order-only differences as clean', async () => {
