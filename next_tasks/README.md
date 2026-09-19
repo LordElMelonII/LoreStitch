@@ -43,5 +43,6 @@ Rationale:
 | Task | Grounded at | Notes |
 |------|-------------|-------|
 | 01, 02 | `4120bb9` (01 landed `a5f4c34`..`109061d`) | Completed 2026-09-18 |
-| 03, 04 | `4120bb9` | Pending — re-read `topbar.*` at current HEAD (Task 02 P1 / Task 03 P3 both touch it) |
+| 03 | `329509b` (re-grounded 2026-09-19) | Pending — plan refreshed for Task 02 (`openResponsive`, topbar badge anatomy) and Task 05 (`detectMalformedWrapper` adopted as a lint rule); core file renamed `linter.ts` per the pure-module convention |
+| 04 | `4120bb9` | Pending — re-ground before dispatch (consumes 03's shared modules; `entry-keys.*` untouched since the audit, but re-check at HEAD) |
 | 05 | `c003bce` (05 landed `ba8b753`..`ca41d39`) | Completed 2026-09-19 — owns `core/models/delimiters.*`, `features/delimiters/**`, `entry-content-field.*`, `e2e/delimiters.spec.ts`; disjoint from 03/04 |
