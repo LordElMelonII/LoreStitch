@@ -73,16 +73,21 @@
                           (click)="goToEntry(jump.entryId)"
                           [attr.aria-label]="jump.ariaLabel"
                         >
-                          {{ jump.title }}
+                          <!-- One-line label: long titles ellipsize instead of
+                               doubling the button height (the chip rule below);
+                               the full title stays on the aria-label. -->
+                          <span class="jump-title">{{ jump.title }}</span>
                           <mat-icon aria-hidden="true">north_east</mat-icon>
                         </button>
                       }
                     </div>
                   } @else if (row.singleTitle !== null) {
                     <!-- Single-entry rows: the chip is decorative metadata;
-                         the trailing Go-to button carries the action. -->
+                         the trailing Go-to button carries the action. One line,
+                         ellipsized — [title] reveals the full text on hover,
+                         and the DOM text (the accessible name) stays complete. -->
                     <div class="chip-row">
-                      <span class="entry-chip">{{ row.singleTitle }}</span>
+                      <span class="entry-chip" [title]="row.singleTitle">{{ row.singleTitle }}</span>
                     </div>
                   }
                 </div>

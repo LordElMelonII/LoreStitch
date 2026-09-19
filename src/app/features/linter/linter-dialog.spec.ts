@@ -134,6 +134,9 @@ describe('LinterDialog', () => {
     expect(el().querySelector('.details')?.textContent?.trim()).toBe('/servant(/');
     // Single-entry rows: decorative chip + trailing jump with the entry name.
     expect(el().querySelector('.entry-chip')?.textContent?.trim()).toBe('Broken regex');
+    // One-line ellipsis polish: the chip carries the full title for hover,
+    // and the DOM text stays the accessible name (CSS truncation only).
+    expect(el().querySelector('.entry-chip')?.getAttribute('title')).toBe('Broken regex');
     const goto = el().querySelector('.goto-button');
     expect(goto?.textContent?.trim()).toBe('Go to entry');
     expect(goto?.getAttribute('aria-label')).toBe('Go to entry: Broken regex');

@@ -161,9 +161,13 @@
 
 // Tonal metadata chip: one per entry, 28px, decorative (never clickable
 // itself — the jump affordance is the trailing button on single-entry rows).
+// One line always (post-acceptance polish): long titles ellipsize instead of
+// doubling the chip height; `title` on the span reveals the full text on
+// hover and the DOM text keeps it for screen readers. `inline-block` (not
+// flex) so text-overflow applies, with line-height doing the vertical
+// centering `align-items` used to.
 .entry-chip {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
   height: 28px;
   max-width: 100%;
   padding: 0 10px;
@@ -171,7 +175,10 @@
   font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-secondary-container);
   background: var(--mat-sys-secondary-container);
-  overflow-wrap: anywhere;
+  line-height: 28px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 // Multi-entry rows (amended 2026-09-19 — "the chips don't look like a
@@ -179,9 +186,25 @@
 // jump glyph, deliberately distinct from the decorative `.entry-chip`
 // metadata. A real `.mat-mdc-button-base`, so the global ≤767px rule raises
 // it to the 48px mobile floor automatically; the 44px desktop floor matches
-// the row's Go-to button.
+// the row's Go-to button. One line always: the button shrinks inside the
+// wrapping `.chip-row` (min-width: 0) and the label span ellipsizes — the
+// `min-width: 0` on Material's internal `.mdc-button__label` flex item comes
+// from the global sheet, which is the only place it can be reached from.
 .jump-button {
   min-height: var(--touch-target-min);
+  min-width: 0;
+  max-width: 100%;
+}
+
+// The button's title span: same one-line ellipsis as the decorative chip, so
+// a long entry name shrinks instead of wrapping the button to two lines; the
+// trailing jump glyph stays pinned and the aria-label keeps the full title.
+.jump-title {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .row-actions {

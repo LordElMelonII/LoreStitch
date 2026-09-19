@@ -547,6 +547,31 @@ app-export-selected-dialog .rows-viewport .cdk-virtual-scroll-content-wrapper {
   }
 }
 
+// --- Linter pane: one-line jump labels + stacked mute chips ---
+
+// The jump button's label span is Material's internal flex item: without
+// `min-width: 0` it keeps its nowrap min-content width and spills past the
+// shrunken button, so the component-scoped ellipsis on `.jump-title`
+// (linter-dialog.scss) never engages. Anchored to the linter pane's stable
+// host element; ::ng-deep is prohibited.
+app-linter-dialog .jump-button .mdc-button__label {
+  min-width: 0;
+}
+
+// Narrow phones (the shell's mobile breakpoint, max-width: 767px — the same
+// query as the touch-floor rules below): mute chips stack ONE PER ROW at
+// natural width, left-aligned. The chips wrap inside Material's internal
+// `.mdc-evolution-chip-set__chips` flex row (the listbox host merely wraps
+// that single row wrapper), so the override reaches it from here — component
+// styles cannot, and Material's own `stacked` mode would stretch the chips
+// full-width instead. Desktop/tablet keep the free wrap.
+@media (max-width: 767px) {
+  app-linter-dialog .mute-chips .mdc-evolution-chip-set__chips {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Mobile touch targets (M3 accessibility): on compact screens icon buttons,
 // buttons, toggles and chips grow to the 48dp minimum clickable size (see
