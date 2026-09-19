@@ -335,6 +335,22 @@ export class DelimiterDialog {
     }
   }
 
+  /**
+   * Row-chip label for a classified malformed shell: mismatched pairs read
+   * `mismatched`, both orphan kinds read `unclosed`. Exhaustive over
+   * `MalformedWrapper` (no default) so a future kind is a compile error here,
+   * not a silently mislabeled chip.
+   */
+  protected malformedChipLabel(malformed: MalformedWrapper): string {
+    switch (malformed.kind) {
+      case 'mismatched':
+        return 'mismatched';
+      case 'orphan-open':
+      case 'orphan-close':
+        return 'unclosed';
+    }
+  }
+
   /** The diff shown in the preview pane: the selected row, else the active entry. */
   protected readonly previewEntry = computed<EntryPreview | null>(() => {
     const previews = this.previews();

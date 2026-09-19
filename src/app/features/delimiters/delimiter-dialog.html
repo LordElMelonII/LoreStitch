@@ -142,7 +142,7 @@
           <span class="row-title">{{ p.title }}</span>
           @if (p.malformed; as m) {
             <span class="row-chip malformed-chip">
-              {{ m.kind === 'mismatched' ? 'mismatched' : 'unclosed' }}
+              {{ malformedChipLabel(m) }}
             </span>
           }
           @if (p.blank) {
