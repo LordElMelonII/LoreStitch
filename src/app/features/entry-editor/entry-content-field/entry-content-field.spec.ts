@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatTooltip } from '@angular/material/tooltip';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { EntryContentField } from './entry-content-field';
@@ -129,5 +131,46 @@ describe('EntryContentField', () => {
 
     expect(openSpy).toHaveBeenCalledOnce();
     expect(openSpy.mock.calls[0]?.[1]?.data).toEqual({ activeEntryId: 0 });
+  });
+
+  it('flags mismatched whole-content wrappers in the hint and tooltip', async () => {
+    // Mismatched pairs need no hints: the broken pair shows on any entry.
+    await createPane({ content: '<test>\nlore\n</universe>' });
+
+    const el = fixture.nativeElement as HTMLElement;
+    const hint = el.querySelector('.malformed-hint');
+    assert(hint);
+    expect(hint.classList.contains('malformed-hint')).toBe(true);
+    expect(hint.textContent).toContain('<test> ? </universe>');
+    expect(hint.textContent).toContain('click the code button to fix');
+
+    const button = fixture.debugElement.query(By.css('.delimiter-btn'));
+    assert(button);
+    expect(button.injector.get(MatTooltip).message).toBe(
+      'Content has mismatched or unclosed delimiters — click to fix',
+    );
+  });
+
+  it('flags an orphaned opener only when the entry names match it', async () => {
+    // The first primary key 'universe' matches the orphaned tag.
+    await createPane({ comment: 'Arc', keys: ['universe'], content: '<universe>\nlore' });
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.malformed-hint')?.textContent,
+    ).toContain('<universe> ?');
+
+    // A lone tag that matches neither comment nor key stays unclassified prose.
+    await createPane({ comment: 'Arc', keys: ['universe'], content: '<div>\nlore' });
+    expect((fixture.nativeElement as HTMLElement).querySelector('.malformed-hint')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+      'click the code button to fix',
+    );
+  });
+
+  it('keeps the malformed hint out of clean prose', async () => {
+    await createPane({ content: 'plain lore text' });
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.malformed-hint')).toBeNull();
+    expect(el.textContent).not.toContain('click the code button to fix');
   });
 });

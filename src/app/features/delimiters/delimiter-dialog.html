@@ -85,6 +85,22 @@
     <pre class="example-text">{{ example().join('\n') }}</pre>
   </div>
 
+  @if (malformedCount()) {
+    <div class="malformed-banner">
+      <mat-icon>warning</mat-icon>
+      <div class="banner-copy">
+        <span class="banner-title">
+          {{ malformedCount() }}
+          {{ malformedCount() === 1 ? 'entry has' : 'entries have' }} malformed delimiters
+        </span>
+        <p class="banner-body">
+          Mismatched or unclosed pairs such as &lt;test&gt; … &lt;/universe&gt;. Applying a style
+          replaces them; None removes them.
+        </p>
+      </div>
+    </div>
+  }
+
   <div class="preview-header">
     <span>
       @if (previewEntry(); as p) {
@@ -96,6 +112,9 @@
       will change
       @if (blankCount()) {
         · {{ blankCount() }} blank unchanged
+      }
+      @if (malformedCount()) {
+        · {{ malformedCount() }} malformed
       }
       ·
       <span
@@ -121,6 +140,11 @@
           (click)="selectPreview(p.entryId)"
         >
           <span class="row-title">{{ p.title }}</span>
+          @if (p.malformed; as m) {
+            <span class="row-chip malformed-chip">
+              {{ m.kind === 'mismatched' ? 'mismatched' : 'unclosed' }}
+            </span>
+          }
           @if (p.blank) {
             <span class="row-chip">blank</span>
           }
@@ -141,6 +165,9 @@
                 : 'Will replace the existing ' + label + ' delimiter'
             }}
           </span>
+        }
+        @if (p.malformed; as m) {
+          <span class="row-hint">{{ malformedHint(m) }}</span>
         }
       </div>
     }

@@ -21,6 +21,8 @@
   </button>
   @if (delimiterBadge(); as badge) {
     <mat-hint>{{ badge }} · click the code button to change</mat-hint>
+  } @else if (malformedBadge(); as label) {
+    <mat-hint class="malformed-hint">{{ label }} · click the code button to fix</mat-hint>
   }
   <mat-hint align="end" class="stats-hint">
     {{ contentStats().chars }} chars · ~{{ contentStats().tokens }} tokens ·

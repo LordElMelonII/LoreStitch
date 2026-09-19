@@ -95,6 +95,39 @@
   }
 }
 
+// Data-integrity warning for rows carrying a classified malformed shell: a
+// flat tonal container in the error roles — no elevation and no click action,
+// the affordance stays the preview-verified Apply below.
+.malformed-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--mat-sys-corner-medium);
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+
+  mat-icon {
+    flex: none;
+  }
+
+  .banner-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .banner-title {
+    font: var(--mat-sys-label-large);
+  }
+
+  .banner-body {
+    margin: 0;
+    font: var(--mat-sys-body-medium);
+  }
+}
+
 .preview-header {
   display: flex;
   align-items: baseline;
@@ -184,6 +217,13 @@
       background: var(--mat-sys-surface-container-high);
       color: var(--mat-sys-on-surface-variant);
       font: var(--mat-sys-label-small);
+
+      // The malformed chip reads in the same data-integrity roles as the
+      // banner above.
+      &.malformed-chip {
+        background: var(--mat-sys-error-container);
+        color: var(--mat-sys-on-error-container);
+      }
     }
 
     .token-delta {

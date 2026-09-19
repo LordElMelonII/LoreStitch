@@ -8,7 +8,15 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry } from '../../../core/models/lorebook.model';
 import { estimateTokens } from '../../../core/services/token-estimator';
-import { delimiterLabel, detectDelimiter } from '../../../core/models/delimiters';
+import {
+  delimiterLabel,
+  detectDelimiter,
+  detectMalformedWrapper,
+  entryDelimiterName,
+  entryDelimiterNameFromKey,
+  malformedWrapperLabel,
+  type MalformedWrapper,
+} from '../../../core/models/delimiters';
 import { entrySliceSignal } from '../entry-edit-form';
 
 /** Form model of the content editor. */
@@ -55,7 +63,35 @@ export class EntryContentField {
     return detected.style === 'none' ? null : delimiterLabel(detected);
   });
 
+  /**
+   * The classified malformed whole-content wrapper, or null. Orphan
+   * openers/closers are hint-gated by the entry's own names (comment, then
+   * first key), so a lone `<div>` in prose stays unclassified; mismatched
+   * pairs need no hints.
+   */
+  protected readonly malformedWrapper = computed<MalformedWrapper | null>(() => {
+    const content = this.entry().content ?? '';
+    // Well-formed wrappers belong to the recognized badge above.
+    if (detectDelimiter(content).style !== 'none') {
+      return null;
+    }
+    const entry = this.entry();
+    return detectMalformedWrapper(content, [
+      entryDelimiterName(entry),
+      entryDelimiterNameFromKey(entry),
+    ]);
+  });
+
+  /** Badge label for a classified malformed shell (`<test> ? </universe>`). */
+  protected readonly malformedBadge = computed<string | null>(() => {
+    const malformed = this.malformedWrapper();
+    return malformed === null ? null : malformedWrapperLabel(malformed);
+  });
+
   protected readonly delimiterTooltip = computed(() => {
+    if (this.malformedWrapper() !== null) {
+      return 'Content has mismatched or unclosed delimiters — click to fix';
+    }
     const detected = detectDelimiter(this.entry().content ?? '');
     if (detected.style === 'none') {
       return 'Wrap content in <tag>, [name=…] or --- delimiters';

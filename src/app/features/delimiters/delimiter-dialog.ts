@@ -14,11 +14,14 @@ import {
   DelimiterStyle,
   delimiterLabel,
   detectDelimiter,
+  detectMalformedWrapper,
   entryDelimiterName,
   entryDelimiterNameFromKey,
   rewrapContent,
   sanitizeDelimiterName,
+  stripMalformedWrapper,
   type DetectedDelimiter,
+  type MalformedWrapper,
 } from '../../core/models/delimiters';
 import { CharacterBookEntry, entryTitle } from '../../core/models/lorebook.model';
 import { estimateTokens, formatTokenCount } from '../../core/services/token-estimator';
@@ -219,12 +222,39 @@ export class DelimiterDialog {
     return [...new Set(names.map((name) => name.trim()).filter((name) => name.length > 0))];
   }
 
+  /**
+   * The rewrap source for one entry: a classified malformed shell is stripped
+   * first so the same rewrap replaces the broken pair instead of nesting
+   * around it. Only classified rows strip — `stripMalformedWrapper` is
+   * structural and hint-free, so the classification gate here is what keeps
+   * an orphan shape whose name matches no entry name as payload. Previews and
+   * `apply()` compose through this one helper: what is previewed is exactly
+   * what is written.
+   */
+  private stripClassifiedShell(entry: CharacterBookEntry): string {
+    const current = entry.content ?? '';
+    const malformed = detectMalformedWrapper(current, this.resolveExpectedNames(entry));
+    return malformed !== null ? stripMalformedWrapper(current) : current;
+  }
+
   protected readonly previews = computed<EntryPreview[]>(() => {
     const style = this.style();
     return this.targets().map((entry) => {
       const current = entry.content ?? '';
       const expectedNames = this.resolveExpectedNames(entry);
-      const next = rewrapContent(current, style, this.resolveName(entry), expectedNames);
+      // Orphan detection is hint-gated (§3.2.4): the dialog reuses its
+      // accepted-name chain — resolved target name plus entry-derived
+      // fallbacks — so an orphaned tag classifies only when the entry itself
+      // points at that name; mismatched pairs need no hints.
+      const malformed = detectMalformedWrapper(current, expectedNames);
+      // Same composition the write path uses (see `stripClassifiedShell`):
+      // the previewed bytes are the written bytes by construction.
+      const next = rewrapContent(
+        this.stripClassifiedShell(entry),
+        style,
+        this.resolveName(entry),
+        expectedNames,
+      );
       const detected = detectDelimiter(current);
       // A detected whole-content wrapper is always stripped (its own name is
       // in the accepted set); a trailing `---` only by the `none` target.
@@ -239,6 +269,7 @@ export class DelimiterDialog {
         blank: current.trim() === '',
         tokenDelta: estimateTokens(next) - estimateTokens(current),
         replacedDelimiter: next !== current && stripped ? delimiterLabel(detected) : null,
+        malformed,
       };
     });
   });
@@ -246,6 +277,11 @@ export class DelimiterDialog {
   protected readonly changedCount = computed(() => this.previews().filter((p) => p.changed).length);
 
   protected readonly blankCount = computed(() => this.previews().filter((p) => p.blank).length);
+
+  /** Rows whose current content carries a classified malformed shell. */
+  protected readonly malformedCount = computed(
+    () => this.previews().filter((p) => p.malformed !== null).length,
+  );
 
   /** True when every target is blank — applying is then a guaranteed no-op. */
   protected readonly allBlank = computed(
@@ -277,6 +313,26 @@ export class DelimiterDialog {
 
   protected deltaDirection(delta: number): TokenDeltaDirection {
     return tokenDeltaDirection(delta);
+  }
+
+  /**
+   * The malformed counterpart of the `replacedDelimiter` hint: names the
+   * broken shell exactly as written and says whether the picked style
+   * replaces it or removes it.
+   */
+  protected malformedHint(malformed: MalformedWrapper): string {
+    const verb = this.style() === 'none' ? 'remove' : 'replace';
+    switch (malformed.kind) {
+      case 'mismatched':
+        return (
+          `Will ${verb} the mismatched <${malformed.openingName}> ` +
+          `and </${malformed.closingName}> delimiters`
+        );
+      case 'orphan-open':
+        return `Will ${verb} the unclosed <${malformed.name}> delimiter`;
+      case 'orphan-close':
+        return `Will ${verb} the unclosed </${malformed.name}> delimiter`;
+    }
   }
 
   /** The diff shown in the preview pane: the selected row, else the active entry. */
@@ -328,7 +384,9 @@ export class DelimiterDialog {
     const style = this.style();
     this.workspace.updateManyEntries(changedIds, (entry) => ({
       content: rewrapContent(
-        entry.content ?? '',
+        // Same composition as the preview rows (see `stripClassifiedShell`):
+        // what is previewed is exactly what is written.
+        this.stripClassifiedShell(entry),
         style,
         this.resolveName(entry),
         this.resolveExpectedNames(entry),

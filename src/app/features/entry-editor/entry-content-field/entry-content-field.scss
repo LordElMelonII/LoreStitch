@@ -40,4 +40,10 @@
   .stats-hint {
     font-variant-numeric: tabular-nums;
   }
+
+  // Broken-markup hint: the M3 error role — the shell in the label is
+  // malformed, so the hint reads as a form-field error.
+  .malformed-hint {
+    color: var(--mat-sys-error);
+  }
 }

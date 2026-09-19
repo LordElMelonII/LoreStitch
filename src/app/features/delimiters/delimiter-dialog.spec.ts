@@ -525,16 +525,35 @@ describe('DelimiterDialog', () => {
     expect(entryOf(0).content).toBe('<New>\nprose\n</New>');
   });
 
-  it('wraps a mismatched <foo>x</bar> additively — nothing recognized to strip', async () => {
+  it('replaces a mismatched <foo>x</bar> instead of nesting', async () => {
     const dialog = await createDialog([entry(0, { comment: 'New', content: '<foo>x</bar>' })]);
     await pickStyle('Tag');
 
     const previews = dialog['previews']();
     assert(previews[0]);
-    // The markup is not a well-formed wrapper, so it is undetected and stays
-    // payload verbatim; no replacement hint either.
+    // The broken pair classifies as malformed (mismatched pairs need no
+    // hints), so it is stripped and rewrapped — one clean wrapper, never a
+    // nest; nothing well-formed was detected, so `replacedDelimiter` stays
+    // null and the malformed hint carries the explanation.
+    expect(previews[0].malformed).toEqual({
+      kind: 'mismatched',
+      openingName: 'foo',
+      closingName: 'bar',
+    });
     expect(previews[0].replacedDelimiter).toBeNull();
-    expect(previews[0].next).toBe('<New>\n<foo>x</bar>\n</New>');
+    expect(previews[0].changed).toBe(true);
+    expect(previews[0].next).toBe('<New>\nx\n</New>');
+
+    assert(fixture);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.row-chip.malformed-chip')?.textContent).toContain('mismatched');
+    const hint = el.querySelector('.row-hint');
+    assert(hint);
+    expect(hint.textContent).toContain('Will replace the mismatched <foo> and </bar> delimiters');
+
+    // What is previewed is exactly what is written — no baked-in markup.
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('<New>\nx\n</New>');
   });
 
   it('strips a matching wrapper when None is picked', async () => {
@@ -607,5 +626,161 @@ describe('DelimiterDialog', () => {
 
     expect(dialog['selectedPreviewId']()).toBe(1);
     expect(dialog['previewEntry']()?.entryId).toBe(1);
+  });
+
+  it('flags malformed rows, counts them in the banner, and writes one clean wrapper pair', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'New', content: '<test>\nlore\n</universe>' }),
+      entry(1, { comment: 'Fuyuki', content: '<old>\ntale\n</new>' }),
+    ]);
+    dialog['setScope']('all');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    assert(previews[1]);
+    expect(previews[0].malformed).toEqual({
+      kind: 'mismatched',
+      openingName: 'test',
+      closingName: 'universe',
+    });
+    expect(previews[0].changed).toBe(true);
+    expect(previews[0].next).toBe('<New>\nlore\n</New>');
+    // The row delta reflects the swap, not a nest around the broken markup.
+    expect(previews[0].tokenDelta).toBe(
+      estimateTokens(previews[0].next) - estimateTokens(previews[0].current),
+    );
+    expect(previews[1].malformed).toEqual({
+      kind: 'mismatched',
+      openingName: 'old',
+      closingName: 'new',
+    });
+    expect(dialog['malformedCount']()).toBe(2);
+
+    // The banner sits between the format card and the preview list.
+    assert(fixture);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const banner = el.querySelector('.malformed-banner');
+    assert(banner);
+    expect(banner.textContent).toContain('2 entries have malformed delimiters');
+    expect(banner.textContent).toContain('Applying a style replaces them; None removes them.');
+    expect(el.querySelector('.meta')?.textContent).toContain('· 2 malformed');
+
+    const hints = el.querySelectorAll('.row-hint');
+    expect(hints).toHaveLength(2);
+    expect(hints[0]?.textContent).toContain(
+      'Will replace the mismatched <test> and </universe> delimiters',
+    );
+
+    // What is previewed is exactly what is written: one wrapper pair per
+    // entry, payload intact, zero nesting.
+    const expected = previews.map((p) => p.next);
+    dialog['apply']();
+    expect(workspace.entries().map((e) => e.content)).toEqual([
+      '<New>\nlore\n</New>',
+      '<Fuyuki>\ntale\n</Fuyuki>',
+    ]);
+    expect(workspace.entries().map((e) => e.content)).toEqual(expected);
+  });
+
+  it('removes the mismatched pair and keeps the payload when None is picked', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'New', content: '<test>\nlore\n</universe>' }),
+    ]);
+    await pickStyle('None');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    expect(previews[0].malformed).toEqual({
+      kind: 'mismatched',
+      openingName: 'test',
+      closingName: 'universe',
+    });
+    expect(previews[0].next).toBe('lore');
+
+    assert(fixture);
+    const el = fixture.nativeElement as HTMLElement;
+    const banner = el.querySelector('.malformed-banner');
+    assert(banner);
+    expect(banner.textContent).toContain('1 entry has malformed delimiters');
+    const hint = el.querySelector('.row-hint');
+    assert(hint);
+    expect(hint.textContent).toContain(
+      'Will remove the mismatched <test> and </universe> delimiters',
+    );
+
+    dialog['apply']();
+    // The broken tags are gone; the payload survives byte-for-byte.
+    expect(entryOf(0).content).toBe('lore');
+  });
+
+  it('replaces orphaned openers and closers that match the entry names', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'universe', content: '<universe>\nlore' }),
+      entry(1, { comment: 'tower', content: 'tale\n</tower>' }),
+    ]);
+    dialog['setScope']('all');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    assert(previews[1]);
+    expect(previews[0].malformed).toEqual({ kind: 'orphan-open', name: 'universe' });
+    expect(previews[0].next).toBe('<universe>\nlore\n</universe>');
+    expect(previews[1].malformed).toEqual({ kind: 'orphan-close', name: 'tower' });
+    expect(previews[1].next).toBe('<tower>\ntale\n</tower>');
+    expect(dialog['malformedCount']()).toBe(2);
+
+    assert(fixture);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.malformed-banner')?.textContent).toContain(
+      '2 entries have malformed delimiters',
+    );
+    const chips = el.querySelectorAll('.row-chip.malformed-chip');
+    expect(chips).toHaveLength(2);
+    expect(chips[0]?.textContent).toContain('unclosed');
+    const hints = el.querySelectorAll('.row-hint');
+    expect(hints).toHaveLength(2);
+    expect(hints[0]?.textContent).toContain('Will replace the unclosed <universe> delimiter');
+    expect(hints[1]?.textContent).toContain('Will replace the unclosed </tower> delimiter');
+
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('<universe>\nlore\n</universe>');
+    expect(entryOf(1).content).toBe('<tower>\ntale\n</tower>');
+  });
+
+  it('keeps an orphaned opener whose name matches nothing as payload', async () => {
+    const dialog = await createDialog([entry(0, { comment: 'London', content: '<div>\nlore' })]);
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    // The hint gate clears classification, so nothing is stripped and the row
+    // stays byte-identical to the additive wrap it always got.
+    expect(previews[0].malformed).toBeNull();
+    expect(previews[0].next).toBe('<London>\n<div>\nlore\n</London>');
+    expect(dialog['malformedCount']()).toBe(0);
+
+    assert(fixture);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.malformed-banner')).toBeNull();
+    expect(el.querySelector('.meta')?.textContent).not.toContain('malformed');
+
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('<London>\n<div>\nlore\n</London>');
+  });
+
+  it('renders no malformed banner or meta count for clean books', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'London', content: 'London is a city.' }),
+      entry(1, { comment: 'Paris', content: 'Paris is a city.' }),
+    ]);
+    dialog['setScope']('all');
+
+    expect(dialog['malformedCount']()).toBe(0);
+    assert(fixture);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.malformed-banner')).toBeNull();
+    expect(el.querySelector('.meta')?.textContent).not.toContain('malformed');
   });
 });

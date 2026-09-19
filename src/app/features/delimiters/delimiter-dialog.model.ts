@@ -1,3 +1,5 @@
+import { type MalformedWrapper } from '../../core/models/delimiters';
+
 /** Payload handed to `DelimiterDialog`. */
 export interface DelimiterDialogData {
   activeEntryId: number | null;
@@ -30,4 +32,13 @@ export interface EntryPreview {
    * the replacement is visible before anything is written.
    */
   replacedDelimiter: string | null;
+  /**
+   * The classified malformed whole-content wrapper in the current content
+   * (`<test>…</universe>`, an orphan opener/closer, an unclosed bracket), null
+   * when none: well-formed detection and this classification are mutually
+   * exclusive, so a row is never both `replacedDelimiter`-hinted and
+   * `malformed`-flagged. The row renders a chip and a strip hint from it, and
+   * applying strips the shell before the rewrap.
+   */
+  malformed: MalformedWrapper | null;
 }
