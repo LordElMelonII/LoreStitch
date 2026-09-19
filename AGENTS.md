@@ -31,3 +31,12 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 - Code coverage: `ng test --coverage`
 - E2E & fidelity: `npx playwright test`
 - Linting: `npm run lint`
+
+## Environment & Session Notes
+
+- One-shot unit run: `CI=true npm test -- --watch=false` (plain `npm test` may watch); add `--coverage` for the coverage run.
+- Coverage thresholds (statements/functions/lines ≥ 80, branches ≥ 75) are enforced inside the test run — a threshold regression fails `npm test` itself.
+- Playwright filters by spec-name substring (`npx playwright test delimiters round-trip`); a large "skipped" count is by design — phone-pinned tests skip on desktop projects, mobile-chrome/mobile-safari run them.
+- History is linear: merge with fast-forward only, no merge commits. Releases: `chore(release): vX.Y.Z` touching `package.json`, both `lore-stitch` version fields in `package-lock.json`, and `CHANGELOG.md` (writer-facing voice; no git tags).
+- Check `git status --short` before each phase commit; unrelated local edits (e.g. `.gitignore`) may appear mid-session — keep them out of atomic phase commits.
+- When a task changes pinned behavior, grep existing unit AND e2e specs for tests pinning the old behavior and migrate them within the changing phase.
