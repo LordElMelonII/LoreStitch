@@ -75,7 +75,9 @@ describe('LinterState', () => {
     workspace.activeProject.set(projectOf(severityFixture()));
     expect(state.issueCount()).toBe(2);
 
-    workspace.activeProject.set(projectOf([entry(0, { keys: ['paris'], selective: true, secondary_keys: [] })]));
+    workspace.activeProject.set(
+      projectOf([entry(0, { keys: ['paris'], selective: true, secondary_keys: [] })]),
+    );
     expect(state.issueCount()).toBe(0);
   });
 
@@ -83,7 +85,11 @@ describe('LinterState', () => {
     workspace.activeProject.set(projectOf(severityFixture()));
     const before = state.diagnostics().length;
 
-    workspace.activeProject.set(projectOf([entry(0, { comment: 'Clean', keys: ['paris'], content: 'Something else entirely.' })]));
+    workspace.activeProject.set(
+      projectOf([
+        entry(0, { comment: 'Clean', keys: ['paris'], content: 'Something else entirely.' }),
+      ]),
+    );
     expect(state.diagnostics().length).toBe(0);
     expect(before).toBe(3);
   });

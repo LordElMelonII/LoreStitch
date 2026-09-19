@@ -28,7 +28,12 @@ describe('st-key-match', () => {
   });
 
   describe('caseSensitive option (world-info.js:268-270, default false)', () => {
-    const CASES: readonly [key: string, text: string, caseSensitive: boolean | null, expected: boolean][] = [
+    const CASES: readonly [
+      key: string,
+      text: string,
+      caseSensitive: boolean | null,
+      expected: boolean,
+    ][] = [
       ['rose', 'the Rose grew', true, false],
       ['Rose', 'the Rose grew', true, true],
       ['ROSE', 'the ROSE grew', true, true],
@@ -91,8 +96,12 @@ describe('st-key-match', () => {
     it('case-folds both sides before the boundary test (world-info.js:345-346)', () => {
       expect(matchStKey('KING', 'long live the KING', OPTIONS)).toBe(true);
       expect(matchStKey('KING', 'long live the king', OPTIONS)).toBe(true);
-      expect(matchStKey('KING', 'long live the king', { caseSensitive: true, matchWholeWords: true })).toBe(false);
-      expect(matchStKey('KING', 'long live the KING', { caseSensitive: true, matchWholeWords: true })).toBe(true);
+      expect(
+        matchStKey('KING', 'long live the king', { caseSensitive: true, matchWholeWords: true }),
+      ).toBe(false);
+      expect(
+        matchStKey('KING', 'long live the KING', { caseSensitive: true, matchWholeWords: true }),
+      ).toBe(true);
     });
 
     it('escapes regex metacharacters in the key (world-info.js:356)', () => {
@@ -133,8 +142,18 @@ describe('st-key-match', () => {
     }
 
     it('keeps substring semantics for multi-word keys even when case-sensitive', () => {
-      expect(matchStKey('Silver Chair', 'the Silver Chair', { caseSensitive: true, matchWholeWords: true })).toBe(true);
-      expect(matchStKey('Silver Chair', 'the silver chair', { caseSensitive: true, matchWholeWords: true })).toBe(false);
+      expect(
+        matchStKey('Silver Chair', 'the Silver Chair', {
+          caseSensitive: true,
+          matchWholeWords: true,
+        }),
+      ).toBe(true);
+      expect(
+        matchStKey('Silver Chair', 'the silver chair', {
+          caseSensitive: true,
+          matchWholeWords: true,
+        }),
+      ).toBe(false);
     });
 
     it('splits on any whitespace run for the word count (world-info.js:350)', () => {
@@ -161,14 +180,25 @@ describe('st-key-match', () => {
     });
 
     it('null options behave exactly like unset options (ST defaults false, world-info.js:77-78)', () => {
-      expect(matchStKey('rose', 'the ROSE grew', { caseSensitive: null, matchWholeWords: null })).toBe(true);
-      expect(matchStKey('king', "it's not to my liking", { caseSensitive: null, matchWholeWords: null })).toBe(true);
-      expect(matchStKey('king', "it's not to my liking", { caseSensitive: null, matchWholeWords: true })).toBe(false);
+      expect(
+        matchStKey('rose', 'the ROSE grew', { caseSensitive: null, matchWholeWords: null }),
+      ).toBe(true);
+      expect(
+        matchStKey('king', "it's not to my liking", { caseSensitive: null, matchWholeWords: null }),
+      ).toBe(true);
+      expect(
+        matchStKey('king', "it's not to my liking", { caseSensitive: null, matchWholeWords: true }),
+      ).toBe(false);
     });
   });
 
   describe('regex keys override the options (world-info.js:338-342)', () => {
-    const CASES: readonly [key: string, text: string, options: StMatchOptions, expected: boolean][] = [
+    const CASES: readonly [
+      key: string,
+      text: string,
+      options: StMatchOptions,
+      expected: boolean,
+    ][] = [
       // Regex wins even when case-sensitive/whole-word would reject the text.
       ['/rose/i', 'ROSE', { caseSensitive: true, matchWholeWords: true }, true],
       // Whole-word plaintext would reject 'kingdom'; the raw regex still hits.
@@ -191,7 +221,9 @@ describe('st-key-match', () => {
     it('tests regex keys before any case folding of the haystack', () => {
       // 'ROSE' folded would be 'rose'; the raw /rose/ without the i flag
       // must still fail -> the haystack was never folded.
-      expect(matchStKey('/rose/', 'ROSE', { caseSensitive: false, matchWholeWords: false })).toBe(false);
+      expect(matchStKey('/rose/', 'ROSE', { caseSensitive: false, matchWholeWords: false })).toBe(
+        false,
+      );
     });
   });
 

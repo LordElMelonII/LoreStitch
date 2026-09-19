@@ -408,9 +408,7 @@ describe('Topbar', () => {
     // Info-only findings never light the badge (the entry is keyed so it
     // emits exactly one info diagnostic).
     workspace.activeProject.set(
-      projectOf([
-        { ...createEmptyEntry(0), keys: ['paris'], selective: true, secondary_keys: [] },
-      ]),
+      projectOf([{ ...createEmptyEntry(0), keys: ['paris'], selective: true, secondary_keys: [] }]),
     );
     fixture.detectChanges();
     expect(healthIcon()?.classList.contains('mat-badge-hidden')).toBe(true);

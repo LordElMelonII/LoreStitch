@@ -208,10 +208,7 @@ describe('linter', () => {
 
     it('compares case-insensitively when neither entry sets case_sensitive', () => {
       const diagnostics = lintBook(
-        makeBook([
-          makeEntry(1, { keys: ['Rose'] }),
-          makeEntry(2, { keys: ['rose'] }),
-        ]),
+        makeBook([makeEntry(1, { keys: ['Rose'] }), makeEntry(2, { keys: ['rose'] })]),
       );
       const duplicate = singleOf(diagnostics, 'duplicate-key');
       expect(duplicate.severity).toBe('warning');
@@ -422,16 +419,17 @@ describe('linter', () => {
         { name: 'match_persona_description', extensions: { match_persona_description: true } },
         { name: 'match_character_description', extensions: { match_character_description: true } },
         { name: 'match_character_personality', extensions: { match_character_personality: true } },
-        { name: 'match_character_depth_prompt', extensions: { match_character_depth_prompt: true } },
+        {
+          name: 'match_character_depth_prompt',
+          extensions: { match_character_depth_prompt: true },
+        },
         { name: 'match_scenario', extensions: { match_scenario: true } },
         { name: 'match_creator_notes', extensions: { match_creator_notes: true } },
       ];
 
       for (const source of SOURCES) {
         it(`suppresses the rule for ${source.name}`, () => {
-          const diagnostics = lintBook(
-            makeBook([makeEntry(5, { extensions: source.extensions })]),
-          );
+          const diagnostics = lintBook(makeBook([makeEntry(5, { extensions: source.extensions })]));
           expect(ruleOf(diagnostics, 'never-activatable')).toHaveLength(0);
         });
       }
@@ -553,7 +551,12 @@ describe('linter', () => {
       const diagnostics = lintBook(
         makeBook([
           makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
-          makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls', constant: true }),
+          makeEntry(2, {
+            comment: 'Beta',
+            keys: ['beta'],
+            content: 'the alpha falls',
+            constant: true,
+          }),
         ]),
       );
       expect(ruleOf(diagnostics, 'recursion-cycle')).toHaveLength(0);
@@ -573,7 +576,12 @@ describe('linter', () => {
       const makePair = (caseSensitive: boolean | undefined): CharacterBook =>
         makeBook([
           makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
-          makeEntry(2, { comment: 'Beta', keys: ['Beta'], content: 'the alpha falls', case_sensitive: caseSensitive }),
+          makeEntry(2, {
+            comment: 'Beta',
+            keys: ['Beta'],
+            content: 'the alpha falls',
+            case_sensitive: caseSensitive,
+          }),
         ]);
       // Case-sensitive target: 'Beta' never matches the lowercase source text.
       expect(ruleOf(lintBook(makePair(true)), 'recursion-cycle')).toHaveLength(0);
@@ -585,10 +593,17 @@ describe('linter', () => {
       const makePair = (wholeWords: Record<string, unknown>): CharacterBook =>
         makeBook([
           makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the betamax runs' }),
-          makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls', extensions: wholeWords }),
+          makeEntry(2, {
+            comment: 'Beta',
+            keys: ['beta'],
+            content: 'the alpha falls',
+            extensions: wholeWords,
+          }),
         ]);
       // Whole-word target: 'betamax' is not the word 'beta' — no edge, no cycle.
-      expect(ruleOf(lintBook(makePair({ match_whole_words: true })), 'recursion-cycle')).toHaveLength(0);
+      expect(
+        ruleOf(lintBook(makePair({ match_whole_words: true })), 'recursion-cycle'),
+      ).toHaveLength(0);
       // Substring default: 'betamax' contains 'beta' — the cycle exists.
       expect(ruleOf(lintBook(makePair({})), 'recursion-cycle')).toHaveLength(1);
     });
@@ -600,9 +615,13 @@ describe('linter', () => {
           makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
         ]);
       // The trigger sits past the cap — no edge, no cycle.
-      expect(ruleOf(lintBook(makeSource('x'.repeat(5000) + 'beta')), 'recursion-cycle')).toHaveLength(0);
+      expect(
+        ruleOf(lintBook(makeSource('x'.repeat(5000) + 'beta')), 'recursion-cycle'),
+      ).toHaveLength(0);
       // Exactly 5000 characters with the trigger inside — the cycle exists.
-      expect(ruleOf(lintBook(makeSource('beta' + 'x'.repeat(4996))), 'recursion-cycle')).toHaveLength(1);
+      expect(
+        ruleOf(lintBook(makeSource('beta' + 'x'.repeat(4996))), 'recursion-cycle'),
+      ).toHaveLength(1);
     });
 
     it('creates edges through valid regex keys, which bypass the match options', () => {
@@ -928,9 +947,7 @@ describe('linter', () => {
           'self-trigger',
           'malformed-wrapper',
         ];
-        expect(
-          lintBook(makeFindingsBook(), { mutedRules: new Set(allRules) }),
-        ).toEqual([]);
+        expect(lintBook(makeFindingsBook(), { mutedRules: new Set(allRules) })).toEqual([]);
       });
 
       it('silences the perf-guard skip note when recursion-cycle is muted (pinned interaction)', () => {
@@ -942,7 +959,9 @@ describe('linter', () => {
 
       it('keeps the graph running for self-trigger when only cycles are muted', () => {
         const diagnostics = lintBook(
-          makeBook([makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'alpha knows alpha' })]),
+          makeBook([
+            makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'alpha knows alpha' }),
+          ]),
           { mutedRules: new Set<LintRuleId>(['recursion-cycle']) },
         );
         expect(ruleOf(diagnostics, 'self-trigger')).toHaveLength(1);
@@ -961,7 +980,9 @@ describe('linter', () => {
 
       it('mutes self-trigger without losing it from an otherwise empty report', () => {
         const diagnostics = lintBook(
-          makeBook([makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'alpha knows alpha' })]),
+          makeBook([
+            makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'alpha knows alpha' }),
+          ]),
           { mutedRules: new Set<LintRuleId>(['self-trigger']) },
         );
         expect(diagnostics).toHaveLength(0);

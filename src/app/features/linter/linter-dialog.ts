@@ -159,9 +159,7 @@ export class LinterDialog {
       diagnostic,
       jumps: jumps.length > 1 ? jumps : [],
       singleTitle: single?.title ?? null,
-      goto: single
-        ? { entryId: single.entryId, ariaLabel: `Go to entry: ${single.title}` }
-        : null,
+      goto: single ? { entryId: single.entryId, ariaLabel: `Go to entry: ${single.title}` } : null,
     };
   }
 

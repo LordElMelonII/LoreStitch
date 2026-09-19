@@ -1,8 +1,4 @@
-import type {
-  CharacterBook,
-  CharacterBookEntry,
-  EntryExtensions,
-} from '../models/lorebook.model';
+import type { CharacterBook, CharacterBookEntry, EntryExtensions } from '../models/lorebook.model';
 import { entryTitle, entryTriggers } from '../models/lorebook.model';
 import {
   detectMalformedWrapper,
@@ -97,7 +93,7 @@ export interface LintOptions {
  * - Derived only from the diagnostic's own fields, so it is stable across
  *   runs and app restarts for the same book.
  * - `entryIds` resolve as `entry.id ?? array index`; ids are assigned by
- *   `normalizeImportedBook` (lorebook.model.ts:793) and `WorkspaceService`,
+ *   `normalizeImportedBook` in `lorebook.model.ts` and `WorkspaceService`,
  *   so signatures are stable for id-carrying — i.e. normalized — books.
  * - Book-level diagnostics (the large-book skip note) carry `entryIds: []`
  *   and no `details` → the `` `rule||` `` shape; diagnostics without
@@ -134,7 +130,7 @@ const SEVERITY_RANK: Record<LintSeverity, number> = { error: 0, warning: 1, info
 
 /**
  * The entry's extension bag. `extensions` is typed required, but the model
- * itself reads it defensively (`entryTriggerState`, lorebook.model.ts:348) —
+ * itself reads it defensively (`entryTriggerState` in `lorebook.model.ts`) —
  * mirrored here for hand-built books.
  */
 function entryExt(entry: CharacterBookEntry): Record<string, unknown> {
@@ -159,10 +155,10 @@ function extBoolOption(ext: Record<string, unknown>, key: keyof EntryExtensions)
 }
 
 /**
- * The ST `match_*` alternate-activation source flags (`EntryExtensions`,
- * lorebook.model.ts:1234-1239) with their legacy camelCase spellings — books
+ * The ST `match_*` alternate-activation source flags (`EntryExtensions` in
+ * `lorebook.model.ts`) with their legacy camelCase spellings — books
  * imported before normalization carry only the verbatim native key
- * (mirrors `legacyFlag`, lorebook.model.ts:1253).
+ * (mirrors `legacyFlag` in `lorebook.model.ts`).
  */
 const MATCH_SOURCE_FLAGS: readonly { normalized: keyof EntryExtensions; legacy: string }[] = [
   { normalized: 'match_persona_description', legacy: 'matchPersonaDescription' },
@@ -174,7 +170,11 @@ const MATCH_SOURCE_FLAGS: readonly { normalized: keyof EntryExtensions; legacy: 
 ];
 
 /** Reads a possibly-legacy match flag as a strict boolean. */
-function extLegacyFlag(ext: Record<string, unknown>, normalized: keyof EntryExtensions, legacy: string): boolean {
+function extLegacyFlag(
+  ext: Record<string, unknown>,
+  normalized: keyof EntryExtensions,
+  legacy: string,
+): boolean {
   const value = ext[normalized] ?? ext[legacy];
   return typeof value === 'boolean' ? value : false;
 }
@@ -190,7 +190,7 @@ function hasUsableKeys(keys: readonly string[]): boolean {
 
 /**
  * Resolves the reported id for an entry. Ids are assigned by
- * `normalizeImportedBook` (lorebook.model.ts:793) and `WorkspaceService`, so
+ * `normalizeImportedBook` in `lorebook.model.ts` and `WorkspaceService`, so
  * the index fallback is type defense only (plan §7.5).
  */
 function entryRefId(entry: CharacterBookEntry, index: number): number {

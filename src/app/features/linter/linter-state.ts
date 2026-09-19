@@ -50,8 +50,8 @@ export class LinterState {
   });
 
   /** errors + warnings — drives the badge; info never counts. Muted and ignored issues are already absent from `diagnostics`, so they never light the badge either. */
-  readonly issueCount = computed(() =>
-    this.diagnostics().filter((diagnostic) => diagnostic.severity !== 'info').length,
+  readonly issueCount = computed(
+    () => this.diagnostics().filter((diagnostic) => diagnostic.severity !== 'info').length,
   );
 
   /** The rules the author muted, as a set for O(1) chip-state lookups. */

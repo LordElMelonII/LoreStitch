@@ -46,32 +46,32 @@ describe('LinterDialog', () => {
   let dismissSpy: ReturnType<typeof vi.fn>;
   let fixture: ComponentFixture<LinterDialog>;
 
-/**
- * Seeds the workspace, then mounts the pane against it, optionally with
- * exactly the host container refs a production open would provide. The
- * overrides land before any `TestBed.inject` — injecting instantiates the
- * test module, and providers cannot be overridden after that (the About
- * spec's documented ordering).
- */
-async function createDialog(
-  entries: CharacterBookEntry[],
-  options: { prefs?: LintPrefs; dialog?: boolean; sheet?: boolean } = {},
-): Promise<LinterDialog> {
-  TestBed.overrideProvider(MatDialogRef, {
-    useValue: options.dialog ? { close: closeSpy } : null,
-  });
-  TestBed.overrideProvider(MatBottomSheetRef, {
-    useValue: options.sheet ? { dismiss: dismissSpy } : null,
-  });
-  workspace = TestBed.inject(WorkspaceService);
-  // Allow the workspace's async init() to settle before seeding.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  workspace.activeProject.set(projectOf(entries, options.prefs));
-  fixture = TestBed.createComponent(LinterDialog);
-  await fixture.whenStable();
-  fixture.detectChanges();
-  return fixture.componentInstance;
-}
+  /**
+   * Seeds the workspace, then mounts the pane against it, optionally with
+   * exactly the host container refs a production open would provide. The
+   * overrides land before any `TestBed.inject` — injecting instantiates the
+   * test module, and providers cannot be overridden after that (the About
+   * spec's documented ordering).
+   */
+  async function createDialog(
+    entries: CharacterBookEntry[],
+    options: { prefs?: LintPrefs; dialog?: boolean; sheet?: boolean } = {},
+  ): Promise<LinterDialog> {
+    TestBed.overrideProvider(MatDialogRef, {
+      useValue: options.dialog ? { close: closeSpy } : null,
+    });
+    TestBed.overrideProvider(MatBottomSheetRef, {
+      useValue: options.sheet ? { dismiss: dismissSpy } : null,
+    });
+    workspace = TestBed.inject(WorkspaceService);
+    // Allow the workspace's async init() to settle before seeding.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    workspace.activeProject.set(projectOf(entries, options.prefs));
+    fixture = TestBed.createComponent(LinterDialog);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    return fixture.componentInstance;
+  }
 
   function el(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
@@ -97,15 +97,15 @@ async function createDialog(
 
   it('groups sections Errors → Warnings → Notes and omits empty ones', async () => {
     await createDialog(severityFixture());
-    expect([...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim())).toEqual([
-      'Errors (1)',
-      'Warnings (1)',
-      'Notes (1)',
-    ]);
+    expect(
+      [...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim()),
+    ).toEqual(['Errors (1)', 'Warnings (1)', 'Notes (1)']);
   });
 
   it('renders an info-only book as just the Notes section', async () => {
-    await createDialog([entry(0, { comment: 'Selective', keys: ['paris'], selective: true, secondary_keys: [] })]);
+    await createDialog([
+      entry(0, { comment: 'Selective', keys: ['paris'], selective: true, secondary_keys: [] }),
+    ]);
     expect(el().querySelectorAll('.severity-section')).toHaveLength(1);
     expect(el().querySelector('.section-heading')?.textContent?.trim()).toBe('Notes (1)');
   });
@@ -213,10 +213,9 @@ async function createDialog(
     keylessChip.dispatchEvent(new Event('click'));
     fixture.detectChanges();
 
-    expect([...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim())).toEqual([
-      'Errors (1)',
-      'Notes (1)',
-    ]);
+    expect(
+      [...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim()),
+    ).toEqual(['Errors (1)', 'Notes (1)']);
     expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual(['never-activatable']);
     const mutedChip = chips().find((chip) => chip.textContent?.includes('Never activatable'));
     assert(mutedChip);
@@ -227,11 +226,9 @@ async function createDialog(
     mutedChip.dispatchEvent(new Event('click'));
     fixture.detectChanges();
     expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual([]);
-    expect([...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim())).toEqual([
-      'Errors (1)',
-      'Warnings (1)',
-      'Notes (1)',
-    ]);
+    expect(
+      [...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim()),
+    ).toEqual(['Errors (1)', 'Warnings (1)', 'Notes (1)']);
   });
 
   it('ignores a row through the not-an-issue affordance and offers Undo all', async () => {
@@ -283,9 +280,12 @@ async function createDialog(
   });
 
   it('closes through the dialog ref when hosted in a MatDialog', async () => {
-    const dialog = await createDialog([entry(0, { comment: 'Broken regex', keys: ['/servant(/'] })], {
-      dialog: true,
-    });
+    const dialog = await createDialog(
+      [entry(0, { comment: 'Broken regex', keys: ['/servant(/'] })],
+      {
+        dialog: true,
+      },
+    );
     dialog['close']();
 
     expect(closeSpy).toHaveBeenCalledTimes(1);
@@ -293,9 +293,12 @@ async function createDialog(
   });
 
   it('dismisses through the bottom-sheet ref when hosted in a MatBottomSheet', async () => {
-    const dialog = await createDialog([entry(0, { comment: 'Broken regex', keys: ['/servant(/'] })], {
-      sheet: true,
-    });
+    const dialog = await createDialog(
+      [entry(0, { comment: 'Broken regex', keys: ['/servant(/'] })],
+      {
+        sheet: true,
+      },
+    );
     dialog['close']();
 
     expect(dismissSpy).toHaveBeenCalledTimes(1);
@@ -303,7 +306,9 @@ async function createDialog(
   });
 
   it('tolerates close with neither container ref present', async () => {
-    const dialog = await createDialog([entry(0, { comment: 'Broken regex', keys: ['/servant(/'] })]);
+    const dialog = await createDialog([
+      entry(0, { comment: 'Broken regex', keys: ['/servant(/'] }),
+    ]);
     expect(() => dialog['close']()).not.toThrow();
     expect(closeSpy).not.toHaveBeenCalled();
     expect(dismissSpy).not.toHaveBeenCalled();
