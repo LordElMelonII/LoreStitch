@@ -916,6 +916,20 @@ describe('linter', () => {
         expect(ruleOf(diagnostics, 'invalid-regex')).toHaveLength(0);
         expect(ruleOf(diagnostics, 'duplicate-key')).toHaveLength(1);
         expect(ruleOf(diagnostics, 'never-activatable')).toHaveLength(2);
+
+        // Mutting every rule at once empties the report without breaking
+        // the pass — each rule's mute filter branch fires here.
+        const allRules: LintRuleId[] = [
+          'invalid-regex',
+          'duplicate-key',
+          'secondary-keys-ignored',
+          'selective-without-secondary',
+          'never-activatable',
+          'recursion-cycle',
+          'self-trigger',
+          'malformed-wrapper',
+        ];
+        expect(lintBook(makeFindingsBook(), { mutedRules: new Set(allRules) })).toEqual([]);
       });
 
       it('silences the perf-guard skip note when recursion-cycle is muted (pinned interaction)', () => {

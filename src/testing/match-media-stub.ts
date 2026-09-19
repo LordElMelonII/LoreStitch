@@ -30,8 +30,13 @@ export function installMatchMediaStub(): {
       listeners.set(query, set);
     },
     removeListener: (cb: unknown) => listeners.get(query)?.delete(cb as never),
-    addEventListener: (_: string, cb: (event: { matches: boolean }) => void) =>
-      listeners.get(query)?.add(cb),
+    addEventListener: (_: string, cb: (event: { matches: boolean }) => void) => {
+      // Create-on-add: a bare `listeners.get(query)?.add(cb)` would silently
+      // no-op for queries that never saw a legacy addListener first.
+      const set = listeners.get(query) ?? new Set();
+      set.add(cb);
+      listeners.set(query, set);
+    },
     removeEventListener: (_: string, cb: unknown) => listeners.get(query)?.delete(cb as never),
     dispatchEvent: () => false,
   });

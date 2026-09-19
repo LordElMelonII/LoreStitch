@@ -449,18 +449,37 @@ describe('TokenMeter', () => {
   // only the topbar-composition wiring stays here.
 
   it('opens the token inspector on click', async () => {
+    // Two ~10-token constant entries against a 15 budget: the meter renders
+    // the footprint and flags the overshoot (the removed dedicated rendering
+    // tests used to hold this branch coverage).
     workspace.activeProject.set(
-      projectOf([constantEntry(0, 'a'.repeat(40))], {
-        id: 'meter-project',
-        title: 'Meter',
-        tokenBudget: 15,
-      }),
+      projectOf(
+        [constantEntry(0, 'a'.repeat(40)), constantEntry(1, 'b'.repeat(40))],
+        { id: 'meter-project', title: 'Meter', tokenBudget: 15 },
+      ),
     );
     const fixture = TestBed.createComponent(TokenMeter);
     await fixture.whenStable();
     fixture.detectChanges();
 
-    fixture.nativeElement.querySelector('.token-meter')?.dispatchEvent(new Event('click'));
+    const meter = fixture.nativeElement.querySelector('.token-meter');
+    expect(meter).toBeTruthy();
+    expect(meter?.textContent).toContain('~');
+    expect(meter?.className).toContain('over-budget');
+    expect(fixture.nativeElement.querySelectorAll('.warn-icon').length).toBeGreaterThan(0);
+    expect(fixture.componentInstance['tooltip']()).toContain('over budget');
+
+    // Singular entry without a budget: the tooltip's other wordings.
+    workspace.activeProject.set(
+      projectOf([constantEntry(0, 'a'.repeat(40))], { id: 'meter-project', title: 'Meter' }),
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.componentInstance['tooltip']()).toBe(
+      'Always active: ~10 tokens across 1 constant entry. Click to inspect.',
+    );
+
+    meter?.dispatchEvent(new Event('click'));
     // openInspector lazy-loads the inspector dialog module first.
     await vi.waitFor(() => expect(dialogOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
   });

@@ -294,11 +294,14 @@ describe('EntryKeys', () => {
       expect(document.activeElement).toBe(secondaryInput);
 
       // While an in-place edit is pending, the click-through must not steal
-      // focus from the (blurred) chip input.
+      // focus — for either field's box.
       component['editingKey'].set({ field: 'keys', index: 0 });
       primaryInput.blur();
+      secondaryInput.blur();
       (element.querySelector('.keys-field') as HTMLElement).click();
       expect(document.activeElement).not.toBe(primaryInput);
+      (element.querySelectorAll('.keys-field')[1] as HTMLElement).click();
+      expect(document.activeElement).not.toBe(secondaryInput);
     });
   });
 });
