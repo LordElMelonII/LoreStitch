@@ -2,7 +2,7 @@
 
 > **Source**: `ROADMAP.md` → MEDIUM PRIORITY → *"Regex Key Testing Sandbox"*
 > **Type**: Feature extension of an existing editor section
-> **Suggested agents**: `core-engine` → `ui-specialist` (lead) → `qa-auditor` → `ts-reviewer`
+> **Suggested agents**: `core-engine` → `ui-specialist` (lead) → `ts-reviewer` → `qa-auditor`
 > **Depends on**: Task 03 Phase 1 (`core/models/st-regex.ts` + `st-key-match.ts`). If this task runs first, absorb Task 03's Phase 1 as Phase 0 here and flag it in Task 03.
 
 ---
@@ -54,8 +54,8 @@ New child component **`src/app/features/entry-editor/entry-keys/regex-test-panel
 | **P0 — Shared modules check** (core-engine) | `core/models/st-regex.ts`, `st-key-match.ts` | Consume from Task 03; if absent, implement them here (exact spec in Task 03 §3.1) + their specs |
 | **P1 — Classification UX** (ui-specialist) | `entry-keys.ts/.html/.scss/.spec.ts` | §3.1 chip states + a11y descriptions |
 | **P2 — Playground** (ui-specialist) | `entry-keys/regex-test-panel.*` (new), `entry-keys.ts/.html` (mount), shared `highlightSegments` + spec | §3.2 panel + highlighting |
-| **P3 — Tests & E2E** (qa-auditor) | `regex-test-panel.spec.ts`, `entry-keys.spec.ts` additions, `e2e/regex-sandbox.spec.ts` | §5 below |
-| **P4 — Review** (ts-reviewer) | all touched | Typing of `extensions` reads, computed purity, lint |
+| **P3 — Review** (ts-reviewer) | all touched | Typing of `extensions` reads, computed purity, lint |
+| **P4 — Tests & E2E** (qa-auditor) | `regex-test-panel.spec.ts`, `entry-keys.spec.ts` additions, `e2e/regex-sandbox.spec.ts` | §5 below |
 
 P1 and P2 are sequential (P2 mounts inside the P1-touched template); P0 before both.
 
@@ -69,11 +69,11 @@ P1 and P2 are sequential (P2 mounts inside the P1-touched template); P0 before b
 ## 6. Orchestration
 
 1. **`core-engine`** (skills: `typescript-advanced-types`) — P0 only (small): confirm/land the shared semantics modules with specs. *Gate: `npm test`.*
-2. **`ui-specialist`** (skills: `angular-developer`, `material-3`) — P1+P2 (lead). Standalone OnPush, signals only, M3 tokens, chip/tree a11y, specs ship with components. *Gate: `npm test` + `npm run build`.*
-3. **`qa-auditor`** (skills: `playwright-cli`) — P3: component coverage + new E2E spec; verify no regressions in `entry-editor` suites; coverage thresholds. *Gate: `npx playwright test regex-sandbox`, `ng test --coverage`.*
-4. **`ts-reviewer`** (skills: `typescript-advanced-types`) — P4: no `any` on `extensions` reads (use `EntryExtensions` guards as done in `entry-activation.ts`), no non-null assertions, `npm run lint`.
+2. **`ui-specialist`** (skills: `angular-developer`, `material-3`, `frontend-design`) — P1+P2 (lead). Standalone OnPush, signals only, M3 tokens, chip/tree a11y, specs ship with components; match-result and empty-state copy follows the frontend-design writing rules. *Gate: `npm test` + `npm run build`.*
+3. **`ts-reviewer`** (skills: `typescript-advanced-types`) — P3: no `any` on `extensions` reads (use `EntryExtensions` guards as done in `entry-activation.ts`), no non-null assertions, `npm run lint`.
+4. **`qa-auditor`** (skills: `playwright-cli`) — P4: component coverage + new E2E spec; verify no regressions in `entry-editor` suites; coverage thresholds. *Gate: `npx playwright test regex-sandbox`, `ng test --coverage`.*
 
-Small task — a single ui-specialist run can cover P1+P2 in one dispatch; qa-auditor and ts-reviewer runs are correspondingly short.
+Small task — a single ui-specialist run can cover P1+P2 in one dispatch; ts-reviewer and qa-auditor runs are correspondingly short.
 
 ## 7. Verification Gates
 

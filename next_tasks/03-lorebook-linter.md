@@ -2,7 +2,7 @@
 
 > **Source**: `ROADMAP.md` → MEDIUM PRIORITY → *"Lorebook Health Linter & Validator"*
 > **Type**: New feature (pure diagnostic core + diagnostic modal)
-> **Suggested agents**: `core-engine` (lead) → `ui-specialist` → `qa-auditor` → `ts-reviewer`
+> **Suggested agents**: `core-engine` (lead) → `ui-specialist` → `ts-reviewer` → `qa-auditor`
 > **Depends on**: Task 02's `openResponsive`/bottom-sheet pattern for the modal (or implement the dual-ref shape directly if 02 hasn't landed).
 > **Produces**: shared ST-regex + key-matching core modules that Task 04 reuses.
 
@@ -110,17 +110,17 @@ Follows the `token-estimator.ts` precedent (pure functions in a `@Service()`-dec
 | **P1 — Shared semantics modules** (core-engine) | `core/models/st-regex.ts` + spec, `core/models/st-key-match.ts` + spec | §3.1, fidelity-tested against `sillytaver-world-info-doc/world-info.js` |
 | **P2 — Linter core** (core-engine) | `core/services/linter.service.ts` + spec | §3.2 rules, graph, immutability test |
 | **P3 — Diagnostic UI** (ui-specialist) | `features/linter/*` (new), `topbar.ts/.html/.scss`, `topbar.spec.ts` | §3.3 modal + entry point + badge |
-| **P4 — E2E + fixture** (qa-auditor) | `e2e/linter.spec.ts`, fixture JSON | §3.4 E2E incl. desktop + one mobile sheet run |
-| **P5 — Review** (ts-reviewer) | all touched | `extensions: Record<string, unknown>` access discipline (typed guards, no `any`), signal purity, lint |
+| **P4 — Review** (ts-reviewer) | all touched | `extensions: Record<string, unknown>` access discipline (typed guards, no `any`), signal purity, lint |
+| **P5 — E2E + fixture** (qa-auditor) | `e2e/linter.spec.ts`, fixture JSON | §3.4 E2E incl. desktop + one mobile sheet run |
 
 P1→P2 sequential; P3 can start once P2's interface (§3.2) is frozen — parallelize P3 with P2's tail if desired.
 
 ## 5. Orchestration
 
 1. **`core-engine`** (skills: `typescript-advanced-types`, `angular-developer`) — P1+P2. Hard constraints: pure functions, no UI imports in `core/`, never drop/mutate vendor fields, `world-info.js` is the semantic oracle. *Gate: `npm test` green; spec suite covers every rule + suppression.*
-2. **`ui-specialist`** (skills: `angular-developer`, `material-3`) — P3. Standalone OnPush, signals/computed only (lint result as `computed(() => lintBook(book))` — pure, memoized), M3 tokens, dual container per Task 02 pattern, 44px touch floors. *Gate: `npm test` + `npm run build`.*
-3. **`qa-auditor`** (skills: `playwright-cli`) — P4. Coverage thresholds, E2E on desktop + mobile projects. *Gate: `npx playwright test linter`, `ng test --coverage`.*
-4. **`ts-reviewer`** (skills: `typescript-advanced-types`) — P5. *Gate: `npm run lint`, zero new `any`/non-null assertions.*
+2. **`ui-specialist`** (skills: `angular-developer`, `material-3`, `frontend-design`) — P3. Standalone OnPush, signals/computed only (lint result as `computed(() => lintBook(book))` — pure, memoized), M3 tokens, dual container per Task 02 pattern, 44px touch floors; lint-rule wording and severity surfaces follow the frontend-design copy rules. *Gate: `npm test` + `npm run build`.*
+3. **`ts-reviewer`** (skills: `typescript-advanced-types`) — P4. *Gate: `npm run lint`, zero new `any`/non-null assertions.*
+4. **`qa-auditor`** (skills: `playwright-cli`) — P5. Coverage thresholds, E2E on desktop + mobile projects. *Gate: `npx playwright test linter`, `ng test --coverage`.*
 
 Orchestrator freezes the §3.2 public interface before dispatching P3 (it's the contract between core-engine and ui-specialist).
 
@@ -132,6 +132,6 @@ Orchestrator freezes the §3.2 public interface before dispatching P3 (it's the 
 
 1. **ST fidelity drift**: our port could diverge from future ST versions. Mitigation: cite `world-info.js` line references in code comments and keep the parser a single small module; the vendored doc is the test oracle.
 2. **Recursion false positives**: full-content matching ignores `scan_depth` and message-window semantics → cycles that ST would never hit at runtime. Accepted: diagnostic copy says "may", severity is warning (not error), and `scan_depth` is honored per-entry when set (`extensions.scan_depth` can bound content scanning if we choose — decide at P2 kickoff, default: ignore, document).
-3. **Duplicate-key vs group nuance**: ST group semantics make same-group key duplication legitimate. If the downgrade-to-info heuristic proves noisy, invert to suppress entirely (tune in P4 with the real fixture).
+3. **Duplicate-key vs group nuance**: ST group semantics make same-group key duplication legitimate. If the downgrade-to-info heuristic proves noisy, invert to suppress entirely (tune in P5 with the real fixture).
 4. **Perf on large books**: O(V²·k) worst case at import-scale (thousands of entries) — acceptable for on-demand linting + `computed` memoization; add a simple guard (skip rule with an inline note) above a threshold (e.g. >2,000 entries) if profiling demands.
 5. **`entryIds` stability**: workspace assigns `id`; imported books without ids are normalized on import — confirm `normalizeImportedBook` guarantees ids before relying on them (P2 kickoff check; fallback = index-based identity within a lint run).
