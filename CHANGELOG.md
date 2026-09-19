@@ -3,6 +3,38 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.2.0 — September 19, 2026
+
+The health-check release. One click tells you what SillyTavern never does:
+which entries can never fire, which keys collide, which tags are broken, and
+which regexes will quietly do nothing — plus the tools to tune away what you
+already know about.
+
+### Highlights
+
+- **Health check, one click away** — a new shield button in the top bar (and a
+  "Health check…" item in the More menu on every device) scans the whole
+  lorebook and groups what it finds into errors, warnings and notes, each row
+  naming the entry it concerns. A count badge on the shield shows how much is
+  waiting, and it drops as you fix things.
+- **Jump straight to the problem** — every finding's buttons take you to the
+  offending entry with one click; when several entries share a finding, each
+  gets its own named button.
+- **You decide what matters** — mute a whole kind of check with the filter
+  chips, or mark a single finding "not an issue". Both are remembered in the
+  saved project, and "Undo all" brings everything back.
+- **Checks that speak SillyTavern's language** — duplicate keys, ignored
+  secondary keys, entries that can never activate, recursion loops, invalid
+  regex keys and malformed whole-content wrappers are detected with the same
+  matching rules SillyTavern itself applies — including the ones it silently
+  ignores.
+
+### Fixed
+
+- Long entry names in a finding's chip now stay on one line (truncated)
+  instead of wrapping.
+- On narrow phones the filter chips stack one per row instead of pairing up.
+
 ## 1.1.1 — September 19, 2026
 
 A quiet repair for the delimiter tools. Wrappers that don't line up — an opening
