@@ -13,6 +13,7 @@ import { GITHUB_REPO_URL } from '../../../shared/constants/github';
 import { TouchSafeNestedMenuTrigger } from '../../../shared/directives/touch-safe-nested-menu-trigger';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
+import { LinterState } from '../../linter/linter-state';
 import { ProjectActionsService } from '../project-actions.service';
 import { TokenMeter } from './token-meter';
 
@@ -38,6 +39,7 @@ export class Topbar {
   protected readonly theme = inject(ThemeService);
   protected readonly layout = inject(LayoutService);
   protected readonly actions = inject(ProjectActionsService);
+  protected readonly linter = inject(LinterState);
   private readonly dialog = inject(MatDialog);
   private readonly overlay = inject(ResponsiveOverlayService);
 
@@ -76,6 +78,28 @@ export class Topbar {
       maxWidth: 'min(96vw, 640px)',
       panelClass: 'app-compact-fullscreen-dialog',
       data: { activeEntryId: this.workspace.activeTabId() },
+    });
+  }
+
+  /**
+   * Health check pane: centered dialog on tablet/desktop, bottom sheet on
+   * phones — same content component, adapted per the mobile ergonomics
+   * charter. The viewport branching lives in `ResponsiveOverlayService`; the
+   * pane reads the root-provided `LinterState`, so no data is passed and the
+   * badge and the pane can never disagree about the book's health.
+   */
+  protected async openLinter(): Promise<void> {
+    // Lazy-loaded: the health check pane is only paid for when actually opened.
+    const { LinterDialog } = await import('../../linter/linter-dialog');
+    this.overlay.openResponsive(LinterDialog, {
+      dialog: {
+        width: '100%',
+        maxWidth: 'min(94vw, 720px)',
+        panelClass: 'app-linter-dialog',
+        ariaLabel: 'Lorebook health check',
+      },
+      sheetPanelClass: 'app-linter-sheet',
+      sheetConfig: { ariaLabel: 'Lorebook health check' },
     });
   }
 

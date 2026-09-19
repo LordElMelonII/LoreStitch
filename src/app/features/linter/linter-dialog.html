@@ -1,0 +1,124 @@
+<div class="shell">
+  <header class="header">
+    <mat-icon class="pane-icon" aria-hidden="true">health_and_safety</mat-icon>
+    <div class="heading">
+      <h2 class="pane-title">Health check</h2>
+      <p class="summary" role="status">{{ summary() }}</p>
+    </div>
+    <button
+      matIconButton
+      type="button"
+      class="close-button"
+      (click)="close()"
+      matTooltip="Close"
+      aria-label="Close health check"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <div class="body">
+    @if (linter.diagnostics().length === 0) {
+      <div class="empty-state">
+        <mat-icon aria-hidden="true">verified</mat-icon>
+        <p>No issues found — lorebook looks healthy.</p>
+      </div>
+    } @else {
+      <!-- Rule mutes (plan 03 §3.6.5.3): one chip per rule present in the
+           unfiltered pass; muted chips stay visible so they re-enable. -->
+      @if (muteChips().length > 0) {
+        <div class="mute-row" role="group" aria-label="Mute checks">
+          @for (chip of muteChips(); track chip.rule) {
+            <button
+              type="button"
+              class="mute-chip"
+              [class.muted]="chip.muted"
+              [attr.aria-pressed]="chip.muted"
+              (click)="linter.toggleMutedRule(chip.rule)"
+              [matTooltip]="chip.muted ? 'Restore this check' : 'Mute this check'"
+            >
+              {{ chip.label }}
+            </button>
+          }
+        </div>
+      }
+
+      @for (section of sections(); track section.severity) {
+        <section class="severity-section" [attr.data-severity]="section.severity">
+          <h3 class="section-heading">{{ section.heading }} ({{ section.rows.length }})</h3>
+          <ul class="diagnostic-list">
+            @for (row of section.rows; track $index) {
+              <li class="diagnostic-row">
+                <span class="severity-icon">
+                  <mat-icon aria-hidden="true">{{ section.icon }}</mat-icon>
+                </span>
+                <div class="message-column">
+                  <p class="message">{{ row.diagnostic.message }}</p>
+                  @if (row.diagnostic.details) {
+                    <p class="details">{{ row.diagnostic.details }}</p>
+                  }
+                  @if (row.jumps.length > 0) {
+                    <!-- Multi-entry rows: the chips are the jump buttons —
+                         one named target per entry (approved R1). -->
+                    <div class="chip-row">
+                      @for (jump of row.jumps; track jump.entryId) {
+                        <button
+                          type="button"
+                          class="entry-chip jump-chip"
+                          (click)="goToEntry(jump.entryId)"
+                          [attr.aria-label]="jump.ariaLabel"
+                        >
+                          {{ jump.title }}
+                        </button>
+                      }
+                    </div>
+                  } @else if (row.singleTitle !== null) {
+                    <!-- Single-entry rows: the chip is decorative metadata;
+                         the trailing Go-to button carries the action. -->
+                    <div class="chip-row">
+                      <span class="entry-chip">{{ row.singleTitle }}</span>
+                    </div>
+                  }
+                </div>
+                <div class="row-actions">
+                  @if (row.goto; as goto) {
+                    <button
+                      matButton
+                      type="button"
+                      class="goto-button"
+                      (click)="goToEntry(goto.entryId)"
+                      [attr.aria-label]="goto.ariaLabel"
+                    >
+                      Go to entry
+                    </button>
+                  }
+                  <button
+                    matIconButton
+                    type="button"
+                    class="not-an-issue-button"
+                    (click)="linter.ignoreDiagnostic(row.diagnostic)"
+                    matTooltip="Not an issue"
+                    aria-label="Not an issue"
+                  >
+                    <mat-icon aria-hidden="true">do_not_disturb_on</mat-icon>
+                  </button>
+                </div>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    }
+  </div>
+
+  @if (linter.ignoredCount() > 0) {
+    <footer class="ignored-footer">
+      @if (linter.ignoredCount() === 1) {
+        <span class="ignored-count">1 issue marked not-an-issue</span>
+      } @else {
+        <span class="ignored-count">{{ linter.ignoredCount() }} issues marked not-an-issue</span>
+      }
+      <button matButton type="button" (click)="linter.undoAllIgnored()">Undo all</button>
+    </footer>
+  }
+</div>

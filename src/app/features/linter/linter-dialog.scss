@@ -1,0 +1,277 @@
+// Layout only — colors and typography come from --mat-sys-* tokens (plus the
+// shared --ls-warning role). Rules that must reach Material's overlay-rendered
+// internals (dialog surface, bottom-sheet container) live in src/styles.scss,
+// anchored to the `app-linter-dialog` / `app-linter-sheet` panel classes.
+
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+// ---------------------------------------------------------------------------
+// Header: title + live summary + close button (fixed, never scrolls)
+// ---------------------------------------------------------------------------
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px 12px;
+}
+
+.pane-icon {
+  color: var(--mat-sys-on-surface-variant);
+  flex: none;
+}
+
+.heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.pane-title {
+  margin: 0;
+  font: var(--mat-sys-title-large);
+}
+
+.summary {
+  margin: 2px 0 0;
+  font: var(--mat-sys-body-large);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.close-button {
+  // The 44px touch floor on every viewport (the global mobile rule covers
+  // phones only; the M3 icon-button default here is a 40px state layer).
+  --mat-icon-button-state-layer-size: var(--touch-target-min);
+}
+
+// ---------------------------------------------------------------------------
+// Body: single scroll container
+// ---------------------------------------------------------------------------
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 24px 24px;
+}
+
+// Mute chips (§3.6.5.3): a config row above the sections. Unmuted chips read
+// as tonal "this check is on"; muted ones go quiet but stay clickable.
+.mute-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 0 12px;
+}
+
+.mute-chip {
+  min-height: var(--touch-target-min);
+  padding: 4px 14px;
+  border: none;
+  border-radius: var(--mat-sys-corner-small);
+  font: var(--mat-sys-label-large);
+  color: var(--mat-sys-on-secondary-container);
+  background: var(--mat-sys-secondary-container);
+  cursor: pointer;
+
+  &.muted {
+    color: var(--mat-sys-on-surface-variant);
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--mat-sys-outline-variant);
+  }
+}
+
+// Severity sections in fixed order; empty ones never render. The accent
+// custom property maps each severity to its approved color role (§3.6.3).
+.severity-section {
+  --severity-accent: var(--mat-sys-on-surface-variant);
+
+  &[data-severity='error'] {
+    --severity-accent: var(--mat-sys-error);
+  }
+
+  &[data-severity='warning'] {
+    --severity-accent: var(--ls-warning);
+  }
+
+  & + .severity-section {
+    border-top: 1px solid var(--mat-sys-outline-variant);
+    margin-top: 8px;
+  }
+}
+
+.section-heading {
+  margin: 16px 0 4px;
+  font: var(--mat-sys-label-large);
+  letter-spacing: 0.4px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.diagnostic-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.diagnostic-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-areas: 'icon message actions';
+  align-items: start;
+  column-gap: 16px;
+  padding: 12px 0;
+}
+
+// 40px icon slot keeps messages aligned across rows; the icon is decorative
+// (aria-hidden) — the section grouping already announces the severity.
+.severity-icon {
+  grid-area: icon;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--severity-accent);
+}
+
+.message-column {
+  grid-area: message;
+  min-width: 0;
+}
+
+.message {
+  margin: 0;
+  font: var(--mat-sys-body-large);
+  color: var(--mat-sys-on-surface);
+  overflow-wrap: anywhere;
+}
+
+.details {
+  margin: 4px 0 0;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+  // Literal key text and cycle paths — the content editor's mono stack.
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-variant-ligatures: none;
+  overflow-wrap: anywhere;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+// Tonal metadata chip: one per entry, 28px, decorative (never clickable
+// itself — the jump affordance is the trailing button on single-entry rows).
+.entry-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  max-width: 100%;
+  padding: 0 10px;
+  border-radius: var(--mat-sys-corner-small);
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-secondary-container);
+  background: var(--mat-sys-secondary-container);
+  overflow-wrap: anywhere;
+}
+
+// Multi-entry rows: the chips themselves are the jump buttons (approved R1) —
+// the chip visual raised to the 44px touch floor. These are plain buttons,
+// not `mat-mdc-standard-chip`s, so the global chip rule does not apply.
+.jump-chip {
+  min-height: var(--touch-target-min);
+  border: none;
+  cursor: pointer;
+}
+
+.row-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .goto-button {
+    min-height: var(--touch-target-min);
+  }
+
+  .not-an-issue-button {
+    --mat-icon-button-state-layer-size: var(--touch-target-min);
+  }
+}
+
+// Phones (< MD3's 600dp window class, matching the sheet reflow): the Go-to
+// action reflows onto its own line under the details, left-aligned with the
+// message text (40px icon slot + 16px column gap), and the message drops to
+// body-medium. The summary shrinks defensively too — it does not wrap at
+// 390px at these counts, but the rule keeps it to one line if it ever does.
+@media (max-width: 599px) {
+  .diagnostic-row {
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-areas:
+      'icon message'
+      '. actions';
+  }
+
+  .message {
+    font: var(--mat-sys-body-medium);
+  }
+
+  .summary {
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Empty state (§3.6.4): one centered block, no filler, no button
+// ---------------------------------------------------------------------------
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  p {
+    margin: 0;
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Ignored footer (§3.6.5.3): "N issues marked not-an-issue" + Undo all
+// ---------------------------------------------------------------------------
+
+.ignored-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 24px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  .ignored-count {
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+  }
+}

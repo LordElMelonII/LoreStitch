@@ -6,6 +6,7 @@ import { MatIconRegistry } from '@angular/material/icon';
 import { MatMenuTrigger } from '@angular/material/menu';
 import { of } from 'rxjs';
 import {
+  CharacterBookEntry,
   ProjectWorkspace,
   createEmptyBook,
   createEmptyEntry,
@@ -14,6 +15,7 @@ import { StorageService } from '../../../core/services/storage.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
+import { LinterDialog } from '../../linter/linter-dialog';
 import { ProjectActionsService } from '../project-actions.service';
 import { GITHUB_ICON } from '../../../shared/constants/github';
 import {
@@ -76,6 +78,20 @@ describe('Topbar', () => {
   let desktop: { setDesktop: (matches: boolean) => void; setMobile: (matches: boolean) => void };
   let fixture: import('@angular/core/testing').ComponentFixture<Topbar>;
 
+  /** Builds a workspace holding exactly the given entries (badge/linter tests). */
+  function projectOf(entries: CharacterBookEntry[]): ProjectWorkspace {
+    return {
+      id: 'topbar-project',
+      title: 'Topbar',
+      createdAt: 1,
+      updatedAt: 1,
+      targetType: 'standalone_lorebook',
+      activeBook: { name: 'Topbar', extensions: {}, entries },
+      headCommitId: null,
+      commits: [],
+    };
+  }
+
   async function createTopbar(): Promise<Topbar> {
     fixture = TestBed.createComponent(Topbar);
     await fixture.whenStable();
@@ -123,6 +139,7 @@ describe('Topbar', () => {
     // Project-scoped actions stay hidden.
     expect(el.querySelector('app-token-meter')).toBeNull();
     expect(el.querySelector('[aria-label="New entry"]')).toBeNull();
+    expect(el.querySelector('[aria-label="Health check"]')).toBeNull();
   });
 
   it('shows the project title and project actions with an open project', async () => {
@@ -362,6 +379,7 @@ describe('Topbar', () => {
     fixture.detectChanges();
 
     const menuText = document.querySelector('.mat-mdc-menu-panel')?.textContent ?? '';
+    expect(menuText).toContain('Health check…');
     expect(menuText).toContain('About LoreStitch…');
     expect(menuText).toContain('Theme');
     // The Theme entry is the phones-only duplicate: on >= 768px the direct
@@ -369,6 +387,105 @@ describe('Topbar', () => {
     const mobileOnly = document.querySelectorAll('.mat-mdc-menu-panel .mobile-only');
     expect(mobileOnly).toHaveLength(1);
     expect(mobileOnly[0]?.textContent).toContain('Theme');
+  });
+
+  it('pins the numeric health-check badge to real issues and hides it at zero', async () => {
+    await workspace.createProject('Fuyuki');
+    await createTopbar();
+    fixture.detectChanges();
+
+    // Clean book: the badge stays hidden, no chrome for a healthy book.
+    const healthIcon = () =>
+      fixture.nativeElement.querySelector('[aria-label="Health check"] mat-icon');
+    expect(healthIcon()?.classList.contains('mat-badge-hidden')).toBe(true);
+
+    // An invalid regex key is one error — the badge shows the count.
+    workspace.activeProject.set(projectOf([{ ...createEmptyEntry(0), keys: ['/servant(/'] }]));
+    fixture.detectChanges();
+    expect(healthIcon()?.classList.contains('mat-badge-hidden')).toBe(false);
+    expect(healthIcon()?.querySelector('.mat-badge-content')?.textContent).toBe('1');
+
+    // Info-only findings never light the badge (the entry is keyed so it
+    // emits exactly one info diagnostic).
+    workspace.activeProject.set(
+      projectOf([
+        { ...createEmptyEntry(0), keys: ['paris'], selective: true, secondary_keys: [] },
+      ]),
+    );
+    fixture.detectChanges();
+    expect(healthIcon()?.classList.contains('mat-badge-hidden')).toBe(true);
+  });
+
+  it('mirrors Health check into the More menu, directly after Search & replace', async () => {
+    await workspace.createProject('Fuyuki');
+    await createTopbar();
+    fixture.detectChanges();
+
+    const triggerDebug = fixture.debugElement.query(By.css('[aria-label="More actions menu"]'));
+    assert(triggerDebug);
+    triggerDebug.injector.get(MatMenuTrigger).openMenu();
+    fixture.detectChanges();
+    const items = [...document.querySelectorAll('.mat-mdc-menu-panel button')].map(
+      (button) => button.textContent ?? '',
+    );
+    const searchIndex = items.findIndex((text) => text.includes('Search & replace…'));
+    const healthIndex = items.findIndex((text) => text.includes('Health check…'));
+    assert(searchIndex >= 0);
+    assert(healthIndex >= 0);
+    // The two authoring-quality tools sit together (plan 03 §3.6.1).
+    expect(healthIndex).toBe(searchIndex + 1);
+  });
+
+  it('keeps the More-menu Health check item reachable on phones', async () => {
+    desktop.setMobile(true);
+    await workspace.createProject('Fuyuki');
+    await createTopbar();
+    fixture.detectChanges();
+
+    // The standalone bar button carries the phone-hiding class (the Search
+    // button's exact mechanism — a stylesheet hide, so the node still exists
+    // in the jsdom DOM and the class is what the assertion targets)...
+    const healthButton = fixture.nativeElement.querySelector('[aria-label="Health check"]');
+    expect(healthButton?.classList.contains('desktop-only')).toBe(true);
+
+    // ...and phones reach the pane through the universal More-menu item.
+    const triggerDebug = fixture.debugElement.query(By.css('[aria-label="More actions menu"]'));
+    assert(triggerDebug);
+    triggerDebug.injector.get(MatMenuTrigger).openMenu();
+    fixture.detectChanges();
+    const menuText = document.querySelector('.mat-mdc-menu-panel')?.textContent ?? '';
+    expect(menuText).toContain('Health check…');
+  });
+
+  it('opens the health check through the responsive overlay', async () => {
+    await workspace.createProject('Fuyuki');
+    await createTopbar();
+    fixture.detectChanges();
+
+    (fixture.nativeElement as HTMLElement)
+      .querySelector('[aria-label="Health check"]')
+      ?.dispatchEvent(new Event('click'));
+    // The health check pane is lazy-loaded; the open lands after the import.
+    await vi.waitFor(() => expect(overlayOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
+    const call = overlayOpen.mock.calls.at(-1);
+    assert(call);
+    const [component, config] = call as [object, Record<string, unknown>];
+    // The lazy import resolves to the same class the spec imports statically.
+    expect(component).toBe(LinterDialog);
+    // Tablet/desktop dialog styling plus the phone sheet panel class (plan
+    // 03 §3.6.1); the viewport branching itself belongs to the overlay service.
+    expect(config).toEqual({
+      dialog: {
+        width: '100%',
+        maxWidth: 'min(94vw, 720px)',
+        panelClass: 'app-linter-dialog',
+        ariaLabel: 'Lorebook health check',
+      },
+      sheetPanelClass: 'app-linter-sheet',
+      sheetConfig: { ariaLabel: 'Lorebook health check' },
+    });
+    // The health check pane must not bypass the responsive service.
+    expect(dialogOpen).not.toHaveBeenCalled();
   });
 
   it('surfaces the persistence-failure banner while saving is broken', async () => {

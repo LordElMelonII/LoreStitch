@@ -73,6 +73,27 @@
       <mat-icon>find_replace</mat-icon>
     </button>
 
+    <!-- Health check (plan 03 §3.6.1): the book's diagnostic pane, mirrored
+         into the More actions menu for phones. The numeric badge sits on the
+         <mat-icon> (the history-button shape): the count says how much work
+         is waiting, and it stays hidden at 0 so a clean book adds no chrome. -->
+    <button
+      matIconButton
+      type="button"
+      class="desktop-only"
+      (click)="openLinter()"
+      matTooltip="Health check"
+      aria-label="Health check"
+    >
+      <mat-icon
+        [matBadge]="linter.issueCount() || null"
+        matBadgeColor="warn"
+        [matBadgeHidden]="!linter.issueCount()"
+      >
+        health_and_safety
+      </mat-icon>
+    </button>
+
     @if (isDesktop()) {
       <button
         matIconButton
@@ -166,6 +187,13 @@
     <button mat-menu-item (click)="openSearch()">
       <mat-icon>find_replace</mat-icon>
       <span>Search &amp; replace…</span>
+    </button>
+    <!-- Universal (plan 03 §3.6.1): on phones this is the only reach into the
+         health check — the desktop-only bar button is hidden there, and the
+         two authoring-quality tools stay adjacent in the menu. -->
+    <button mat-menu-item (click)="openLinter()">
+      <mat-icon>health_and_safety</mat-icon>
+      <span>Health check…</span>
     </button>
     <button mat-menu-item (click)="actions.importMergeFromPicker()">
       <mat-icon>merge_type</mat-icon>

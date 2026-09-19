@@ -122,6 +122,13 @@ body {
   --ls-diff-remove-bg: color-mix(in srgb, #c62828 12%, var(--mat-sys-surface));
   --ls-diff-remove-text: color-mix(in srgb, #c62828 70%, var(--mat-sys-on-surface));
 
+  // Linter warning role (plan 03 §3.6.3, approved R2): M3 web ships no warning
+  // token, so the role is derived once here — the --ls-diff-* precedent. The
+  // fixed hue mixes into the live system values, so it tracks both themes and
+  // the hue lives in exactly one place (no raw hex in component styles).
+  --ls-warning: color-mix(in srgb, #b26a00 82%, var(--mat-sys-on-surface));
+  --ls-warning-container: color-mix(in srgb, #e8930c 14%, var(--mat-sys-surface));
+
   // Touch-target policy (values sourced from src/app/shared/constants/
   // touch-targets.ts — keep the two in sync): 44px is the universal minimum
   // floor for every interactive element; 48px is the mobile target, applied
@@ -204,6 +211,29 @@ body {
   max-height: 88dvh;
   padding: 0;
 }
+
+// --- Health check dialog & bottom sheet (src/app/features/linter) ---
+
+// Centered health-check pane (tablet/desktop): a definite height, like the
+// About dialog, so the header stays pinned while the body scrolls (plan 03
+// §3.6.2). The component paints its own header (it is shared with the bottom
+// sheet), so the height lands on the surface itself; the host below fills it
+// with height: 100%. Phones get a bottom sheet instead (see Topbar.openLinter).
+.app-linter-dialog .mat-mdc-dialog-surface {
+  height: min(78dvh, 640px);
+  max-height: min(78dvh, 640px);
+}
+
+// Health check bottom sheet (phones): the batch/merge/export sheet treatment —
+// fixed height, no container padding, and M3's 28px top radius applied
+// explicitly (Material only carries it from the Medium viewport class up).
+.app-linter-sheet .mat-bottom-sheet-container {
+  height: 88dvh;
+  max-height: 88dvh;
+  padding: 0;
+  border-radius: 28px 28px 0 0;
+}
+
 
 // --- Batch / merge / export responsive sheets ---
 // Phones (< 768px) open these three panes as bottom sheets via

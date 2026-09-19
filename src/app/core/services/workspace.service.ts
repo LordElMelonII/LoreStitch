@@ -2,6 +2,7 @@ import { Service, computed, inject, signal } from '@angular/core';
 import {
   CharacterBook,
   CharacterBookEntry,
+  LintPrefs,
   ProjectWorkspace,
   createEmptyBook,
   createEmptyEntry,
@@ -183,6 +184,17 @@ export class WorkspaceService {
 
   async renameProject(title: string): Promise<void> {
     this.mutateProject((p) => ({ ...p, title }));
+  }
+
+  /**
+   * Replaces the active project's linter preferences (plan 03 §3.6.5.4) — the
+   * one `lintPrefs` write path, so the mutation/persistence chokepoint stays
+   * single. Prefs are workspace metadata: they ride the debounced IndexedDB
+   * save and `.stproj` export, never `ProjectCommit.snapshot` and never the
+   * book itself.
+   */
+  updateLintPrefs(prefs: LintPrefs): void {
+    this.mutateProject((p) => ({ ...p, lintPrefs: prefs }));
   }
 
   private async setActive(project: ProjectWorkspace): Promise<void> {
