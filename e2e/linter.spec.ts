@@ -21,9 +21,13 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
  *     `Go to entry` on the invalid-regex row selects the entry in the editor →
  *     fixing the key through the editor's chip field drops the badge to 5
  *     (automatic recompute, no refresh).
- *  2. Desktop amendment: mute a rule chip → its row disappears and the
- *     summary drops; unmute → it returns. Mark a row `Not an issue` → the
- *     footer counts it; `Undo all` → the row and clean summary return.
+ *  2. Desktop amendment: the mute chips are the entry editor's filter-chip
+ *     pattern (mat-chip-option: selected = check on, deselected = muted) —
+ *     mute a chip → its row disappears and the summary drops; unmute → it
+ *     returns; muting EVERY chip keeps the mute row above the empty state.
+ *     Multi-entry rows jump through named stroked buttons. Mark a row
+ *     `Not an issue` → the footer counts it; `Undo all` → the row and clean
+ *     summary return.
  *  3. Phone: the pane opens as the `app-linter-sheet` bottom sheet through
  *     the More menu (the only reach on phones — the bar button is
  *     desktop-only), showing the same summary and rows.
@@ -138,11 +142,17 @@ test.describe('linter desktop flows', () => {
         hasText: 'may activate during recursion in a loop',
       }),
     ).toContainText('"Cycle: Moonshard" and "Cycle: Sunwell"');
+    // Multi-entry rows jump through named stroked buttons, one per entry
+    // (post-acceptance fix — chips did not read as clickable).
+    const duplicateRow = pane.locator('li.diagnostic-row', {
+      hasText: "share the primary key 'Silver Sword'",
+    });
+    await expect(duplicateRow).toBeVisible();
+    await expect(duplicateRow.locator('.jump-button')).toHaveCount(2);
+    await expect(duplicateRow.locator('.jump-button', { hasText: 'Twinblade Legacy' })).toBeVisible();
+    await expect(duplicateRow.locator('.jump-button', { hasText: 'Silver Sword Lore' })).toBeVisible();
     await expect(
       pane.locator('li.diagnostic-row', { hasText: 'is constant — SillyTavern ignores all' }),
-    ).toBeVisible();
-    await expect(
-      pane.locator('li.diagnostic-row', { hasText: 'is not selective — SillyTavern ignores' }),
     ).toBeVisible();
 
     // Monospace details lines: the offending key and the cycle path.
@@ -199,29 +209,30 @@ test.describe('linter desktop flows', () => {
     const pane = linterPane(page);
 
     // One chip per rule present in the unfiltered pass — the fixture emits
-    // five distinct rules, so all five chips render.
+    // five distinct rules, so all five chips render. Chips follow the entry
+    // editor's filter pattern: aria-selected = the check runs.
     const muteRow = pane.locator('.mute-row');
-    await expect(muteRow.getByRole('button', { name: 'Duplicate keys' })).toBeVisible();
-    await expect(muteRow.getByRole('button', { name: 'Invalid regex' })).toBeVisible();
-    await expect(muteRow.getByRole('button', { name: 'Recursion cycles' })).toBeVisible();
-    await expect(muteRow.getByRole('button', { name: 'Malformed wrappers' })).toBeVisible();
-    await expect(muteRow.getByRole('button', { name: 'Ignored secondary keys' })).toBeVisible();
+    const option = (name: string) => muteRow.getByRole('option', { name });
+    await expect(option('Duplicate keys')).toBeVisible();
+    await expect(option('Invalid regex')).toBeVisible();
+    await expect(option('Recursion cycles')).toBeVisible();
+    await expect(option('Malformed wrappers')).toBeVisible();
+    await expect(option('Ignored secondary keys')).toBeVisible();
 
-    // Mute Duplicate keys: its row disappears and the summary drops — no
-    // other warning is affected.
-    const duplicateChip = muteRow.getByRole('button', { name: 'Duplicate keys' });
+    // Mute Duplicate keys (deselect the chip): its row disappears and the
+    // summary drops — no other warning is affected.
+    const duplicateChip = option('Duplicate keys');
+    await expect(duplicateChip).toHaveAttribute('aria-selected', 'true');
     await duplicateChip.click();
-    await expect(duplicateChip).toHaveClass(/muted/);
-    await expect(duplicateChip).toHaveAttribute('aria-pressed', 'true');
+    await expect(duplicateChip).toHaveAttribute('aria-selected', 'false');
     await expect(
       pane.locator('li.diagnostic-row', { hasText: "share the primary key 'Silver Sword'" }),
     ).toHaveCount(0);
     await expect(pane.locator('.summary')).toHaveText('2 errors · 3 warnings · 0 notes');
 
-    // Unmute: the chip restores and the row returns with the same message.
+    // Re-select the chip: the row returns with the same message.
     await duplicateChip.click();
-    await expect(duplicateChip).not.toHaveClass(/muted/);
-    await expect(duplicateChip).toHaveAttribute('aria-pressed', 'false');
+    await expect(duplicateChip).toHaveAttribute('aria-selected', 'true');
     await expect(
       pane.locator('li.diagnostic-row', { hasText: "share the primary key 'Silver Sword'" }),
     ).toBeVisible();
@@ -244,6 +255,39 @@ test.describe('linter desktop flows', () => {
       pane.locator('li.diagnostic-row', { hasText: 'not a valid regex' }),
     ).toBeVisible();
     await expect(pane.locator('.summary')).toHaveText(FULL_SUMMARY);
+  });
+
+  test('muting every check keeps the mute row above the empty state', async ({ page }) => {
+    await page.goto('/');
+    await importLorebook(page, FIXTURE_PATH);
+    await openLinterFromTopbar(page);
+    const pane = linterPane(page);
+
+    // Deselect all five chips: the filtered diagnostics drain away…
+    const muteRow = pane.locator('.mute-row');
+    const chips = muteRow.getByRole('option');
+    await expect(chips).toHaveCount(5);
+    for (let i = 0; i < 5; i += 1) {
+      await chips.nth(i).click();
+    }
+    await expect(pane.locator('.empty-state')).toBeVisible();
+    await expect(pane.locator('.summary')).toHaveText('0 errors · 0 warnings · 0 notes');
+
+    // …but the chip row itself stays: every chip remains, deselected, so the
+    // all-muted book keeps its recovery path (issue-2 regression).
+    await expect(muteRow).toBeVisible();
+    await expect(chips).toHaveCount(5);
+    for (let i = 0; i < 5; i += 1) {
+      await expect(chips.nth(i)).not.toHaveAttribute('aria-selected', 'true');
+    }
+
+    // And a chip is still selectable: unmuting one brings its rows back.
+    await muteRow.getByRole('option', { name: 'Invalid regex' }).click();
+    await expect(
+      pane.locator('li.diagnostic-row', { hasText: 'not a valid regex' }),
+    ).toBeVisible();
+    await expect(pane.locator('.empty-state')).toHaveCount(0);
+    await expect(pane.locator('.summary')).toHaveText('1 error · 0 warnings · 0 notes');
   });
 });
 

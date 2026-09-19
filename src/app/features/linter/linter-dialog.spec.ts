@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MatBottomSheetRef } from '@angular/material/bottom-sheet';
+import { MatChipOption } from '@angular/material/chips';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatDialogRef } from '@angular/material/dialog';
 import {
@@ -77,6 +78,20 @@ describe('LinterDialog', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  /**
+   * The mute row's chip options (the entry editor spec's pattern): component
+   * instances for state reads/`toggleSelected`, native elements for DOM
+   * assertions, addressed by label text.
+   */
+  function muteChips(): { chip: MatChipOption; native: HTMLElement }[] {
+    return fixture.debugElement
+      .queryAll(By.css('.mute-row mat-chip-option'))
+      .map((option) => ({
+        chip: option.componentInstance as MatChipOption,
+        native: option.nativeElement as HTMLElement,
+      }));
+  }
+
   beforeEach(async () => {
     closeSpy = vi.fn();
     dismissSpy = vi.fn();
@@ -136,7 +151,7 @@ describe('LinterDialog', () => {
     expect(dismissSpy).not.toHaveBeenCalled();
   });
 
-  it('makes the multi-entry chips the jump buttons instead of one trailing action', async () => {
+  it('renders multi-entry jumps as named stroked buttons instead of one trailing action', async () => {
     await createDialog(
       [
         entry(0, { comment: 'Saber', keys: ['Excalibur'] }),
@@ -146,17 +161,26 @@ describe('LinterDialog', () => {
     );
 
     const row = el().querySelector('.diagnostic-row');
-    expect(row?.querySelectorAll('.jump-chip')).toHaveLength(2);
-    const chips = [...el().querySelectorAll('.jump-chip')];
-    expect(chips.map((chip) => chip.textContent?.trim())).toEqual(['Saber', 'Rider']);
-    expect(chips.map((chip) => chip.getAttribute('aria-label'))).toEqual([
+    const jumps = [...(row?.querySelectorAll('.jump-button') ?? [])];
+    expect(jumps).toHaveLength(2);
+    // Real Material stroked buttons (the user-endorsed "two buttons" fix),
+    // titled per entry with the trailing jump glyph.
+    expect(jumps.every((jump) => jump.classList.contains('mat-mdc-outlined-button'))).toBe(true);
+    expect(jumps[0]?.textContent).toContain('Saber');
+    expect(jumps[1]?.textContent).toContain('Rider');
+    expect(
+      jumps.every((jump) => jump.querySelector('mat-icon')?.textContent === 'north_east'),
+    ).toBe(true);
+    expect(jumps.map((jump) => jump.getAttribute('aria-label'))).toEqual([
       'Go to entry Saber',
       'Go to entry Rider',
     ]);
-    // No single trailing Go-to: the named chips carry the jumps.
+    // The decorative metadata chips stay out of multi-entry rows, and no
+    // single trailing Go-to: the named buttons carry the jumps.
+    expect(row?.querySelector('.entry-chip')).toBeNull();
     expect(el().querySelector('.goto-button')).toBeNull();
 
-    chips[1]?.dispatchEvent(new Event('click'));
+    jumps[1]?.dispatchEvent(new Event('click'));
     expect(workspace.activeTabId()).toBe(1);
     expect(closeSpy).toHaveBeenCalledTimes(1);
   });
@@ -176,7 +200,8 @@ describe('LinterDialog', () => {
     );
     // Zero-entry rows offer nothing to jump into — but per §3.6.5.3 every row
     // keeps the not-an-issue affordance.
-    expect(row?.querySelector('.jump-chip')).toBeNull();
+    expect(row?.querySelector('.jump-button')).toBeNull();
+    expect(row?.querySelector('.entry-chip')).toBeNull();
     expect(row?.querySelector('.goto-button')).toBeNull();
     expect(row?.querySelector('.not-an-issue-button')).toBeTruthy();
   });
@@ -199,36 +224,70 @@ describe('LinterDialog', () => {
   it('offers a mute chip per rule in the unfiltered pass and toggles them', async () => {
     await createDialog(severityFixture());
 
-    const chips = () => [...el().querySelectorAll('.mute-chip')];
-    expect(chips().map((chip) => chip.textContent?.trim())).toEqual([
-      'Invalid regex',
-      'Never activatable',
-      'Selective without secondary',
-    ]);
+    const labels = () => muteChips().map((entry) => entry.native.textContent?.trim());
+    expect(labels()).toEqual(['Invalid regex', 'Never activatable', 'Selective without secondary']);
+    // The entry editor's chip semantics: selected (filled + check) = on.
+    expect(muteChips().map((entry) => entry.chip.selected)).toEqual([true, true, true]);
 
-    // Mute the keyless check: its rows vanish, its whole (empty) section
-    // stops rendering, and the chip stays visible styled muted.
-    const keylessChip = chips().find((chip) => chip.textContent?.includes('Never activatable'));
-    assert(keylessChip);
-    keylessChip.dispatchEvent(new Event('click'));
+    // Deselect the keyless check: its rows vanish, its whole (empty) section
+    // stops rendering, and the chip stays visible deselected (muted).
+    const keyless = muteChips().find((entry) => entry.native.textContent?.includes('Never activatable'));
+    assert(keyless);
+    keyless.chip.toggleSelected(true);
     fixture.detectChanges();
 
     expect(
       [...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim()),
     ).toEqual(['Errors (1)', 'Notes (1)']);
     expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual(['never-activatable']);
-    const mutedChip = chips().find((chip) => chip.textContent?.includes('Never activatable'));
-    assert(mutedChip);
-    expect(mutedChip.classList.contains('muted')).toBe(true);
-    expect(mutedChip.getAttribute('aria-pressed')).toBe('true');
+    const muted = muteChips().find((entry) => entry.native.textContent?.includes('Never activatable'));
+    assert(muted);
+    // Muted = NOT selected — the editor chip's outlined/deselected state.
+    // (aria-selected lives on the chip's inner action button, role="option".)
+    expect(muted.chip.selected).toBe(false);
+    expect(muted.native.querySelector('button[role="option"]')?.getAttribute('aria-selected')).toBe(
+      'false',
+    );
 
-    // Click again: the rule re-enables and its section returns.
-    mutedChip.dispatchEvent(new Event('click'));
+    // Select again: the rule re-enables and its section returns.
+    muted.chip.toggleSelected(true);
     fixture.detectChanges();
     expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual([]);
     expect(
       [...el().querySelectorAll('.section-heading')].map((h) => h.textContent?.trim()),
     ).toEqual(['Errors (1)', 'Warnings (1)', 'Notes (1)']);
+  });
+
+  it('keeps the mute row when every rule is muted and the filtered pass is empty', async () => {
+    await createDialog(severityFixture());
+
+    // Mute every rule the unfiltered pass offers.
+    for (const entry of muteChips()) {
+      entry.chip.toggleSelected(true);
+    }
+    fixture.detectChanges();
+
+    // The filtered diagnostics are gone…
+    expect(el().querySelectorAll('.diagnostic-row')).toHaveLength(0);
+    expect(el().querySelector('.empty-state')).toBeTruthy();
+    expect(el().querySelector('.severity-section')).toBeNull();
+    // …but the chip row stays above it: the all-muted state keeps its
+    // recovery path (issue-2 regression, 2026-09-19).
+    const allMuted = muteChips();
+    expect(allMuted).toHaveLength(3);
+    expect(allMuted.every((entry) => !entry.chip.selected)).toBe(true);
+
+    // And a chip is still selectable: unmuting one brings its rows back.
+    const first = allMuted[0];
+    assert(first);
+    first.chip.toggleSelected(true);
+    fixture.detectChanges();
+    expect(el().querySelectorAll('.diagnostic-row')).toHaveLength(1);
+    expect(el().querySelector('.empty-state')).toBeNull();
+    expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual([
+      'never-activatable',
+      'selective-without-secondary',
+    ]);
   });
 
   it('ignores a row through the not-an-issue affordance and offers Undo all', async () => {
@@ -274,7 +333,7 @@ describe('LinterDialog', () => {
     assert(row);
     expect(row.injector.get(MatTooltip).message).toBe('Not an issue');
 
-    const chip = fixture.debugElement.query(By.css('.mute-chip'));
+    const chip = fixture.debugElement.query(By.css('.mute-row mat-chip-option'));
     assert(chip);
     expect(chip.injector.get(MatTooltip).message).toBe('Mute this check');
   });

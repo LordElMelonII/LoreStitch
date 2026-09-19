@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { MatChipSelectionChange } from '@angular/material/chips';
 import {
   CharacterBookEntry,
   LintPrefs,
@@ -11,6 +12,11 @@ import { LinterState } from './linter-state';
 /** Builds an entry with sensible defaults for linter tests. */
 function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
   return { ...createEmptyEntry(id), ...overrides };
+}
+
+/** A user-initiated chip selection change, as the pane's mute chips emit. */
+function chipChange(selected: boolean, isUserInput = true): MatChipSelectionChange {
+  return { isUserInput, selected } as MatChipSelectionChange;
 }
 
 function projectOf(entries: CharacterBookEntry[], lintPrefs?: LintPrefs): ProjectWorkspace {
@@ -157,7 +163,7 @@ describe('LinterState', () => {
     const target = state.diagnostics()[0];
     assert(target);
     state.ignoreDiagnostic(target);
-    state.toggleMutedRule('recursion-cycle');
+    state.setRuleMuted('recursion-cycle', chipChange(false));
 
     state.undoAllIgnored();
 
@@ -184,21 +190,38 @@ describe('LinterState', () => {
     });
   });
 
-  it('toggleMutedRule adds and removes a rule in mutedRules', () => {
+  it('setRuleMuted maps a user chip selection onto mutedRules', () => {
     workspace.activeProject.set(projectOf(severityFixture()));
 
-    state.toggleMutedRule('never-activatable');
+    // Deselected chip = muted.
+    state.setRuleMuted('never-activatable', chipChange(false));
     expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual(['never-activatable']);
     expect(state.mutedRules().has('never-activatable')).toBe(true);
     expect(state.diagnostics().map((d) => d.rule)).not.toContain('never-activatable');
 
-    state.toggleMutedRule('never-activatable');
+    // Re-selected chip = the check runs again.
+    state.setRuleMuted('never-activatable', chipChange(true));
     // Empty sides stay as empty arrays: the prefs shape is stable once created.
     expect(workspace.activeProject()?.lintPrefs).toEqual({
       ignoredSignatures: [],
       mutedRules: [],
     });
     expect(state.diagnostics().map((d) => d.rule)).toContain('never-activatable');
+  });
+
+  it('setRuleMuted writes nothing when the chip state already matches or is not user input', () => {
+    workspace.activeProject.set(projectOf(severityFixture()));
+    state.setRuleMuted('never-activatable', chipChange(false));
+    const projectAfterMute = workspace.activeProject();
+
+    // Requesting the already-stored state is a no-op: no write.
+    state.setRuleMuted('never-activatable', chipChange(false));
+    expect(workspace.activeProject()).toBe(projectAfterMute);
+
+    // The programmatic `[selected]` re-sync (isUserInput false) never writes —
+    // the entry editor's `setChipFlag` guard.
+    state.setRuleMuted('never-activatable', chipChange(true, false));
+    expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual(['never-activatable']);
   });
 
   it('leaves the workspace untouched when mutators fire without a project', () => {
@@ -210,7 +233,7 @@ describe('LinterState', () => {
     });
     state.undoAllIgnored();
     state.unmuteAll();
-    state.toggleMutedRule('recursion-cycle');
+    state.setRuleMuted('recursion-cycle', chipChange(false));
 
     expect(workspace.activeProject()).toBeNull();
   });

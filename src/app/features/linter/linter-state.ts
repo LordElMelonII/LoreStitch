@@ -1,4 +1,5 @@
 import { Service, computed, inject } from '@angular/core';
+import { MatChipSelectionChange } from '@angular/material/chips';
 import {
   LintDiagnostic,
   LintRuleId,
@@ -114,13 +115,26 @@ export class LinterState {
     );
   }
 
-  /** Mutes a rule (its checks stop running) or re-enables it, in `mutedRules`. */
-  toggleMutedRule(ruleId: LintRuleId): void {
+  /**
+   * Chip-driven mute switch (§3.6.5.3, the entry editor's filter-chip
+   * contract): selected = the check runs, deselected = muted. Guarded on
+   * `isUserInput` exactly like the editor's `EntryUpdatesService.setChipFlag`,
+   * so the programmatic `[selected]` re-sync after a prefs write — which
+   * emits `selectionChange` with `isUserInput: false` — can never clobber
+   * the stored sets.
+   */
+  setRuleMuted(ruleId: LintRuleId, change: MatChipSelectionChange): void {
+    if (!change.isUserInput) {
+      return;
+    }
     this.updatePrefs((prefs) => {
       const muted = prefs?.mutedRules ?? [];
+      if (change.selected === !muted.includes(ruleId)) {
+        return undefined; // already in the requested state — no write
+      }
       return {
         ignoredSignatures: prefs?.ignoredSignatures ?? [],
-        mutedRules: muted.includes(ruleId)
+        mutedRules: change.selected
           ? muted.filter((rule) => rule !== ruleId)
           : [...muted, ruleId],
       };

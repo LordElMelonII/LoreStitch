@@ -66,30 +66,18 @@
   padding: 4px 24px 24px;
 }
 
-// Mute chips (§3.6.5.3): a config row above the sections. Unmuted chips read
-// as tonal "this check is on"; muted ones go quiet but stay clickable.
+// Mute chips (§3.6.5.3, amended 2026-09-19): the entry editor's
+// `mat-chip-listbox`/`mat-chip-option` filter pattern, mirrored so both
+// surfaces look identical — selected (filled + check) reads as "this check is
+// on", deselected (outlined) as muted. No component chip styling beyond the
+// wrap: the look comes from the theme exactly like the editor's chips, and
+// the global ≤767px rule raises them to the 48px mobile floor.
 .mute-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   padding: 4px 0 12px;
 }
 
-.mute-chip {
-  min-height: var(--touch-target-min);
-  padding: 4px 14px;
-  border: none;
-  border-radius: var(--mat-sys-corner-small);
-  font: var(--mat-sys-label-large);
-  color: var(--mat-sys-on-secondary-container);
-  background: var(--mat-sys-secondary-container);
-  cursor: pointer;
-
-  &.muted {
-    color: var(--mat-sys-on-surface-variant);
-    background: transparent;
-    box-shadow: inset 0 0 0 1px var(--mat-sys-outline-variant);
-  }
+.mute-chips {
+  flex-wrap: wrap;
 }
 
 // Severity sections in fixed order; empty ones never render. The accent
@@ -186,13 +174,14 @@
   overflow-wrap: anywhere;
 }
 
-// Multi-entry rows: the chips themselves are the jump buttons (approved R1) —
-// the chip visual raised to the 44px touch floor. These are plain buttons,
-// not `mat-mdc-standard-chip`s, so the global chip rule does not apply.
-.jump-chip {
+// Multi-entry rows (amended 2026-09-19 — "the chips don't look like a
+// clickable item"): one compact stroked button per entry, title + trailing
+// jump glyph, deliberately distinct from the decorative `.entry-chip`
+// metadata. A real `.mat-mdc-button-base`, so the global ≤767px rule raises
+// it to the 48px mobile floor automatically; the 44px desktop floor matches
+// the row's Go-to button.
+.jump-button {
   min-height: var(--touch-target-min);
-  border: none;
-  cursor: pointer;
 }
 
 .row-actions {

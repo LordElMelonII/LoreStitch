@@ -18,31 +18,34 @@
   </header>
 
   <div class="body">
+    <!-- Rule mutes (plan 03 §3.6.5.3, amended 2026-09-19): the entry editor's
+         filter-chip pattern — selected (filled + check) = the check runs,
+         deselected (outlined) = muted. The row renders whenever the
+         unfiltered pass has rules, even when every rule is muted and the
+         filtered diagnostics are empty, so an all-muted book keeps its
+         recovery path; the empty state renders below it. -->
+    @if (muteChips().length > 0) {
+      <div class="mute-row">
+        <mat-chip-listbox class="mute-chips" multiple aria-label="Mute checks">
+          @for (chip of muteChips(); track chip.rule) {
+            <mat-chip-option
+              [selected]="!chip.muted"
+              (selectionChange)="linter.setRuleMuted(chip.rule, $event)"
+              [matTooltip]="chip.muted ? 'Restore this check' : 'Mute this check'"
+            >
+              {{ chip.label }}
+            </mat-chip-option>
+          }
+        </mat-chip-listbox>
+      </div>
+    }
+
     @if (linter.diagnostics().length === 0) {
       <div class="empty-state">
         <mat-icon aria-hidden="true">verified</mat-icon>
         <p>No issues found — lorebook looks healthy.</p>
       </div>
     } @else {
-      <!-- Rule mutes (plan 03 §3.6.5.3): one chip per rule present in the
-           unfiltered pass; muted chips stay visible so they re-enable. -->
-      @if (muteChips().length > 0) {
-        <div class="mute-row" role="group" aria-label="Mute checks">
-          @for (chip of muteChips(); track chip.rule) {
-            <button
-              type="button"
-              class="mute-chip"
-              [class.muted]="chip.muted"
-              [attr.aria-pressed]="chip.muted"
-              (click)="linter.toggleMutedRule(chip.rule)"
-              [matTooltip]="chip.muted ? 'Restore this check' : 'Mute this check'"
-            >
-              {{ chip.label }}
-            </button>
-          }
-        </div>
-      }
-
       @for (section of sections(); track section.severity) {
         <section class="severity-section" [attr.data-severity]="section.severity">
           <h3 class="section-heading">{{ section.heading }} ({{ section.rows.length }})</h3>
@@ -58,17 +61,20 @@
                     <p class="details">{{ row.diagnostic.details }}</p>
                   }
                   @if (row.jumps.length > 0) {
-                    <!-- Multi-entry rows: the chips are the jump buttons —
-                         one named target per entry (approved R1). -->
+                    <!-- Multi-entry rows (amended 2026-09-19): one compact
+                         stroked button per entry — unmistakably interactive,
+                         unlike the decorative metadata chips. -->
                     <div class="chip-row">
                       @for (jump of row.jumps; track jump.entryId) {
                         <button
+                          matButton="outlined"
                           type="button"
-                          class="entry-chip jump-chip"
+                          class="jump-button"
                           (click)="goToEntry(jump.entryId)"
                           [attr.aria-label]="jump.ariaLabel"
                         >
                           {{ jump.title }}
+                          <mat-icon aria-hidden="true">north_east</mat-icon>
                         </button>
                       }
                     </div>

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatButtonModule } from '@angular/material/button';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -48,7 +49,7 @@ interface EntryJump {
  */
 interface DiagnosticRow {
   readonly diagnostic: LintDiagnostic;
-  /** Multi-entry rows: the chips themselves are the jump buttons (R1). */
+  /** Multi-entry rows: one named stroked jump button per entry (amended R1). */
   readonly jumps: readonly EntryJump[];
   /** Single-entry rows: decorative title chip (null on multi/zero rows). */
   readonly singleTitle: string | null;
@@ -64,7 +65,11 @@ interface LintSection {
   readonly rows: readonly DiagnosticRow[];
 }
 
-/** One mute chip (§3.6.5.3): muted chips stay visible so they can re-enable. */
+/**
+ * One mute chip (§3.6.5.3): the entry editor's filter-chip pattern —
+ * selected (filled + check) means the check runs, deselected (outlined)
+ * means muted. Muted chips stay visible so they can be re-enabled.
+ */
 interface MuteChip {
   readonly rule: LintRuleId;
   readonly label: string;
@@ -83,7 +88,7 @@ interface MuteChip {
 @Component({
   selector: 'app-linter-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, MatTooltipModule],
+  imports: [MatButtonModule, MatChipsModule, MatIconModule, MatTooltipModule],
   templateUrl: './linter-dialog.html',
   styleUrl: './linter-dialog.scss',
 })
