@@ -38,6 +38,51 @@ export async function exportWorldInfo(
 }
 
 /**
+ * Creates a project through the welcome screen so the studio shell appears.
+ * The title labels the project only; every spec starts from the same empty book.
+ */
+export async function createProject(page: Page, title: string): Promise<void> {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New project' }).first().click();
+  await page.getByLabel('Project title').fill(title);
+  await page.getByRole('button', { name: 'Create Project' }).click();
+  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
+  await expect(page.locator('.entries-sidenav')).toBeAttached();
+}
+
+/**
+ * Opens the first visible entry (its tab becomes the active editor pane).
+ *
+ * Viewport-aware: below the shell's 768px breakpoint the entries sidenav is
+ * an off-canvas `over` drawer, so it is toggled open before the click and
+ * released again afterwards (the editor renders behind it).
+ */
+export async function openFirstEntry(page: Page): Promise<void> {
+  const viewport = page.viewportSize();
+  const mobile = viewport !== null && viewport.width < 768;
+  const drawerToggle = page.locator('[aria-label="Toggle entries panel"]');
+  if (mobile) {
+    await drawerToggle.click();
+    await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
+  }
+  await page.locator('.entry-item').first().click();
+  await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
+  if (mobile) {
+    // Release the drawer so the editor pane behind it is interactable, and
+    // re-zero the workspace in case the drawer-close focus restore panned it
+    // sideways (see delimiters' phone choreography for the same settle).
+    await drawerToggle.click();
+    await expect(page.locator('.entries-sidenav')).not.toBeInViewport();
+    await page.evaluate(() => {
+      const workspace = document.querySelector('.workspace') as HTMLElement | null;
+      if (workspace) {
+        workspace.scrollLeft = 0;
+      }
+    });
+  }
+}
+
+/**
  * Checks the selection checkboxes of the first two visible entry rows.
  *
  * Viewport-aware: below the shell's 768px breakpoint the entries sidenav is
