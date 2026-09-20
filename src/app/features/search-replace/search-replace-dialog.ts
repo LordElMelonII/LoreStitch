@@ -82,12 +82,7 @@ export class SearchReplaceDialog {
 
   /** The active regex, or null while the settled pattern is invalid/empty. */
   protected readonly pattern = computed<RegExp | null>(() =>
-    compileSearchPattern({
-      query: this.queryDebounced(),
-      regexMode: this.regexMode(),
-      wholeWord: this.wholeWord(),
-      matchCase: this.matchCase(),
-    }),
+    this.compileForQuery(this.queryDebounced()),
   );
 
   protected readonly patternError = computed(() => {
@@ -100,15 +95,22 @@ export class SearchReplaceDialog {
     // without waiting for the debounce. (Wrapping a pattern in \b(?:…)\b
     // cannot change its validity, so this always agrees with the settled
     // `pattern` above.)
+    return this.compileForQuery(query) === null ? 'Invalid regular expression' : null;
+  });
+
+  /**
+   * One construction site for the compile options, shared by the settled
+   * scan (`pattern`) and the immediate validity check (`patternError`) so
+   * the two can never drift apart.
+   */
+  private compileForQuery(query: string): RegExp | null {
     return compileSearchPattern({
       query,
       regexMode: this.regexMode(),
       wholeWord: this.wholeWord(),
       matchCase: this.matchCase(),
-    }) === null
-      ? 'Invalid regular expression'
-      : null;
-  });
+    });
+  }
 
   protected readonly rows = computed<MatchRow[]>(() => {
     const regex = this.pattern();
