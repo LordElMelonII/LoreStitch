@@ -6,6 +6,7 @@
     #entriesPane
     [mode]="viewport() === 'mobile' ? 'over' : 'side'"
     [opened]="leftOpened()"
+    (opened)="onEntriesDrawerOpened()"
     (closed)="closeLeft()"
   >
     @if (workspace.activeProject()) {
@@ -31,10 +32,11 @@
     }
   </mat-sidenav-content>
 
-  <!-- (opened): when this drawer is opened from the mobile bottom bar, its
-       trigger unstamps itself and focus falls to <body>, killing the pane's
-       Escape-to-close handling — the shell re-focuses the pane in that case
-       (App.onHistoryDrawerOpened). -->
+  <!-- (opened): on phones the shell focuses the drawer pane once it has
+       opened (App's pane-focus policy, bound on both drawers) — the docked
+       bar goes inert under the open drawer and releases focus to <body>, so
+       the pane must take it for Escape-to-close to work. Tablet/desktop
+       triggers keep their focus; the policy is phone-only. -->
   <mat-sidenav
     class="history-sidenav"
     #historyPane
@@ -63,9 +65,12 @@
      projects mat-sidenav/mat-sidenav-content children — but as a normal flex
      child of app-root, NOT fixed-positioned: the workspace shrinks above it,
      so it can never overlap editor content (the bug that retired the FAB;
-     see mobile-bottom-bar.scss for the surface rationale). -->
+     see mobile-bottom-bar.scss for the surface rationale). The bar stays
+     docked while drawers and dialogs are open: [barState] lowers it to
+     `backgrounded` under a drawer (it sits below the sidenav container, so
+     it synthesizes the scrim look itself), and full-viewport CDK overlays
+     simply cover it. -->
 <app-mobile-bottom-bar
-  [overlayOpen]="anyOverlayOpen()"
-  [drawerOpen]="anyDrawerOpen()"
+  [barState]="barState()"
   (action)="runBarAction($event)"
 />

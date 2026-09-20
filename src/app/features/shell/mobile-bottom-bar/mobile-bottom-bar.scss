@@ -12,6 +12,9 @@
 :host {
   flex: none;
   display: block;
+  // Anchor for the backgrounded veil (generated content on the host, below)
+  // — relative with no offsets changes nothing geometrically.
+  position: relative;
 
   // M3 bottom app bar surface: the `surface-container` tint marks the bar as
   // an app surface distinct from the `surface` editor beneath it — tonal
@@ -27,12 +30,57 @@
   padding-block-end: env(safe-area-inset-bottom, 0px);
 }
 
-// Hidden while a modal pane or drawer covers the app (or on non-phone
-// viewports / with no project): the template unstamps the content entirely
-// (see the @if in mobile-bottom-bar.html) and the host drops out of flow,
-// so the workspace reclaims the row.
+// Out of flow only on non-phone viewports or with no project — the two
+// cases where the bar has nothing to act on. Drawers and dialogs no longer
+// hide it: the bar stays docked and changes state instead (see the veil
+// rules just below).
 :host(.bar-hidden) {
   display: none;
+}
+
+// ---------------------------------------------------------------------------
+// Backgrounded veil: while an over-mode drawer is open the strip must read
+// as background, but it cannot inherit the drawer's scrim — the bar sits
+// below the sidenav container, whose overflow clips the drawer and its
+// backdrop to the workspace above. So the look is synthesized with the same
+// recipe Material's own `.mat-drawer-backdrop.mat-drawer-shown` uses. The
+// veil is generated content on the host (not on .bar) so the safe-area
+// padding dims with the row — a bright strip at the home indicator would
+// betray the seam.
+// ---------------------------------------------------------------------------
+
+// The veil element is always present but transparent in `normal` (and the
+// not-yet-emitted `batch`), so the scrim fades in and out on the drawer's
+// own 400ms backdrop curve instead of snapping.
+:host::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: transparent;
+  pointer-events: none;
+  transition: background-color 400ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+:host(.bar-backgrounded) {
+  // The inert content already blocks interaction and focus; pointer-events
+  // is the belt-and-braces for engines without inert, and stops hover
+  // state layers from lighting up under the veil.
+  pointer-events: none;
+}
+
+:host(.bar-backgrounded)::after {
+  background-color: var(
+    --mat-sidenav-scrim-color,
+    color-mix(in srgb, var(--mat-sys-neutral-variant20) 40%, transparent)
+  );
+}
+
+// Forced-colors parity with Material's backdrop, which halves its own
+// opacity there.
+@media (forced-colors: active) {
+  :host(.bar-backgrounded)::after {
+    opacity: 0.5;
+  }
 }
 
 .bar {
@@ -121,7 +169,8 @@
 // ---------------------------------------------------------------------------
 
 @media (prefers-reduced-motion: reduce) {
-  .bar-item::after {
+  .bar-item::after,
+  :host::after {
     transition-duration: 1ms;
   }
 }

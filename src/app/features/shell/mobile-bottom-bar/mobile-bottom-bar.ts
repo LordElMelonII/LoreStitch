@@ -25,15 +25,32 @@ import { ProjectActionsService } from '../project-actions.service';
 export type MobileBarAction = 'new-entry' | 'search-replace' | 'batch' | 'history';
 
 /**
+ * What the phone strip is doing beneath whatever else is open. `batch` is
+ * the entry-list selection swap (Task 06 P2): it ships in the union from
+ * the start so the shell/bar contract does not change shape twice — P1
+ * never receives it, and the bar renders nothing for it yet.
+ */
+export type BarState = 'normal' | 'backgrounded' | 'batch';
+
+/**
  * M3 bottom action bar for phones: the quick actions that desktop reaches
  * through topbar buttons and keyboard shortcuts, docked to the viewport's
  * bottom edge as a normal flex child of the shell — never fixed-positioned,
  * so the workspace shrinks above it and nothing can ever overlap editor
  * content (the overlap bug that retired the mobile FAB).
  *
- * Presentational by design: it renders, hides and emits `action`; the shell
- * (`App`) routes each action to the owning component or service and feeds
- * drawer and overlay state back through inputs.
+ * Always docked while a phone session has a project: tearing the 64px row
+ * down and rebuilding it on every drawer/dialog open read as a stutter, so
+ * nothing unstamps the bar anymore. What covers it differs by kind — an
+ * over-mode drawer's scrim stops at the sidenav container above, so the
+ * shell lowers the bar to `backgrounded` and the bar synthesizes the scrim
+ * look itself (veil + inert content); full-viewport CDK overlays (dialogs,
+ * sheets, menus) simply cover and dim the strip, so they carry no bar-side
+ * state at all.
+ *
+ * Presentational by design: it renders its state and emits `action`; the
+ * shell (`App`) routes each action to the owning component or service and
+ * computes the `barState` it feeds back.
  */
 @Component({
   selector: 'app-mobile-bottom-bar',
@@ -43,6 +60,7 @@ export type MobileBarAction = 'new-entry' | 'search-replace' | 'batch' | 'histor
   styleUrl: './mobile-bottom-bar.scss',
   host: {
     '[class.bar-hidden]': '!visible()',
+    '[class.bar-backgrounded]': 'backgrounded()',
   },
 })
 export class MobileBottomBar {
@@ -51,31 +69,24 @@ export class MobileBottomBar {
   protected readonly actions = inject(ProjectActionsService);
 
   /**
-   * True while any dialog or bottom sheet covers the app. The bar hides for
-   * as long as a modal pane is up (it re-appears when all close), so it
-   * never sits beneath a scrim or fights a sheet for the bottom edge.
+   * The strip's state, owned by the shell (`App.barState`): `normal` on the
+   * idle phone surface, `backgrounded` while a drawer overlays the editor
+   * (veiled + inert — the scrim look it cannot inherit), `batch` once the
+   * P2 selection swap lands (fully interactive).
    */
-  readonly overlayOpen = input(false);
-
-  /**
-   * True while either sidenav drawer is open. Unlike overlays, an over-mode
-   * drawer's scrim cannot cover the bar (it lives outside the sidenav
-   * container), so the bar hides itself instead of showing UI that looks
-   * reachable but is not.
-   */
-  readonly drawerOpen = input(false);
+  readonly barState = input<BarState>('normal');
 
   /** Emits the triggered quick action; the shell routes it to its owner. */
   readonly action = output<MobileBarAction>();
 
-  /** Rendered only on phones with an open project and nothing covering it. */
+  /** Rendered only on phones with an open project — never unmounted by a
+   * drawer or dialog (the always-docked contract; see the class doc). */
   protected readonly visible = computed(
-    () =>
-      this.layout.isMobile() &&
-      this.workspace.activeProject() !== null &&
-      !this.overlayOpen() &&
-      !this.drawerOpen(),
+    () => this.layout.isMobile() && this.workspace.activeProject() !== null,
   );
+
+  /** Whether the strip is scrim-veiled and inert beneath an open drawer. */
+  protected readonly backgrounded = computed(() => this.barState() === 'backgrounded');
 
   protected select(action: MobileBarAction): void {
     this.action.emit(action);

@@ -253,7 +253,7 @@ describe('App', () => {
     expect(document.activeElement).toBe(document.body);
   });
 
-  it('focuses the history drawer opened from the bottom bar so Escape can close it', async () => {
+  it('focuses the history drawer pane on phones so Escape can close it', async () => {
     // Boot straight into the phone class instead of resizing down from
     // desktop: a mid-test resize races the sidenav's pending close
     // animation-end against the re-open click (the same stale-transitionend
@@ -271,9 +271,11 @@ describe('App', () => {
     const bar = host.querySelector('app-mobile-bottom-bar');
     assert(bar);
     expect(bar.classList.contains('bar-hidden')).toBe(false);
-    // The bug's precondition: nothing holds focus. The bar item that opens
-    // the drawer unstamps itself mid-click; real browsers land on <body>
-    // via the focus-fixup rule, and a synthetic click never focuses at all.
+    // The bar stays docked under the open drawer (backgrounded + inert), so
+    // the tap that opens it leaves focus nowhere useful: a synthetic click
+    // never focuses, and on a real phone inerting the focused bar item
+    // releases focus to <body>. Either way the shell's pane-focus policy is
+    // what must hand focus to the pane.
     expect(document.activeElement).toBe(document.body);
 
     const pane = host.querySelector<HTMLElement>('.history-sidenav');
@@ -291,13 +293,13 @@ describe('App', () => {
     // assertion, not a bare timeout.
     await vi.waitFor(() => expect(historyNav.opened).toBe(true), { timeout: 4000 });
 
-    // Focus now sits inside the drawer pane: the shell focuses the pane
-    // itself when the trigger vanished (Material stamps tabindex="-1" on
-    // over-mode drawers), and any subsequent Material focus move
-    // (first-tabbable) stays within the pane too. Asserting the end state
-    // inside the pane is the honest check — pinning the exact element would
-    // depend on whether Material's deferred focus move finds tabbable
-    // content.
+    // The phone pane-focus policy, deterministically for every open path:
+    // once the drawer has opened, the shell focuses the pane itself
+    // (Material stamps tabindex="-1" on over-mode drawers), and any
+    // subsequent Material focus move (first-tabbable) stays within the pane
+    // too. Asserting the end state inside the pane is the honest check —
+    // pinning the exact element would depend on whether Material's deferred
+    // focus move finds tabbable content.
     await vi.waitFor(() => expect(pane.contains(document.activeElement)).toBe(true), {
       timeout: 4000,
     });
@@ -310,14 +312,50 @@ describe('App', () => {
     await vi.waitFor(() => expect(app['rightOpened']()).toBe(false), { timeout: 4000 });
   });
 
+  it('focuses the entries drawer pane on phones so Escape can close it', async () => {
+    // Same phone pane-focus policy, driven from the other open path: the
+    // topbar hamburger persists across the toggle (nothing vanishes
+    // mid-click), proving the policy is unconditional on phones rather
+    // than a patch for a disappearing trigger.
+    viewport.setViewport('mobile');
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const host = fixture.nativeElement as HTMLElement;
+    const hamburger = host.querySelector<HTMLButtonElement>('[aria-label="Toggle entries panel"]');
+    assert(hamburger);
+    hamburger.dispatchEvent(new Event('click'));
+    expect(app['leftOpened']()).toBe(true);
+
+    const entriesNav = fixture.debugElement.query(By.css('.entries-sidenav'))
+      ?.componentInstance as MatSidenav;
+    assert(entriesNav);
+    await vi.waitFor(() => expect(entriesNav.opened).toBe(true), { timeout: 4000 });
+
+    const pane = host.querySelector<HTMLElement>('.entries-sidenav');
+    assert(pane);
+    await vi.waitFor(() => expect(pane.contains(document.activeElement)).toBe(true), {
+      timeout: 4000,
+    });
+
+    // Escape from inside the pane closes the drawer — the fix for the
+    // hamburger path, which never had working Escape on phones.
+    const escape = new KeyboardEvent('keydown');
+    Object.defineProperty(escape, 'keyCode', { value: ESCAPE });
+    (document.activeElement as HTMLElement).dispatchEvent(escape);
+    await vi.waitFor(() => expect(app['leftOpened']()).toBe(false), { timeout: 4000 });
+  });
+
   it('leaves focus on a persistent trigger when a drawer opens from it', async () => {
     await workspace.createProject('Fuyuki');
     const app = await createApp();
     const host = fixture.nativeElement as HTMLElement;
 
     // Desktop steady state: the topbar history toggle holds focus and
-    // persists across the toggle — the shell's (opened) hook must not
-    // disturb it (the body guard only fires when the trigger vanished).
+    // persists across the toggle — the pane-focus policy is phone-only, so
+    // it must not disturb focus here.
     const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Toggle history drawer"]');
     assert(toggle);
     toggle.focus();

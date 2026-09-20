@@ -1,14 +1,22 @@
-<!-- Stamped only while the bar is shown (mobile + project + nothing
-     covering it): hidden state contributes nothing to the DOM, so the
-     History item below can never collide with the topbar's own history
-     button under strict-mode locator resolution (the shell e2e clicks it
-     by aria-label). -->
+<!-- Stamped only while the bar is shown (mobile + project); the hidden
+     state contributes nothing to the DOM, so the History item below can
+     never collide with the topbar's own history button under strict-mode
+     locator resolution (the shell e2e clicks it by aria-label). Drawers and
+     dialogs never unstamp it — they lower it to `backgrounded` (or simply
+     cover it) instead. -->
 @if (visible()) {
   <!-- M3 bottom action bar: five icon-over-label rows, always visible while
        shown (no expanded/collapsed state to manage). Visible labels are short
        (navigation-bar style); buttons that need a longer accessible name
        carry an explicit aria-label. -->
-  <nav class="bar" aria-label="Quick actions">
+  <!-- While a drawer is open the strip goes `backgrounded`: it sits below
+       the sidenav container, so it cannot inherit the drawer's scrim — the
+       host carries the synthesized veil (see the stylesheet) and this
+       content goes inert, removing it from the tab order and the a11y tree
+       (house precedent: the regex-test-panel collapse). Inerting content
+       that holds focus releases focus to <body>, which is why the shell
+       focuses the drawer pane on phones (App's pane-focus policy). -->
+  <nav class="bar" aria-label="Quick actions" [attr.inert]="backgrounded() ? '' : null">
   <button type="button" class="bar-item" (click)="select('new-entry')">
     <mat-icon aria-hidden="true">post_add</mat-icon>
     <span class="bar-label">New entry</span>

@@ -11,17 +11,8 @@ describe('MobileBottomBar', () => {
   let viewport: ReturnType<typeof installMatchMediaStub>;
   let barFixture: ComponentFixture<MobileBottomBar>;
 
-  async function createBar(options?: {
-    overlayOpen?: boolean;
-    drawerOpen?: boolean;
-  }): Promise<MobileBottomBar> {
+  async function createBar(): Promise<MobileBottomBar> {
     barFixture = TestBed.createComponent(MobileBottomBar);
-    if (options?.overlayOpen) {
-      barFixture.componentRef.setInput('overlayOpen', true);
-    }
-    if (options?.drawerOpen) {
-      barFixture.componentRef.setInput('drawerOpen', true);
-    }
     await barFixture.whenStable();
     barFixture.detectChanges();
     return barFixture.componentInstance;
@@ -79,40 +70,47 @@ describe('MobileBottomBar', () => {
     expect(host().classList.contains('bar-hidden')).toBe(false);
   });
 
-  it('hides while the overlay-open input is set and returns when it clears', async () => {
+  it('carries no overlay state — full-viewport dialogs cover the docked bar themselves', async () => {
     await workspace.createProject('Fuyuki');
     await resizeToMobile();
     await createBar();
-    expect(host().classList.contains('bar-hidden')).toBe(false);
 
-    barFixture.componentRef.setInput('overlayOpen', true);
-    await barFixture.whenStable();
-    barFixture.detectChanges();
-    expect(host().classList.contains('bar-hidden')).toBe(true);
-
-    barFixture.componentRef.setInput('overlayOpen', false);
-    await barFixture.whenStable();
-    barFixture.detectChanges();
+    // CDK overlays sit at the full-viewport plane and dim/block the strip on
+    // their own, so the old `overlayOpen` input is gone — no test sets it,
+    // and the bar stays mounted and fully interactive underneath whatever
+    // the overlay's backdrop does visually. This pin is the evidence: the
+    // bar below is in `normal` state by default, with no overlay to answer.
     expect(host().classList.contains('bar-hidden')).toBe(false);
+    expect(host().classList.contains('bar-backgrounded')).toBe(false);
+    const [firstItem] = itemButtons();
+    assert(firstItem);
+    expect(firstItem.closest('nav')?.hasAttribute('inert')).toBe(false);
   });
 
-  it('hides while the drawer-open input is set and returns when it clears', async () => {
+  it('stays stamped and inert while a drawer backgrounds it and returns to normal on close', async () => {
     await workspace.createProject('Fuyuki');
     await resizeToMobile();
     await createBar();
     expect(host().classList.contains('bar-hidden')).toBe(false);
 
-    // An over-mode drawer's scrim cannot cover the bar (it lives outside the
-    // sidenav container), so the bar removes itself while a drawer is open.
-    barFixture.componentRef.setInput('drawerOpen', true);
+    // A drawer's scrim cannot reach the bar (it lives below the sidenav
+    // container), so the shell lowers the bar to `backgrounded` instead of
+    // unstamping it: veil class on the host, inert content, host still in
+    // flow — the row is never torn down mid-interaction.
+    barFixture.componentRef.setInput('barState', 'backgrounded');
     await barFixture.whenStable();
     barFixture.detectChanges();
-    expect(host().classList.contains('bar-hidden')).toBe(true);
-
-    barFixture.componentRef.setInput('drawerOpen', false);
-    await barFixture.whenStable();
-    barFixture.detectChanges();
+    const nav = host().querySelector<HTMLElement>('nav.bar');
+    assert(nav);
     expect(host().classList.contains('bar-hidden')).toBe(false);
+    expect(host().classList.contains('bar-backgrounded')).toBe(true);
+    expect(nav.hasAttribute('inert')).toBe(true);
+
+    barFixture.componentRef.setInput('barState', 'normal');
+    await barFixture.whenStable();
+    barFixture.detectChanges();
+    expect(host().classList.contains('bar-backgrounded')).toBe(false);
+    expect(nav.hasAttribute('inert')).toBe(false);
   });
 
   it('renders five icon-over-label items', async () => {

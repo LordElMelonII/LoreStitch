@@ -19,9 +19,9 @@ import { WelcomeScreen } from './features/shell/welcome-screen/welcome-screen';
 import {
   MobileBottomBar,
   MobileBarAction,
+  BarState,
 } from './features/shell/mobile-bottom-bar/mobile-bottom-bar';
 import { LayoutService } from './shared/services/layout.service';
-import { ResponsiveOverlayService } from './shared/services/responsive-overlay.service';
 import { ProjectActionsService } from './features/shell/project-actions.service';
 
 /** Studio shell: top bar, entry sidenav, tabbed editor, commit history drawer. */
@@ -46,7 +46,6 @@ import { ProjectActionsService } from './features/shell/project-actions.service'
 export class App {
   protected readonly workspace = inject(WorkspaceService);
   protected readonly layout = inject(LayoutService);
-  private readonly overlays = inject(ResponsiveOverlayService);
   private readonly actions = inject(ProjectActionsService);
 
   /** Children the shell forwards actions into (search dialog, batch pane). */
@@ -86,8 +85,16 @@ export class App {
   /** Whether either sidenav drawer overlays the editor right now. */
   protected readonly anyDrawerOpen = computed(() => this.leftOpened() || this.rightOpened());
 
-  /** Whether any dialog or bottom sheet covers the app right now. */
-  protected readonly anyOverlayOpen = this.overlays.anyOverlayOpen;
+  /**
+   * The bottom bar's state: `backgrounded` while either drawer overlays the
+   * editor (the docked bar veils and inerts itself), `normal` otherwise.
+   * Full-viewport CDK overlays need no member here — they cover the strip
+   * themselves. Task 06 P2 will extend this with the `batch` case once the
+   * entries drawer owns a selection; do not pre-wire selection here.
+   */
+  protected readonly barState = computed<BarState>(() =>
+    this.anyDrawerOpen() ? 'backgrounded' : 'normal',
+  );
 
   constructor() {
     // Re-apply the per-class defaults when the window class changes. User
@@ -177,29 +184,39 @@ export class App {
   }
 
   /**
-   * Called from the history drawer's `(opened)` event — after its open
-   * transition, when Material has already attempted its own focus move.
+   * Phone pane-focus policy, bound to both drawers' `(opened)` events:
+   * when an over-mode drawer finishes opening on a phone, the shell
+   * focuses its pane element (Material stamps tabindex="-1" on it).
    *
-   * The mobile bottom bar unstamps itself while a drawer is open (the
-   * `drawerOpen` input), so the History item that opened this drawer
-   * vanishes mid-click and focus falls to `<body>` (the HTML focus-fixup
-   * rule). From there the pane's Escape handling — a keydown listener on
-   * the pane element — never fires: a phone user had to backdrop-tap to
-   * close, and screen readers never announced the drawer. Focus the pane
-   * (Material stamps tabindex="-1" on over-mode drawers itself) when — and
-   * only when — nothing better holds focus: persistent triggers keep their
-   * focus, and desktop `side` mode's no-autofocus behavior is untouched by
-   * the body guard. The entries drawer has no disappearing trigger (its
-   * hamburger persists), so it needs no matching hook.
+   * Why this is a correctness requirement, not polish: the docked bar goes
+   * inert while a drawer is open, and inerting content that holds focus
+   * releases focus to `<body>` — the very tap that opens the drawer hits
+   * this. From `<body>` the pane's Escape handling (a keydown listener on
+   * the pane element) never sees a key, and screen readers never announce
+   * the drawer. Focusing the pane makes Escape-to-close work from every
+   * open path (bar item, topbar hamburger, keyboard) and announces the
+   * pane for AT.
+   *
+   * Guarded to phones so tablet/desktop behavior is untouched: persistent
+   * triggers keep their focus (the desktop persistent-trigger pin), and
+   * `side`-mode drawers have no backdrop semantics to mirror.
    *
    * Implemented here, not in the bar: the bar is presentational by charter
-   * (render, hide, emit) and holds no pane reference — the shell owns the
+   * (render, emit) and holds no pane reference — the shell owns the
    * drawers, so it owns their focus policy.
    */
-  protected onHistoryDrawerOpened(): void {
-    if (this.document.activeElement === this.document.body) {
-      this.historyPaneEl()?.nativeElement.focus();
+  private focusPaneOnPhone(pane: ElementRef<HTMLElement> | undefined): void {
+    if (this.layout.isMobile()) {
+      pane?.nativeElement.focus();
     }
+  }
+
+  protected onEntriesDrawerOpened(): void {
+    this.focusPaneOnPhone(this.entriesPaneEl());
+  }
+
+  protected onHistoryDrawerOpened(): void {
+    this.focusPaneOnPhone(this.historyPaneEl());
   }
 
   /**
@@ -222,7 +239,8 @@ export class App {
         void this.entryList()?.openBatchOperations();
         break;
       case 'history':
-        // Focus handoff for the trigger that vanishes mid-click happens in
+        // The bar item stays docked under the drawer it opens (backgrounded
+        // + inert); the phone focus handoff for the pane lives in
         // `onHistoryDrawerOpened`, once the drawer has actually opened.
         this.toggleRight();
         break;
