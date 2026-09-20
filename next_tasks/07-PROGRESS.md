@@ -89,3 +89,32 @@ filter (`entry-list.ts/.html` + spec migrations) and the S&R dialog
 
 **Next:** P3 (ts-reviewer) — typing/signal-purity review + lint gate +
 single-pass scan decision.
+
+## Phase 3 — Review (2026-09-20, ts-reviewer)
+
+- Commits: `3fbc944 fix(shared): make debouncedSignal flush apply the source's
+  current value` (+2 debounce pins + entry-list sync-reveal pin),
+  `aba0341 refactor(search): share the compile options between pattern and
+  patternError` (drift-risk dedup), `2d9108b style(search): restore
+  no-results indentation in the dialog template`.
+- **Bug found & fixed**: P2's append-reveal `flush()` was a no-op — flush only
+  applied an already-armed pending value, but the debounce effect runs
+  asynchronously, so a change made inside another effect's body is never
+  pending yet; the reveal scroll silently regressed vs pre-task behavior.
+  `flush()` now applies the source's CURRENT value (untracked read),
+  superseding stale pending ones; the queued effect run early-returns on
+  `Object.is`. No double-fire, no resurrected timers.
+- Waives: `Object.assign(mirror, {flush})` construction confirmed cleanest
+  (zero assertions, writable set unreachable through the declared type);
+  `EntryListItem.search` readonly-vs-siblings (not worth churn).
+- **§3.3 stretch DECISION: REJECTED — debounce-only ships.** Building
+  previews from a `matchAll()` sweep means hand-reimplementing GetSubstitution
+  (`$$`, `$&`, `$\``, `$'`, `$1`–`$n` >9-group disambiguation, `$<name>`,
+  zero-width advancement); `rows.next*` feeds `apply()` verbatim, so any
+  divergence is silent lorebook corruption. Preview and write sharing the
+  same `.replace()` closure is the strongest equivalence guarantee.
+- Gates: `npm run lint` **clean**; `CI=true npm test -- --watch=false`
+  **green** after refactors (54 files / 1012 tests, thresholds met).
+
+**Next:** P4 (qa-auditor) — new light e2e (sidebar filter + S&R), full
+three-project suite, manual perf trace in the phase report.
