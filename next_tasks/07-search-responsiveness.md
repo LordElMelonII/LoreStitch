@@ -7,7 +7,9 @@
 > **Type**: Performance fix (no behavior/byte changes to search results)
 > **Suggested agents**: `core-engine` (pure helpers) → `ui-specialist` (wiring) →
 > `ts-reviewer` → `qa-auditor`
-> **Status**: 🟢 Planned — no implementation started (grounded against `develop` @ `2468de3`)
+> **Status**: 🟡 In progress — P1 phase (re-grounded against `develop` @ `c05592a`
+> on 2026-09-20, no reference drift — Task 06's gate-blocked phases did not touch
+> this task's files)
 
 ---
 
