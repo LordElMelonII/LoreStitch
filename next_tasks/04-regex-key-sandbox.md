@@ -153,3 +153,167 @@ Suggested phase commits: `feat(core): classify ST keys and return match ranges` 
 4. **Chip visual density**: error/accent affordances must not break the existing chip-grid layout on mobile — covered by the mobile E2E pass and the §3.5 comparison.
 5. **Branch coverage**: the new pure modules lift coverage, but any spec pruning during P4/P5 must diff per-file coverage against the phase-start baseline (AGENTS.md: global thresholds stay green while a touched file drops).
 6. **Linter copy divergence**: the landed linter says invalid regex keys are "silently dropped"; this task's accurate copy is "treated as plain text" (world-info.js falls through to plaintext). Two phrasings for one defect class is a smell, but the linter's messages are pinned by `linter.spec.ts` + `e2e/linter.spec.ts` — aligning them is a contract change requiring a user checkpoint. Default: leave the landed copy untouched and note the follow-up; ask the user at P2a approval (one line, they're already reviewing copy then).
+   **Resolved at P2a (2026-09-20)**: the premise is stale — the landed copy at `linter.ts:361` already reads *"…not a valid regex — SillyTavern will not treat it as a regex."* (accurate; pinned by e2e `hasText: 'not a valid regex'`). No contract change needed; the sandbox's "treated as plain text" phrasing complements it by design (see §3.6 §8).
+
+---
+
+### 3.6 Approved design (P2a spec — recorded 2026-09-20)
+
+> **Status**: recorded as the design P2b/P3 implement. The design-gate question was posted to the user with the baseline and this full spec; it closed on the **recommended default** (this text, with §7's decided tone mapping) after no response in session. Every decision below sits within the latitude §3.2/§3.3 grant P2a ("final treatment is P2a's call within M3 tokens"); the P3 after-set comparison is the re-review point for any of these visual calls.
+> Baseline evidence: `__screenshots__/04-regex-sandbox/before/` (gitignored; double-underscore dir follows the `__screenshots__/linter/` capture precedent) — 6 PNGs captured 2026-09-20 against `feature/04-regex-sandbox` @ `4bb1d5b` (P1 landed) under the Task 03 §3.6.6 pinned conditions (light theme, FATE fixture via the real import path, 1280×800 / 1024×768 / 390×844, chromium, deviceScaleFactor 1, en-US / UTC). Capture script: `__screenshots__/04-regex-sandbox/capture.mjs` (adapted from `__screenshots__/linter/capture.mjs`; `<before|after>` argument preserved so P3 re-runs it unchanged for the after-set).
+
+#### 1. Overview
+
+The entry editor's Keys section gains two additive layers, one per §3.2/§3.3 of plan 04: every key chip classifies itself live via P1's `classifyStKey` (`src/app/core/models/st-regex.ts`) — valid regex keys get a quiet accent + tooltip, invalid ones get the linter's error vocabulary + tooltip, plain keys are pixel-untouched — and a collapsible **Test keys** playground mounts below the Secondary Logic row, where a sample text (≤5,000 chars, component-local, never workspace state) drives per-key match rows and a read-only highlighted preview, honoring the sibling sections' `case_sensitive` chip and `match_whole_words` tri-state through a panel `computed` over `findStKeyMatches` (`src/app/core/models/st-key-match.ts`). No writes: chip add/remove/edit still funnel through `EntryUpdatesService.addKey`/`setKeys` untouched; the sandbox is presentation-only.
+
+#### 2. Exemplar map (every new control → the surface it reuses)
+
+| New control | In-app exemplar (concrete) | What carries over |
+|---|---|---|
+| Collapse toggle | `EntryOptionsAccordion` expand toggle (`src/app/features/entry-editor/entry-options-accordion/entry-options-accordion.html:66-81`) | `matIconButton` + `[attr.aria-expanded]` + `[attr.aria-controls]` on a stable id + `[inert]` content wrapper when closed + `expand_more`/`expand_less` glyph + `matTooltip`. **No `MatExpansionModule`** (verified absent from `src/`). |
+| Section header (science icon + "Test keys") | The panel sections' `.section-title` row (`_shared.scss`) + the linter header's icon idiom (`linter-dialog.html:3` — `aria-hidden` icon in `--mat-sys-on-surface-variant`) | Icon is decorative; the text carries the name. |
+| Regex chip accent | The chip **leading-icon slot** the selected filter chips already render (`entry-activation.html` Case Sensitive / `linter-dialog.html` mute chips — selected = filled + leading check). Counter-evidence that the accent must NOT be a tonal fill: `entry-list.scss:133` (`.active` row) and the selected filter chips themselves use `secondary-container` for *selection* | Small `functions` glyph (Σ), `aria-hidden`, `--mat-sys-secondary`; chip outline/fill/ink otherwise untouched. |
+| Invalid chip | Linter error idiom: `--mat-sys-error` accent (`linter-dialog.scss:88-90`), `error-container`/`on-error-container` tones (plan 03 §3.6.3 approved mapping) | Error-toned outline + fill, trailing `error` glyph (`aria-hidden`), tooltip. `error` ligature already in the font subset (`topbar.html:43`). |
+| Sample-text textarea | The entry editor's own Content field (`entry-content-field.html:1-10`: `appearance="fill"` + `matInput` textarea + `subscriptSizing="dynamic"`) at sample scale; hints as `.chip-hint` captions (`entry-keys.html:110`) | Filled form-field, floating label, caption-under-field. |
+| Match rows | Linter `.diagnostic-row` grid (`linter-dialog.html:54-62`, `linter-dialog.scss:115-131`): 40px `aria-hidden` icon slot + message column — **minus `.row-actions`** (rows are textual, not focusable) | Same grid, same `.details` mono idiom (`linter-dialog.scss:145-153`) for excerpts, same `.entry-chip` decorative chip (`linter-dialog.scss:169-182`) for secondary rows' logic label. |
+| Highlighted preview | Bespoke — no in-app surface renders highlighted user text. Justification (the persona's bespoke-control clause): nearest idioms are the delimiter dialog's read-only preview (`delimiter-dialog.scss:191` already paints preview spans with `secondary-container`) and the linter's tonal vocabulary; the segment render itself is `@for` over plain spans, no `innerHTML` | Tones borrow the established container roles; nothing else on the surface is new. |
+| Icons | `science` (header), `check_circle` (matched), `remove` (not-matched) are **NEW ligatures** — not in the current woff2 subset; `error`, `cancel`, `expand_more`/`expand_less` already in use (plan §2 verified). P3: write row icons as literal `<mat-icon>` ligatures inside `@switch` branches so `scripts/refresh-icons.mjs`'s scan picks them up (bound `{{ }}` names only land via `DYNAMIC_ICONS`), then `npm run icons:refresh` + stage the regenerated woff2 with the P3 commit. |
+
+#### 3. Chip treatments (plan §3.2)
+
+`keyStates = computed(...)` in `entry-keys.ts` maps every primary/secondary key to `{ key, cls: StKeyClass, tooltip }` via `classifyStKey` + `parseStRegex` (both from `core/models/st-regex.ts`); the template binds one host class per chip (`key-regex` / `key-invalid`) and the tooltip string. Recomputes live on add/remove/in-place edit through the `entry` input signal. Writes are untouched: `addKey` trimming/dedupe and `setKeys` behavior stay byte-identical (no contract change, no exported-byte change).
+
+**`invalid-regex` — the loud state (defect)**
+
+- Chip host class sets: outline `--mat-chip-outline-color: var(--mat-sys-error)`, label ink `--mat-chip-label-text-color: var(--mat-sys-on-error-container)`, fill `background: var(--mat-sys-error-container)` on the host class (the chip host is our template element — no Material internals, no `::ng-deep`, no `!important`; exact token set verified against `node_modules/@angular/material` chips tokens: `--mat-chip-*` family).
+- Trailing `error` glyph between the label and the remove button, `aria-hidden` (the tooltip carries the words).
+- `matTooltip`: **"Invalid regular expression — SillyTavern treats this key as plain text"** (§3.4 verbatim).
+- The remove button stays the **only** interactive affordance — the error mark is decoration (affordance separation).
+
+**`regex` — the quiet state (classification) — DECIDED: `functions` glyph, not a tonal fill**
+
+- Leading `functions` glyph (M3's Σ), `aria-hidden`, `color: var(--mat-sys-secondary)`, before the key text. Chip outline, fill and ink otherwise **default**.
+- Why not `secondary-container` fill: in this app that tone already means *selection* — the selected filter chips above the very same section (`Selective`, `Case Sensitive`) render filled-secondary-container + check, and `entry-list` paints the active row and batch bar with it. A filled key chip would read as "selected". A glyph borrows the chip's existing leading-icon slot (the selected-filter-chip anatomy) without touching the fill/outline semantics, and keeps emphasis proportional to consequence: the section's loud voice stays reserved for the error state.
+- `matTooltip`: **"Regex key: /source/flags — case and whole-word options don't apply"** with `/source/flags` filled from `parseStRegex(key)` (§3.4 verbatim shape).
+
+**`text` — unchanged**
+
+No class, no glyph, no tooltip. The other 367 fixture chips (and every plaintext chip in the app) render exactly as today — verified by the unchanged-surface re-shots in the state matrix (§6).
+
+**Chip row mock (all three states)**
+
+```
+… Primary Keys (filled field) ………………………………………
+┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+│  Σ /(?:saber|artoria)/i  ⊗     ╷  /(saber/  ⚠  ⊗     ╷  Greater Grail  ⊗
+└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+   │ 'regex'                          │ 'invalid-regex'      │ 'text'
+   │ default ink + quiet              │ error-container fill │ unchanged
+   │ leading Σ (--mat-sys-secondary)  │ error outline + ⚠    │
+   │ tooltip: parsed /source/flags    │ tooltip: treated as  │
+   │ + options-don't-apply hint       │ plain text           │
+   ▼                                  ▼                      ▼
+   remove ⊗ stays the ONLY interactive affordance on every chip
+```
+
+(`⚠` stands in for the `error` Material glyph; `⊗` for the existing `cancel` remove button, untouched.)
+
+#### 4. Test keys panel (plan §3.3)
+
+New child component `src/app/features/entry-editor/entry-keys/regex-test-panel.ts/.html/.scss/.spec.ts`, mounted by `entry-keys.html` below the Secondary Logic row, with `highlight-segments.ts` + spec (pure segment math) beside it per the plan's P3 file list.
+
+**Mount gating**: `@if (hasKeys() && !isConstant())` — constant entries ignore all keys (the Selective chip's tooltip already says so) and a keyless entry has nothing to test; `hasKeys` = any primary key, or any secondary key when selective. When gated off, nothing renders — no disabled shell, no ghost row.
+
+**Collapse idiom** (exact `EntryOptionsAccordion` reuse): a hairline-separated row (`--mat-sys-outline-variant` top border, the accordion's `.panel > * + *` divider idiom) = `science` icon (`aria-hidden`, `--mat-sys-on-surface-variant`, the linter header icon idiom) + `Test keys` in the `.section-title` style + trailing `matIconButton` (`.expand-toggle` anatomy, `--mat-icon-button-state-layer-size: var(--touch-target-min)` — the linter close-button precedent, `linter-dialog.scss:55`), carrying `[attr.aria-expanded]`, `[attr.aria-controls]="'regex-test-panel-' + entry().id"`, tooltip **"Test keys against a sample text"**. Content stays mounted in a `[inert]="!open()"` wrapper with the accordion's grid `0fr → 1fr` collapse animation — so the sample text survives toggling, and closed content is invisible and inert. **Chevron mapping is the conventional one, NOT the accordion's inverted mapping** (the accordion's panel opens upward; this one expands downward): collapsed = `expand_more`, expanded = `expand_less`.
+
+```
+Collapsed                                                              Expanded
+────────────────────────────────────────┆ ────────────────────────────────────────
+🔬 Test keys                     [⌄]   ┆ 🔬 Test keys                     [⌃]
+────────────────────────────────────────┆ ┌ Sample text ──────────────────────────┐
+   (content mounted, [inert], 0fr)      ┆ │ Artoria raised Excalibur as Saber…    │
+                                        ┆ └───────────────────────────────────────┘
+                                        ┆ Matches against the raw text you provide —
+                                        ┆ not SillyTavern's assembled chat history
+                                        ┆ (message names, scan depth, recursion).
+                                        ┆ Unset options use SillyTavern's defaults:
+                                        ┆ case-insensitive, substring matching.
+                                        ┆ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+                                        ┆ ✓ Matches  /(?:saber|artoria)/i
+                                        ┆     …raised Excalibur as Saber awakened…
+                                        ┆ ✕ No match  excalibur        [AND Any]
+                                        ┆ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+                                        ┆ Sample (highlights) ────────────────────
+                                        ┆ Artoria raised [Excalibur] as [Saber]…
+                                        ┆ Showing first 200 matches   (only when clamped)
+```
+
+(`🔬` = `science`, `✓` = `check_circle`, `✕` = `remove`, `⌄/⌃` = `expand_more`/`expand_less`.)
+
+**Textarea**: `appearance="fill"` `mat-form-field` (the Content-field idiom), `mat-label` **"Sample text"**, placeholder **"Artoria raised Excalibur as Saber…"**, `maxlength="5000"` (enforced at input), `matInput textarea` bound to a component-local `sample = signal('')` — **never workspace state**, nothing persists. Scope + default-resolution hints sit under it as `.chip-hint` captions (§5 wording).
+
+**Match rows** (`<ul>`/`<li>`, linter `.diagnostic-row` grid minus `.row-actions`; primary keys first then secondary, list order):
+
+- 40px `aria-hidden` icon slot: matched → `check_circle` colored by key class — `--mat-sys-tertiary` for primary-key rows, `--mat-sys-secondary` for secondary-key rows (the full-strength roles pairing with the preview's container tones); not matched → quiet `remove` dash in `--mat-sys-on-surface-variant` (the linter info role — deliberately the quietest); invalid regex → `error` in `--mat-sys-error` (the linter error role).
+- State word beside the icon, textual and always announced: **`Matches`** · **`No match`** · **`Invalid regex — treated as plain text`** (§3.4 verbatim; an invalid row still shows the faithful plaintext fall-back result, which reads "No match" for any sane sample).
+- Key text (body-medium, `overflow-wrap: anywhere` — long regex keys wrap, the global `keys-field` chip-wrap philosophy).
+- Excerpt when matched: up to ~60 chars centered on the first match, `…`-trimmed both sides, in the linter `.details` mono muted idiom. Locating only — highlighting is the preview's job.
+- Secondary rows carry their `selectiveLogic` label as a decorative `.entry-chip`-style tonal span (linter idiom, 28px `secondary-container`): **`AND Any`** / `NOT All` / `NOT Any` / `AND All` from `ST_LOGIC_OPTIONS`.
+- All matching runs in `computed`s over `findStKeyMatches` with `matchOptions = computed(() => ({ caseSensitive: entry().case_sensitive ?? false, matchWholeWords: <typed boolean read of extensions['match_whole_words']> ?? false }))` (the `entry-activation` typed `extensions` read exemplar; `null` "Default (book setting)" resolves to `false` — ST's global default — and the hint says so). Typing in the textarea, editing chips, or flipping the sibling sections' controls updates everything instantly; no reload, no events.
+- Rows are **not** focusable controls — the facts are textual, announced in reading order; nothing in a row is clickable.
+
+**Highlighted preview** (read-only, under the rows):
+
+- Pure `highlightSegments(text, perKeyRanges): readonly TextSegment[]` with `TextSegment = { text: string; tone: 'none' | 'primary' | 'secondary' }`, rendered `@for` over spans — no DOM parsing, no `innerHTML`. Overlap resolution deterministic and unit-pinned by `highlight-segments.spec.ts`: outermost range wins; ties → earlier start; equal spans → primary before secondary, then key list order.
+- **Tone mapping — DECIDED**: primary hits `--mat-sys-tertiary-container` with `--mat-sys-on-tertiary-container` ink; secondary hits `--mat-sys-secondary-container` with `--mat-sys-on-secondary-container` ink. Justification: (a) M3 container/on-container pairs are the theme's contrast-engineered unit, so both tracks stay readable in light **and** dark (light: `#e0e0ff`/`#0000ef` and `#dae2f9`/`#3e4759` per the azure-blue prebuilt values this app's theme generates from; dark cyan/orange scheme separates the families even further); (b) `secondary-container` is the app's established "lesser metadata" tone (linter entry chips), matching secondary keys' weight, while `tertiary-container` is unused by any editor chrome — primary hits get a role that can never collide with existing emphasis; (c) all-blue-family light scheme is inherent to azure+blue — the rows (state word + grouping + logic label) carry the primary disambiguation, the preview tones are the second encoding.
+- Rendered highlights clamp at **200**; when clamped, a `.chip-hint` caption **"Showing first 200 matches"** renders directly under the preview (§3.4 verbatim).
+- `aria-hidden="true"`: the textarea holds the accessible sample text and the rows hold the match facts — the preview must not make screen readers re-read up to 5,000 characters of duplicate content.
+
+**a11y + ergonomics**: toggle 44px floor via `--mat-icon-button-state-layer-size` (desktop) and the global ≤767px 48px bump (phones); textarea min-height ~3 rows with comfortable touch scrolling; rows textual (no tabindex); **no Escape handler anywhere in the panel** — Escape inside the textarea must not collapse the section (collapse is the toggle's job only); the whole panel lives inside the existing options-panel scrollport (`max-height: min(62vh, 640px)`), so no new mobile surface, drawer, or overlay is introduced — the entry editor's existing mobile ergonomics carry it.
+
+#### 5. Copy (plan §3.4 — verbatim, do not paraphrase)
+
+| Surface | Copy |
+|---|---|
+| Section title / toggle tooltip | `Test keys` / `Test keys against a sample text` |
+| Textarea label · placeholder | `Sample text` · `Artoria raised Excalibur as Saber…` |
+| Row states | `Matches` · `No match` · `Invalid regex — treated as plain text` |
+| Regex chip tooltip | `Regex key: /source/flags — case and whole-word options don't apply` |
+| Invalid chip tooltip | `Invalid regular expression — SillyTavern treats this key as plain text` |
+| Truncation note | `Showing first 200 matches` |
+| Scope hint | §3.3 scope note + default-resolution note |
+| Secondary row context | logic label from `ST_LOGIC_OPTIONS` (e.g. `AND Any`) |
+
+Scope hint, full sentence (per §3.3: the scope note plus the explicit default-resolution note):
+
+> Matches against the raw text you provide — not SillyTavern's assembled chat history (message names, scan depth, recursion). Unset options use SillyTavern's defaults: case-insensitive, substring matching.
+
+#### 6. State matrix (what the P3 after-set must capture)
+
+Re-run `node __screenshots__/04-regex-sandbox/capture.mjs after` — the script re-takes all six `before` shots under identical pinned conditions (unchanged surfaces must be pixel-comparable; the change is additive), then adds:
+
+| Shot | State | Fixture / setup |
+|---|---|---|
+| `after-1280/1024/390.png` | Unchanged-surface re-shots | identical flow to before-set |
+| `after-keys-1280.png`, `after-keys-secondary-1280.png`, `after-keys-regex-1280.png` | Unchanged crops | identical flow |
+| `after-chip-regex-1280.png` | Valid regex chip: Σ glyph + default ink | uid 65 "Distance nodes" (fixture-provided `/(?:…)/i`) |
+| `after-chip-invalid-1280.png` | Invalid chip: error tones + `error` glyph | type `/(saber/` through the real chip input (plan §5 Tier 3 flow) |
+| `after-panel-matches-1280.png` (+ `390` variant) | Panel open: match rows + highlighted preview | add `/(?:saber|artoria)/i` + `excalibur`, fill sample, expand Test keys |
+| `after-panel-truncated-1280.png` | 200-clamp note | sample = repeated `saber ` to exceed 200 matches |
+| `after-panel-mobile-390.png` | Panel on the phone viewport | entry editor is the primary mobile surface |
+
+Comparison: side-by-side before/after posted with the P3 phase report (the AGENTS.md Visual Feature Baseline rule).
+
+#### 7. Open questions for the approver
+
+1. **Highlight tone pair (only if you want a second opinion)** — primary hits in `tertiary-container`, secondary in `secondary-container` is the decided mapping (rationale in §4). In the LIGHT theme both tones sit in the scheme's blue family (azure + blue palettes — every container role does), so the two are neighbors by hue though distinct in value/ink. The alternative would be a derived `--ls-*` pair, which is not recommended: it would add a second source of tonal truth next to the linter's `--ls-warning`. Default: ship the decided mapping.
+
+No other open questions: the linter-copy alignment question plan §8.6 asked to raise at this gate is moot — the landed linter copy is already accurate (§8 below).
+
+#### 8. Copy-alignment note (plan §8.6 premise is stale)
+
+Plan §8.6 expected the landed linter to say invalid regex keys are "silently dropped", making the sandbox's "treated as plain text" a divergence needing a user checkpoint. The landed copy at `src/app/core/services/linter.ts:361` reads: *"…has a regex-shaped key that is not a valid regex — SillyTavern will not treat it as a regex."* — accurate, and pinned by e2e (`hasText: 'not a valid regex'`). No contract change is needed. The sandbox's tooltip ("…treats this key as plain text", per ST's actual fall-through at `world-info.js:337-366`) complements the linter's phrasing: the linter says what the key is not, the sandbox says what it then is. The two surfaces agree on the predicate (`isRegexShapedKey && !isValidStRegex`) because both call `classifyStKey`'s exact underlying exports; only the phrasing differs, by design.
+
+#### P2a audit addendum (fixture fact P3/P5 should use)
+
+The FATE fixture already contains one valid regex key — uid 65 "Distance nodes", a 612-char `/(?:…)/i` key (367 plaintext keys, 0 invalid). Consequence: the after-set's regex-chip state is fixture-provided; only the invalid-chip state needs live typing. Operational note: with two editor tabs open, panel locators must scope to `.mat-mdc-tab-body-active` (strict-mode violation otherwise) — the capture script already does this.
