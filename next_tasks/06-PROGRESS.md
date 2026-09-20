@@ -81,3 +81,18 @@ focus policy. Gate: `npm test` + `npm run build`; background-state screenshots.
 
 **Next:** §5 step 2 — user design checkpoint (swapped-toolbar mock,
 transplant-vs-bar-items). P2 dispatch is BLOCKED until the user answers.
+
+## Checkpoint evidence posted (2026-09-20, orchestrator)
+
+- Mocks rendered over the real app in the P2 phone state (drawer open, two
+  rows selected, in-drawer toolbar removed; script
+  `__screenshots__/06-mobile-bar-swap/mock-swap.mjs`):
+  `mock-A-transplant.png` (today's `.batch-bar` node moved into the bar
+  strip, centered — real checkbox/buttons/tokens),
+  `mock-A2-transplant-emphasis.png` (+ subtle `secondary-container` tonal
+  top edge), `mock-B-bar-items.png` (five icon-over-label bar items, count
+  as a label, select-all via the More menu). P2 implementation note banked
+  from the mock: the transplanted toolbar's `.batch-bar` styles must be
+  OWNED by the bar's stylesheet (entry-list's scoped rules nest under
+  `.list-header` and stop applying once the node moves).
+- **GATE OPEN — awaiting the user's answer. No P2 dispatch.**
