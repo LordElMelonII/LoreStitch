@@ -109,3 +109,20 @@ transplant-vs-bar-items). P2 dispatch is BLOCKED until the user answers.
 - Post-rebase sanity: `CI=true npm test -- --watch=false` **green**
   (54 files / 1013 tests — the union of both tasks' suites).
 - **GATE CLOSED — P2 dispatched with the A2 decision.**
+
+## PAUSED (2026-09-20, orchestrator — machine shutdown requested)
+
+- P2 was dispatched but CANCELLED mid-phase by the user (machine pause).
+  Its partial unverified work (9 files) was stashed as
+  `stash@{0}` ("task 06 P2 partial (cancelled mid-phase…)") — insurance
+  only; resume does NOT restore it, a fresh P2 dispatch starts from the
+  plan. Nothing of P2 is committed.
+- Working tree clean; branch HEAD `83c3a32`, pushed.
+- **Next (resume point): P2 (ui-specialist)** — the full A2-design brief
+  stands as written for the cancelled dispatch: §3.2 + §3.3, transplanted
+  toolbar styled by the bar's stylesheet, barState batch case in the shell,
+  `batchAction` output, EntryList public API, clear/delete-selection focus
+  recovery. Gate: `npm test` + `npm run build`. Then P3 (ts-reviewer), P4
+  (qa-auditor incl. re-captured after-set with the swapped state), task
+  status commit, STOP for user test. After that: Task 08 P2 (treatment 1)
+  → P3 → P4, then the archive step.
