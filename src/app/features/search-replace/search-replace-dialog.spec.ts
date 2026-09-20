@@ -5,6 +5,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { SearchReplaceDialog } from './search-replace-dialog';
 import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { projectOf } from '../../../testing/project-fixtures';
 
 /** Builds an entry with sensible defaults for search tests. */
@@ -15,27 +16,50 @@ function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): Charact
 describe('SearchReplaceDialog', () => {
   let workspace: WorkspaceService;
   let closeSpy: ReturnType<typeof vi.fn>;
+  let fixture: ComponentFixture<SearchReplaceDialog>;
 
   async function createDialog(_activeEntryId: number | null = null): Promise<SearchReplaceDialog> {
-    const fixture = TestBed.createComponent(SearchReplaceDialog);
+    fixture = TestBed.createComponent(SearchReplaceDialog);
     await fixture.whenStable();
     return fixture.componentInstance;
   }
 
-  /** Types into the (private) form model and returns the dialog for chaining. */
-  function typeIn(dialog: SearchReplaceDialog, query: string, replacement: string): void {
+  /**
+   * Settles the debounced preview: `detectChanges()` flushes the component's
+   * debounce-arming view effect synchronously (Angular schedules view-effect
+   * flushes on its own setTimeout/rAF race, which fake-time advances cannot be
+   * relied upon to fire), then the full-window advance fires the trailing edge
+   * (storage.service.spec's canonical advance pattern).
+   */
+  async function settlePreview(): Promise<void> {
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+  }
+
+  /** Types into the (private) form model and lets the debounced preview settle. */
+  async function typeIn(
+    dialog: SearchReplaceDialog,
+    query: string,
+    replacement: string,
+  ): Promise<void> {
     dialog['model'].set({ query, replacement });
+    await settlePreview();
   }
 
   /** Mounts the dialog and returns its fixture with the initial render flushed. */
   async function createDialogDom(): Promise<ComponentFixture<SearchReplaceDialog>> {
-    const fixture = TestBed.createComponent(SearchReplaceDialog);
+    fixture = TestBed.createComponent(SearchReplaceDialog);
     await fixture.whenStable();
     fixture.detectChanges();
     return fixture;
   }
 
   beforeEach(async () => {
+    // The debounced preview settles on fake time (storage.service.spec
+    // precedent). Only the timer pair debouncedSignal uses is faked: the
+    // default set also fakes microtask/rAF scheduling, which starves
+    // fixture.whenStable() and hangs every component spec.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     closeSpy = vi.fn();
     TestBed.configureTestingModule({
       imports: [SearchReplaceDialog],
@@ -63,12 +87,16 @@ describe('SearchReplaceDialog', () => {
       ]),
     );
     // Allow the service's async init() to settle before assertions.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('finds matches in content, primary and secondary keys', async () => {
     const dialog = await createDialog();
-    typeIn(dialog, 'saber', 'SHIROU');
+    await typeIn(dialog, 'saber', 'SHIROU');
 
     const rows = dialog['rows']();
     expect(rows).toHaveLength(1);
@@ -81,7 +109,7 @@ describe('SearchReplaceDialog', () => {
 
   it('replaces secondary key hits, not just primary keys', async () => {
     const dialog = await createDialog();
-    typeIn(dialog, 'saber', 'artoria pendragon');
+    await typeIn(dialog, 'saber', 'artoria pendragon');
     await dialog['apply']();
 
     const updated = workspace.entries().find((e) => e.id === 0);
@@ -92,7 +120,7 @@ describe('SearchReplaceDialog', () => {
 
   it('keeps $ patterns in the replacement literal (non-regex mode)', async () => {
     const dialog = await createDialog();
-    typeIn(dialog, 'Saber', 'Saber$&');
+    await typeIn(dialog, 'Saber', 'Saber$&');
     await dialog['apply']();
 
     const updated = workspace.entries().find((e) => e.id === 0);
@@ -104,7 +132,7 @@ describe('SearchReplaceDialog', () => {
   it('expands $1 capture groups in regex mode', async () => {
     const dialog = await createDialog();
     dialog['regexMode'].set(true);
-    typeIn(dialog, '(Rin)', '$1 Tohsaka');
+    await typeIn(dialog, '(Rin)', '$1 Tohsaka');
     await dialog['apply']();
 
     const updated = workspace.entries().find((e) => e.id === 1);
@@ -115,7 +143,7 @@ describe('SearchReplaceDialog', () => {
   it('limits the search to the active entry when scoped', async () => {
     const dialog = await createDialog();
     dialog['scopeActive'].set(true);
-    typeIn(dialog, 'a', 'b');
+    await typeIn(dialog, 'a', 'b');
 
     const ids = dialog['rows']().map((row) => row.entryId);
     expect(ids).toEqual([1]);
@@ -123,7 +151,7 @@ describe('SearchReplaceDialog', () => {
 
   it('skips entries excluded from the replace run', async () => {
     const dialog = await createDialog();
-    typeIn(dialog, 'rin', 'rin-tohsaka');
+    await typeIn(dialog, 'rin', 'rin-tohsaka');
     dialog['toggleExcluded'](1, false);
     await dialog['apply']();
 
@@ -135,7 +163,7 @@ describe('SearchReplaceDialog', () => {
   it('reports an invalid regex instead of crashing', async () => {
     const dialog = await createDialog();
     dialog['regexMode'].set(true);
-    typeIn(dialog, '([unclosed', 'x');
+    await typeIn(dialog, '([unclosed', 'x');
 
     expect(dialog['pattern']()).toBeNull();
     expect(dialog['patternError']()).toBe('Invalid regular expression');
@@ -144,7 +172,7 @@ describe('SearchReplaceDialog', () => {
 
   it('matches case-insensitively by default and respects match-case', async () => {
     const dialog = await createDialog();
-    typeIn(dialog, 'saber', 'x');
+    await typeIn(dialog, 'saber', 'x');
     expect(dialog['totalHits']()).toBe(3);
 
     dialog['matchCase'].set(true);
@@ -162,7 +190,7 @@ describe('SearchReplaceDialog', () => {
       projectOf([entry(0, { content: 'The rinsing ritual begins. Rin wins.' })]),
     );
     const dialog = await createDialog();
-    typeIn(dialog, 'rin', 'LUVIA');
+    await typeIn(dialog, 'rin', 'LUVIA');
     // Without the constraint the substring inside "rinsing" matches too.
     expect(dialog['totalHits']()).toBe(2);
 
@@ -179,7 +207,7 @@ describe('SearchReplaceDialog', () => {
       projectOf([entry(0, { content: 'Costs 5 credits (a.x) and aox too.' })]),
     );
     const dialog = await createDialog();
-    typeIn(dialog, 'a.x', 'gold');
+    await typeIn(dialog, 'a.x', 'gold');
     const rows = dialog['rows']();
     assert(rows[0]);
     // The dot must not act as a wildcard in literal mode.
@@ -195,7 +223,7 @@ describe('SearchReplaceDialog', () => {
 
   it('excludes key hits from preview and write when the keys field is off', async () => {
     const dialog = await createDialog();
-    typeIn(dialog, 'saber', 'artoria');
+    await typeIn(dialog, 'saber', 'artoria');
     dialog['inKeys'].set(false);
 
     const rows = dialog['rows']();
@@ -213,7 +241,7 @@ describe('SearchReplaceDialog', () => {
 
   it('searches and rewrites entry names only when the names field is on', async () => {
     const dialog = await createDialog();
-    typeIn(dialog, 'saber', 'artoria');
+    await typeIn(dialog, 'saber', 'artoria');
     // Names are opt-in: the comment hit is neither counted nor rewritten.
     expect(dialog['totalHits']()).toBe(3);
 
@@ -229,7 +257,7 @@ describe('SearchReplaceDialog', () => {
 
   it('resolves truthy and reports the tally through the snackbar on success', async () => {
     const dialog = await createDialog();
-    typeIn(dialog, 'saber', 'artoria pendragon');
+    await typeIn(dialog, 'saber', 'artoria pendragon');
     await dialog['apply']();
 
     expect(closeSpy).toHaveBeenCalledWith(true);
@@ -256,9 +284,80 @@ describe('SearchReplaceDialog', () => {
     expect(untouched.content).toBe('Saber is silent about the Grail.');
   });
 
+  it('keeps the preview empty until the debounce settles', async () => {
+    const dialog = await createDialog();
+    dialog['model'].set({ query: 'saber', replacement: 'x' });
+    // Flush the component so the debounce timer is armed, without settling it.
+    fixture.detectChanges();
+
+    expect(dialog['query']()).toBe('saber'); // the input is immediate
+    expect(dialog['rows']()).toEqual([]);
+    expect(dialog['totalHits']()).toBe(0);
+
+    await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS - 1);
+    expect(dialog['rows']()).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(dialog['rows']()).toHaveLength(1);
+    expect(dialog['totalHits']()).toBe(3);
+  });
+
+  it('flags an invalid regex immediately while the preview still lags behind', async () => {
+    const dialog = await createDialog();
+    dialog['regexMode'].set(true);
+    await typeIn(dialog, 'saber', 'x');
+    expect(dialog['rows']()).toHaveLength(1);
+
+    dialog['model'].set({ query: '([unclosed', replacement: 'x' });
+    fixture.detectChanges(); // arm the debounce, do not settle
+    // Feedback is immediate: the broken pattern flags right away…
+    expect(dialog['patternError']()).toBe('Invalid regular expression');
+    // …while the scan still shows the settled query's preview.
+    expect(dialog['rows']()).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+    expect(dialog['patternError']()).toBe('Invalid regular expression');
+    expect(dialog['rows']()).toEqual([]);
+  });
+
+  it('flushes a pending query on apply so a fast type→Replace never uses stale rows', async () => {
+    const dialog = await createDialog();
+    dialog['model'].set({ query: 'saber', replacement: 'artoria pendragon' });
+    fixture.detectChanges(); // typed, NOT settled: the preview still lags
+    expect(dialog['rows']()).toEqual([]);
+
+    await dialog['apply']();
+
+    const updated = workspace.entries().find((e) => e.id === 0);
+    assert(updated);
+    // Byte-identical to what the settled preview (and the sibling test
+    // above) produced: same rows, same rewrites.
+    expect(updated.keys).toEqual(['artoria pendragon']);
+    expect(updated.secondary_keys).toEqual(['artoria', 'artoria pendragon']);
+    expect(updated.content).toBe('artoria pendragon is silent about the Grail.');
+  });
+
+  it('flushes a pending replacement on apply too', async () => {
+    const dialog = await createDialog();
+    await typeIn(dialog, 'saber', 'old-value'); // the query is settled
+    dialog['model'].set({ query: 'saber', replacement: 'new-value' }); // only the replacement changed
+    fixture.detectChanges(); // arm, do not settle
+    const staleRow = dialog['rows']()[0];
+    assert(staleRow);
+    // The preview still previews the OLD replacement…
+    expect(staleRow.nextContent).toBe('old-value is silent about the Grail.');
+
+    await dialog['apply']();
+
+    const updated = workspace.entries().find((e) => e.id === 0);
+    assert(updated);
+    // …but Replace applies the one actually in the input.
+    expect(updated.content).toBe('new-value is silent about the Grail.');
+  });
+
   it('labels the per-row include checkbox for assistive technology', async () => {
     const fixture = await createDialogDom();
-    typeIn(fixture.componentInstance, 'saber', 'artoria');
+    await typeIn(fixture.componentInstance, 'saber', 'artoria');
     fixture.detectChanges();
 
     const input = (fixture.nativeElement as HTMLElement).querySelector(
@@ -273,7 +372,7 @@ describe('SearchReplaceDialog', () => {
   it('narrows the preview through the scope chips', async () => {
     const fixture = await createDialogDom();
     const dialog = fixture.componentInstance;
-    typeIn(dialog, 'a', 'e'); // matches both entries
+    await typeIn(dialog, 'a', 'e'); // matches both entries
     fixture.detectChanges();
     expect(dialog['rows']().map((row) => row.entryId)).toEqual([0, 1]);
 
@@ -290,7 +389,7 @@ describe('SearchReplaceDialog', () => {
   it('renders preview rows, badges, key chips and live apply-button state', async () => {
     const fixture = await createDialogDom();
     const dialog = fixture.componentInstance;
-    typeIn(dialog, 'saber', 'artoria');
+    await typeIn(dialog, 'saber', 'artoria');
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -340,7 +439,7 @@ describe('SearchReplaceDialog', () => {
     );
 
     // A well-formed query without matches.
-    typeIn(dialog, 'shirou', 'x');
+    await typeIn(dialog, 'shirou', 'x');
     fixture.detectChanges();
     expect(el.querySelector('.no-results')?.textContent).toContain(
       'No matches found for the current scope.',
@@ -348,7 +447,7 @@ describe('SearchReplaceDialog', () => {
 
     // A broken regex: the hint names the problem and the empty state defers to it.
     dialog['regexMode'].set(true);
-    typeIn(dialog, '([unclosed', 'x');
+    await typeIn(dialog, '([unclosed', 'x');
     fixture.detectChanges();
     expect(el.querySelector('.pattern-error')?.textContent).toContain(
       'Invalid regular expression',
@@ -370,7 +469,7 @@ describe('SearchReplaceDialog', () => {
     );
     const fixture = await createDialogDom();
     const dialog = fixture.componentInstance;
-    typeIn(dialog, 'Rin', 'Luvia');
+    await typeIn(dialog, 'Rin', 'Luvia');
     fixture.detectChanges();
     await fixture.whenStable();
 

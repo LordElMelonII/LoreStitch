@@ -95,7 +95,9 @@
 
   <div class="preview-header">
     <span>
-      @if (query()) {
+      <!-- The settled (debounced) query, so the header and the rows it counts
+        never disagree during the debounce window. -->
+      @if (queryDebounced()) {
         {{ totalHits() }} match{{ totalHits() === 1 ? '' : 'es' }} in {{ rows().length }} entr{{
           rows().length === 1 ? 'y' : 'ies'
         }}
@@ -160,9 +162,9 @@
     } @empty {
       <div class="no-results">
         @if (patternError()) {
-          Fix the pattern to see matches.
-        } @else if (query()) {
-          No matches found for the current scope.
+        Fix the pattern to see matches.
+        } @else if (queryDebounced()) {
+        No matches found for the current scope.
         }
       </div>
     }

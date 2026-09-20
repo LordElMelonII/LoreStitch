@@ -11,6 +11,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry, entryTitle } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
+import { debouncedSignal } from '../../shared/util/debounced-signal';
 import {
   compileSearchPattern,
   type FieldHits,
@@ -57,6 +59,17 @@ export class SearchReplaceDialog {
   protected readonly query = computed(() => this.model().query);
   protected readonly replacement = computed(() => this.model().replacement);
 
+  /**
+   * The form values the preview consumes: both text fields debounced by
+   * `SEARCH_DEBOUNCE_MS`, so the O(book) scan runs at most once per settle
+   * window instead of per keystroke. The match/scope/field toggles below
+   * stay immediate (discrete taps), and `apply()` flushes both mirrors
+   * before reading rows, so a fast type→Replace never writes against a
+   * stale preview.
+   */
+  protected readonly queryDebounced = debouncedSignal(this.query, SEARCH_DEBOUNCE_MS);
+  private readonly replacementDebounced = debouncedSignal(this.replacement, SEARCH_DEBOUNCE_MS);
+
   protected readonly matchCase = signal(false);
   protected readonly wholeWord = signal(false);
   protected readonly regexMode = signal(false);
@@ -67,10 +80,10 @@ export class SearchReplaceDialog {
   /** Entry ids excluded from the replace run. */
   protected readonly excluded = signal<Set<number>>(new Set());
 
-  /** The active regex, or null while the pattern is invalid/empty. */
+  /** The active regex, or null while the settled pattern is invalid/empty. */
   protected readonly pattern = computed<RegExp | null>(() =>
     compileSearchPattern({
-      query: this.query(),
+      query: this.queryDebounced(),
       regexMode: this.regexMode(),
       wholeWord: this.wholeWord(),
       matchCase: this.matchCase(),
@@ -78,13 +91,23 @@ export class SearchReplaceDialog {
   );
 
   protected readonly patternError = computed(() => {
-    if (!this.query()) {
+    const query = this.query();
+    if (!query || !this.regexMode()) {
       return null;
     }
-    if (this.regexMode() && this.pattern() === null) {
-      return 'Invalid regular expression';
-    }
-    return null;
+    // Validity is checked against the IMMEDIATE query — a fresh compile of
+    // one pattern, no book scan — so a broken regex flags, and a fix clears,
+    // without waiting for the debounce. (Wrapping a pattern in \b(?:…)\b
+    // cannot change its validity, so this always agrees with the settled
+    // `pattern` above.)
+    return compileSearchPattern({
+      query,
+      regexMode: this.regexMode(),
+      wholeWord: this.wholeWord(),
+      matchCase: this.matchCase(),
+    }) === null
+      ? 'Invalid regular expression'
+      : null;
   });
 
   protected readonly rows = computed<MatchRow[]>(() => {
@@ -110,7 +133,7 @@ export class SearchReplaceDialog {
 
   /** Preview row of an entry, or empty. */
   private matchEntry(entry: CharacterBookEntry, regex: RegExp): MatchRow[] {
-    const replacement = this.replacement();
+    const replacement = this.replacementDebounced();
     // In literal (non-regex) mode the replacement must not be interpreted:
     // passing it as a function keeps `$&`, `$1` etc. verbatim.
     const apply = (text: string): string =>
@@ -179,6 +202,10 @@ export class SearchReplaceDialog {
   }
 
   protected async apply(): Promise<void> {
+    // A fast type→Replace must never apply against a stale preview: pull the
+    // form's current values through the debounce before reading rows.
+    this.queryDebounced.flush();
+    this.replacementDebounced.flush();
     const excluded = this.excluded();
     const targets = this.rows().filter((row) => row.changed && !excluded.has(row.entryId));
     let occurrences = 0;

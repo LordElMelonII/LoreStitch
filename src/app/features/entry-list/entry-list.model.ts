@@ -13,6 +13,12 @@ export interface EntryListItem {
   tokens: number;
   /** Author-assigned LoreStitch tags (see `entryTags`). */
   tags: string[];
+  /**
+   * Pre-folded lowercase haystack of every searchable field, built once per
+   * entry change by `entrySearchHaystack` in the `items` computed — the
+   * per-keystroke filter scan only ever `includes` over it.
+   */
+  readonly search: string;
 }
 
 /**

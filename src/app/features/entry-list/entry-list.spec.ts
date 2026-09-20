@@ -10,6 +10,7 @@ import {
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { ProjectActionsService } from '../shell/project-actions.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
+import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { EntryList } from './entry-list';
 import { BatchOperationsDialog } from './batch-operations-dialog';
 import { projectOf } from '../../../testing/project-fixtures';
@@ -55,7 +56,25 @@ function itemAt(list: EntryList, index: number) {
     await fixture.whenStable();
   }
 
+  /**
+   * Settles the debounced filter. `detectChanges()` flushes the component's
+   * debounce-arming view effect synchronously — Angular schedules view-effect
+   * flushes on its own setTimeout/rAF race, which fake-time advances cannot be
+   * relied upon to fire — and the subsequent full-window advance then fires
+   * the trailing edge (storage.service.spec's canonical advance pattern).
+   */
+  async function settleFilter(): Promise<void> {
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+  }
+
   beforeEach(async () => {
+    // The debounced filter settles on fake time (storage.service.spec
+    // precedent) so specs can pin the lag explicitly and flush it cheaply.
+    // Only the timer pair debouncedSignal uses is faked: the default set
+    // also fakes microtask/rAF scheduling, which starves
+    // fixture.whenStable() and hangs every component spec.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     // CDK BreakpointObserver (via ProjectActionsService) needs matchMedia.
     if (!window.matchMedia) {
       Object.defineProperty(window, 'matchMedia', {
@@ -88,7 +107,11 @@ function itemAt(list: EntryList, index: number) {
     snackBar = TestBed.inject(MatSnackBar);
     vi.spyOn(snackBar, 'open');
     // Allow the workspace's async init() to settle before the component reads it.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.advanceTimersByTimeAsync(0);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('lists every entry with title, keys and token estimate', async () => {
@@ -102,6 +125,9 @@ function itemAt(list: EntryList, index: number) {
     expect(items[0]).toMatchObject({ id: 0, title: 'Saber', keys: ['saber', 'artoria'] });
     assert(items[0]);
     expect(items[0].tokens).toBeGreaterThan(0);
+    // The search haystack folds once per entry change: title, keys, tags and
+    // content joined on '\n', lowercased — the filter only `includes` over it.
+    expect(items[0].search).toBe('saber\nsaber\nartoria\nking of knights.');
   });
 
   it('shows the empty state on an empty book', async () => {
@@ -117,23 +143,77 @@ function itemAt(list: EntryList, index: number) {
     const list = await createList([
       entry(0, { comment: 'Saber', keys: ['artoria'], content: 'King of Knights.' }),
       entry(1, { comment: 'Rin', keys: ['tohsaka'], content: 'Jewel magecraft.' }),
-      entry(2, { comment: 'Shielder', keys: ['mash'], content: 'A member of the round table.' }),
+      entry(2, {
+        comment: 'Shielder',
+        keys: ['mash'],
+        content: 'A member of the round table.',
+        // Tag "round-table" only on entry 2: the text query must hit tags too.
+        extensions: { ...createEmptyEntry(2).extensions, lorestitch_tags: ['round-table'] },
+      }),
     ]);
-    // Tag "round-table" only on entry 2; the text query must also hit tags.
+    // Multi-word, mixed-case: 'ROUND TABLE' hits entry 2's content.
     list['filterModel'].set({ query: 'ROUND TABLE' });
+    await settleFilter();
     expect(list['filtered']().map((i) => i.id)).toEqual([2]);
 
     list['filterModel'].set({ query: 'saber' });
+    await settleFilter();
     expect(list['filtered']().map((i) => i.id)).toEqual([0]);
 
     list['filterModel'].set({ query: 'tohsaka' });
+    await settleFilter();
     expect(list['filtered']().map((i) => i.id)).toEqual([1]);
 
     list['filterModel'].set({ query: 'magecraft' });
+    await settleFilter();
     expect(list['filtered']().map((i) => i.id)).toEqual([1]);
 
+    // Author tags are part of the pre-folded haystack.
+    list['filterModel'].set({ query: 'round-table' });
+    await settleFilter();
+    expect(list['filtered']().map((i) => i.id)).toEqual([2]);
+
     list['filterModel'].set({ query: '  ' });
+    await settleFilter();
     expect(list['filtered']()).toHaveLength(3);
+  });
+
+  it('debounces the scan: the list settles only after the debounce window', async () => {
+    const list = await createList([entry(0, { comment: 'Saber' }), entry(1, { comment: 'Rin' })]);
+
+    list['filterModel'].set({ query: 'saber' });
+    // Flush the component so the debounce timer is armed, without settling it.
+    fixture.detectChanges();
+    // The input's value is immediate; the scanned list is not.
+    expect(list['filter']()).toBe('saber');
+    expect(list['filterDebounced']()).toBe('');
+    expect(list['filtered']()).toHaveLength(2);
+
+    await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS - 1);
+    expect(list['filtered']()).toHaveLength(2);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(list['filterDebounced']()).toBe('saber');
+    expect(list['filtered']().map((i) => i.id)).toEqual([0]);
+  });
+
+  it('matches multi-word queries within one field, never across field boundaries', async () => {
+    const list = await createList([
+      entry(0, { comment: 'Saber', keys: ['artoria'], content: 'King of Knights.' }),
+      entry(1, { comment: 'Rin', keys: ['rin'], content: 'Jewel magecraft.' }),
+    ]);
+
+    // Both words sit inside entry 1's content: the phrase matches.
+    list['filterModel'].set({ query: 'jewel magecraft' });
+    await settleFilter();
+    expect(list['filtered']().map((i) => i.id)).toEqual([1]);
+
+    // The same words split across entry 0's title and key do NOT join into a
+    // match: the haystack's '\n' separators keep fields from concatenating,
+    // so a query can only ever match inside a single field.
+    list['filterModel'].set({ query: 'saber artoria' });
+    await settleFilter();
+    expect(list['filtered']()).toHaveLength(0);
   });
 
   it('clears the filter from the clear button in the header', async () => {
@@ -191,6 +271,7 @@ function itemAt(list: EntryList, index: number) {
   it('select-all covers only filtered entries; unchecking keeps hidden selections', async () => {
     const list = await createList([entry(0, { comment: 'Saber' }), entry(1, { comment: 'Rin' })]);
     list['filterModel'].set({ query: 'saber' });
+    await settleFilter();
 
     list['toggleSelectAll'](true);
     expect(list['selection']()).toEqual(new Set([0]));
@@ -205,6 +286,7 @@ function itemAt(list: EntryList, index: number) {
 
     // Partial coverage of the shown view reads as indeterminate.
     list['filterModel'].set({ query: '' });
+    await settleFilter();
     expect(list['someFilteredSelected']()).toBe(true);
 
     list['clearSelection']();
@@ -378,9 +460,10 @@ function itemAt(list: EntryList, index: number) {
   it('appends a new entry and reveals it by clearing an active filter', async () => {
     const list = await createList([entry(0, { comment: 'Saber' })]);
     list['filterModel'].set({ query: 'saber' });
+    await settleFilter();
 
     list['add']();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.advanceTimersByTimeAsync(0);
     await settle();
 
     expect(workspace.entries()).toHaveLength(2);
@@ -425,6 +508,7 @@ function itemAt(list: EntryList, index: number) {
       entry(2, { comment: 'Beta' }),
     ]);
     list['filterModel'].set({ query: 'a' }); // Alpha + Beta (hidden excluded)
+    await settleFilter();
 
     list['drop'](0, 1); // Move Alpha after Beta in the filtered view.
 
@@ -434,6 +518,7 @@ function itemAt(list: EntryList, index: number) {
   it('ignores out-of-range drops', async () => {
     const list = await createList([entry(0), entry(1)]);
     list['filterModel'].set({ query: 'saber' }); // filtered view is empty
+    await settleFilter();
 
     list['drop'](0, 1);
 

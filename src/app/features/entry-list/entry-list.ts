@@ -28,7 +28,9 @@ import { estimateEntryTokens, formatTokenCount } from '../../core/services/token
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { paneResult, ProjectActionsService } from '../shell/project-actions.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
-import { type EntryListItem } from './entry-list.model';
+import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
+import { debouncedSignal } from '../../shared/util/debounced-signal';
+import { entrySearchHaystack, matchesQuery, type EntryListItem } from './entry-list.model';
 import { type BatchOperationsDialogData } from './batch-operations-dialog';
 
 /** Form model of the sidebar filter box. */
@@ -147,6 +149,10 @@ export class EntryList {
           // hide the new row, clear the filter so it is actually visible.
           if (!this.filtered().some((item) => item.id === lastId)) {
             this.filterModel.set({ query: '' });
+            // Revealing is a discrete action: apply the cleared query now,
+            // or the reveal scroll below would look the row up in a view
+            // still filtered by the not-yet-settled debounce.
+            this.filterDebounced.flush();
             this.tagFilter.set(new Set());
           }
           this.scrollToEntry(lastId);
@@ -160,6 +166,15 @@ export class EntryList {
 
   /** Current filter text (single source: the form model). */
   protected readonly filter = computed(() => this.filterModel().query);
+
+  /**
+   * The query the scan consumes: `filter` lagged by `SEARCH_DEBOUNCE_MS`,
+   * so the O(book) scan runs at most once per settle window instead of per
+   * keystroke. The input and its clear button stay immediate — typing never
+   * feels laggy, only the settled list lags. Tag chips keep filtering
+   * immediately: discrete taps, already cheap.
+   */
+  protected readonly filterDebounced = debouncedSignal(this.filter, SEARCH_DEBOUNCE_MS);
 
   /** Clears the filter box. */
   protected clearFilter(): void {
@@ -178,17 +193,26 @@ export class EntryList {
 
   protected readonly items = computed<EntryListItem[]>(() => {
     const dirty = this.workspace.dirtyEntryIds();
-    return this.workspace.entries().map((entry) => ({
-      id: entry.id ?? -1,
-      title: entryTitle(entry),
-      keys: entry.keys ?? [],
-      enabled: entry.enabled,
-      state: entryTriggerState(entry),
-      dirty: entry.id !== undefined && dirty.has(entry.id),
-      content: entry.content ?? '',
-      tokens: estimateEntryTokens(entry),
-      tags: entryTags(entry),
-    }));
+    return this.workspace.entries().map((entry) => {
+      const title = entryTitle(entry);
+      const keys = entry.keys ?? [];
+      const tags = entryTags(entry);
+      const content = entry.content ?? '';
+      return {
+        id: entry.id ?? -1,
+        title,
+        keys,
+        enabled: entry.enabled,
+        state: entryTriggerState(entry),
+        dirty: entry.id !== undefined && dirty.has(entry.id),
+        content,
+        tokens: estimateEntryTokens(entry),
+        tags,
+        // One fold per entry change, not per keystroke: the filter scan
+        // below only ever runs `includes` over this pre-lowered haystack.
+        search: entrySearchHaystack(title, keys, tags, content),
+      };
+    });
   });
 
   /** All tags in the book, alphabetically (drives the filter chips). */
@@ -203,7 +227,7 @@ export class EntryList {
   });
 
   protected readonly filtered = computed<EntryListItem[]>(() => {
-    const query = this.filter().trim().toLowerCase();
+    const query = this.filterDebounced().trim().toLowerCase();
     const requiredTags = this.tagFilter();
     const all = this.items();
     const byTags = requiredTags.size
@@ -220,13 +244,7 @@ export class EntryList {
     if (!query) {
       return byTags;
     }
-    return byTags.filter(
-      (item) =>
-        item.title.toLowerCase().includes(query) ||
-        item.keys.some((k) => k.toLowerCase().includes(query)) ||
-        item.tags.some((tag) => tag.toLowerCase().includes(query)) ||
-        item.content.toLowerCase().includes(query),
-    );
+    return byTags.filter((item) => matchesQuery(item.search, query));
   });
 
   protected readonly activeId = computed(() => this.workspace.activeTabId());

@@ -220,9 +220,12 @@
   @if (!filtered().length) {
     <div class="empty-state">
       <mat-icon>menu_book</mat-icon>
+      <!-- The settled (debounced) query, not the live input: the message
+        describes the list the user is looking at, which itself settles
+        after the debounce window. -->
       <p>
         {{
-          filter()
+          filterDebounced()
             ? 'No entries match your filter.'
             : 'This lorebook is empty. Add your first entry.'
         }}
