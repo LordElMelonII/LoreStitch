@@ -22,6 +22,7 @@ import {
 import { classifyStKey, parseStRegex, type StKeyClass } from '../../../core/models/st-regex';
 import { EntryUpdatesService } from '../entry-updates.service';
 import { type KeyEditTarget, type KeyListField } from '../entry-editor.model';
+import { RegexTestPanel } from './regex-test-panel';
 
 /** §3.4 verbatim description of an invalid regex key. */
 const INVALID_KEY_TOOLTIP =
@@ -54,7 +55,14 @@ interface KeyChipState {
  */
 @Component({
   selector: 'app-entry-keys',
-  imports: [MatChipsModule, MatFormFieldModule, MatIconModule, MatSelectModule, MatTooltipModule],
+  imports: [
+    MatChipsModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatSelectModule,
+    MatTooltipModule,
+    RegexTestPanel,
+  ],
   templateUrl: './entry-keys.html',
   styleUrl: './entry-keys.scss',
   host: { class: 'entry-panel-section' },

@@ -1,0 +1,205 @@
+@use '../shared';
+
+// ---------------------------------------------------------------------------
+// Test keys playground (Task 04 §3.6 §4) — mounted inside the Keys section,
+// below the Secondary Logic row. Bespoke only where no in-app surface existed
+// (the highlighted preview); every other control reuses an idiom: collapse =
+// EntryOptionsAccordion's toggle + grid animation, header icon = the linter
+// header idiom, rows = the linter diagnostic grid minus actions, logic chip =
+// the linter's decorative entry chip, excerpts = the linter `.details` mono.
+// ---------------------------------------------------------------------------
+
+:host {
+  display: flex;
+  flex-direction: column;
+}
+
+// Section header: hairline-separated row (the accordion's `.panel > * + *`
+// divider idiom) — decorative icon + title + trailing toggle.
+.test-keys-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}
+
+.header-icon {
+  flex: none;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// 44px touch floor on every viewport (the linter close-button precedent);
+// the global ≤767px rule raises it to the 48px mobile floor on phones.
+.test-keys-toggle {
+  margin-left: auto;
+  --mat-icon-button-state-layer-size: var(--touch-target-min);
+}
+
+// Collapsible content: the accordion's grid `0fr -> 1fr` auto-height
+// animation; closed content stays mounted (the sample survives toggling),
+// invisible and inert.
+.test-panel-anchor {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition:
+    grid-template-rows 175ms cubic-bezier(0.3, 0, 0.8, 0.15),
+    visibility 0s 175ms;
+
+  &.open {
+    grid-template-rows: 1fr;
+    visibility: visible;
+    transition:
+      grid-template-rows 175ms cubic-bezier(0.05, 0.7, 0.1, 1),
+      visibility 0s 0s;
+  }
+}
+
+.test-panel-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.test-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 12px;
+}
+
+// Sample textarea: the Content-field idiom at sample scale — ~3 rows with
+// comfortable touch scrolling on phones (the whole panel lives inside the
+// options panel's existing scrollport).
+.sample-field {
+  --mat-form-field-filled-container-shape: var(--mat-sys-corner-medium);
+  width: 100%;
+
+  textarea {
+    min-height: 84px;
+    resize: vertical;
+  }
+}
+
+// Match rows: the linter `.diagnostic-row` grid minus `.row-actions` — a 40px
+// decorative icon slot and a message column. Rows are textual, never
+// focusable, never clickable.
+.match-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px dashed var(--mat-sys-outline-variant);
+}
+
+.match-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-areas: 'icon body';
+  align-items: start;
+  column-gap: 16px;
+  padding: 8px 0;
+}
+
+.row-icon-slot {
+  grid-area: icon;
+  display: inline-flex;
+  justify-content: center;
+}
+
+// Icon roles (§3.6 §4): full-strength roles for matches — pairing with the
+// preview's container tones; the quietest role for no match; the linter's
+// error role for invalid.
+.row-icon.matched.tone-primary {
+  color: var(--mat-sys-tertiary);
+}
+
+.row-icon.matched.tone-secondary {
+  color: var(--mat-sys-secondary);
+}
+
+.row-icon.not-matched {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.row-icon.invalid {
+  color: var(--mat-sys-error);
+}
+
+.row-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.row-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+}
+
+// Long regex keys wrap instead of overflowing — the `keys-field` chip-wrap
+// philosophy.
+.row-key {
+  overflow-wrap: anywhere;
+}
+
+// Secondary rows' logic label: the linter's decorative 28px tonal chip
+// (never clickable itself).
+.logic-chip {
+  display: inline-block;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--mat-sys-corner-small);
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-secondary-container);
+  background: var(--mat-sys-secondary-container);
+  line-height: 28px;
+  white-space: nowrap;
+}
+
+// Excerpt when matched: the linter `.details` mono muted idiom (literal key
+// text — the content editor's mono stack).
+.row-excerpt {
+  margin: 4px 0 0;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-variant-ligatures: none;
+  overflow-wrap: anywhere;
+}
+
+// Highlighted preview: read-only and aria-hidden (the textarea holds the
+// accessible sample, the rows hold the facts). Tones are the decided
+// container/on-container pairs (§3.6 §4) — contrast-engineered units, so
+// both tracks stay readable in light and dark.
+.preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--mat-sys-corner-small);
+  background: var(--mat-sys-surface-container-lowest);
+  font: var(--mat-sys-body-medium);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  span {
+    border-radius: var(--mat-sys-corner-extra-small);
+  }
+
+  .tone-primary {
+    background: var(--mat-sys-tertiary-container);
+    color: var(--mat-sys-on-tertiary-container);
+  }
+
+  .tone-secondary {
+    background: var(--mat-sys-secondary-container);
+    color: var(--mat-sys-on-secondary-container);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .test-panel-anchor {
+    transition: none;
+  }
+}

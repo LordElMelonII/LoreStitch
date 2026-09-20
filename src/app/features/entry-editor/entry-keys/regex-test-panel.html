@@ -1,0 +1,110 @@
+@if (visible()) {
+  <div class="test-keys-header">
+    <mat-icon class="header-icon" aria-hidden="true">science</mat-icon>
+    <p class="section-title">Test keys</p>
+    <button
+      matIconButton
+      type="button"
+      class="test-keys-toggle"
+      (click)="toggle()"
+      [attr.aria-expanded]="open()"
+      [attr.aria-controls]="panelId()"
+      matTooltip="Test keys against a sample text"
+      aria-label="Test keys against a sample text"
+    >
+      @switch (open()) {
+        @case (true) {
+          <mat-icon aria-hidden="true">expand_less</mat-icon>
+        }
+        @case (false) {
+          <mat-icon aria-hidden="true">expand_more</mat-icon>
+        }
+      }
+    </button>
+  </div>
+
+  <!-- The accordion's collapse idiom: content stays mounted in a grid 0fr →
+       1fr clip, invisible and inert while closed, so the sample survives
+       toggling. Collapse is the toggle's job only — no Escape handler
+       anywhere in the panel. -->
+  <div
+    class="test-panel-anchor"
+    [class.open]="open()"
+    [attr.id]="panelId()"
+    [inert]="!open()"
+  >
+    <div class="test-panel-clip">
+      <div class="test-panel-body">
+        <mat-form-field class="sample-field" subscriptSizing="dynamic" appearance="fill">
+          <mat-label>Sample text</mat-label>
+          <textarea
+            matInput
+            rows="3"
+            [value]="sample()"
+            (input)="setSample($event)"
+            maxlength="5000"
+            placeholder="Artoria raised Excalibur as Saber…"
+          ></textarea>
+        </mat-form-field>
+        <p class="chip-hint">
+          Matches against the raw text you provide — not SillyTavern's assembled chat
+          history (message names, scan depth, recursion). Unset options use SillyTavern's
+          defaults: case-insensitive, substring matching.
+        </p>
+
+        <!-- Match rows: textual facts in reading order — the icons are
+             decoration, nothing in a row is focusable or clickable. -->
+        <ul class="match-rows">
+          @for (row of rows(); track $index) {
+            @let rowTone = row.tone === 'primary' ? 'tone-primary' : 'tone-secondary';
+            <li class="match-row">
+              <span class="row-icon-slot">
+                @switch (row.kind) {
+                  @case ('matched') {
+                    <mat-icon aria-hidden="true" class="row-icon matched" [class]="rowTone">check_circle</mat-icon>
+                  }
+                  @case ('not-matched') {
+                    <mat-icon aria-hidden="true" class="row-icon not-matched">remove</mat-icon>
+                  }
+                  @case ('invalid') {
+                    <mat-icon aria-hidden="true" class="row-icon invalid">error</mat-icon>
+                  }
+                }
+              </span>
+              <div class="row-body">
+                <p class="row-line">
+                  <span class="row-state">{{ row.stateLabel }}</span>
+                  <span class="row-key">{{ row.key }}</span>
+                  @if (row.logicLabel; as label) {
+                    <span class="logic-chip">{{ label }}</span>
+                  }
+                </p>
+                @if (row.excerpt; as excerpt) {
+                  <p class="row-excerpt">{{ excerpt }}</p>
+                }
+              </div>
+            </li>
+          }
+        </ul>
+
+        <!-- The preview is aria-hidden: the textarea holds the accessible
+             sample and the rows hold the match facts. No innerHTML — plain
+             spans over the pure segment math. -->
+        @if (segments().length > 0) {
+          <div class="preview" aria-hidden="true">
+            @for (segment of segments(); track $index) {
+              <span
+                [class.tone-primary]="segment.tone === 'primary'"
+                [class.tone-secondary]="segment.tone === 'secondary'"
+                >{{ segment.text }}</span
+              >
+            }
+          </div>
+          @if (truncated()) {
+            <p class="chip-hint">Showing first 200 matches</p>
+          }
+        }
+      </div>
+    </div>
+  </div>
+}
