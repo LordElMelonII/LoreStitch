@@ -6,16 +6,9 @@ Completed plans live in [archive/](./archive/).
 
 ## Pending
 
-| # | Plan | ROADMAP Item | Primary Agents |
-|---|------|--------------|----------------|
-| 04 | [regex-key-sandbox.md](./04-regex-key-sandbox.md) | Regex Key Testing Sandbox | core-engine → ui-specialist → ts-reviewer → qa-auditor |
-
-Task 04 depends on Task 03 Phase 1 (the shared `st-regex` / `st-key-match`
-core modules — landed 2026-09-19); the dependency is satisfied. The plan was
-**fully re-grounded 2026-09-20 at `af244ba`** (the original `4120bb9` audit
-was stale after Tasks 01–03, 05 and the test-suite audit), so only the
-standard pre-dispatch re-check applies: verify each phase's file list at the
-HEAD the task starts from.
+None — Task 04 (regex key testing sandbox) completed 2026-09-20 and moved to
+the [archive](./archive/README.md). New work enters as a numbered plan off
+`ROADMAP.md`, or through the urgent-intake convention below.
 
 ## Shared Conventions (apply to every task)
 
