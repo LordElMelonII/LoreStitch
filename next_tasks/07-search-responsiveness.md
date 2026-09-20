@@ -7,9 +7,9 @@
 > **Type**: Performance fix (no behavior/byte changes to search results)
 > **Suggested agents**: `core-engine` (pure helpers) → `ui-specialist` (wiring) →
 > `ts-reviewer` → `qa-auditor`
-> **Status**: 🟡 In progress — P1 phase (re-grounded against `develop` @ `c05592a`
-> on 2026-09-20, no reference drift — Task 06's gate-blocked phases did not touch
-> this task's files)
+> **Status**: ✅ Implemented on `feature/07-search-responsiveness`
+> (`8d32256..0e0859e`, all gates green — see [07-PROGRESS.md](./07-PROGRESS.md));
+> awaiting user test + ff-merge go-ahead
 
 ---
 

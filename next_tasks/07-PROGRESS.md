@@ -118,3 +118,34 @@ single-pass scan decision.
 
 **Next:** P4 (qa-auditor) — new light e2e (sidebar filter + S&R), full
 three-project suite, manual perf trace in the phase report.
+
+## Phase 4 — E2E & evidence (2026-09-20, qa-auditor)
+
+- Commit: `0e0859e test(e2e): pin the debounced search settle and replace flow`
+  (new `e2e/search-responsiveness.spec.ts`, 2 tests × 3 projects).
+- E2E: full suite **0 failed** (desktop-chrome 55p/12s, mobile-chrome 32p/35s,
+  mobile-safari 30p/37s; skips are by-design project pinning). New pins:
+  filter badge settles via auto-retry + directional ≥150ms lower bound;
+  clear restores 70. S&R: fill → `9 matches in 6 entries` → uncheck a row →
+  Replace all → snackbar → re-scan shows the excluded entry only.
+  Ground truth banked: the 9th FATE hit is "Excalibur" as a KEY of uid 27;
+  S&R pane is a plain MatDialog (compact-fullscreen class) on every viewport;
+  snackbar located via `.mat-mdc-snack-bar-label`.
+- Perf trace (manual, not CI; scripts under `__screenshots__/07-search-responsiveness/`):
+  4000-entry/12.7MB synthetic book, 12 chars @60ms, develop-worktree baseline.
+  At 4× CPU throttle: develop 13 long tasks / **2421ms** blocked / 3 badge
+  scans; branch 1 long task / **71ms** / 1 scan; settle 290ms after last
+  keystroke. At 1× both clean (dev box folds 12MB in single-digit ms).
+  Import-window haystack cost: 13.4s vs 13.3s — negligible (§7.2 answer).
+- Checklist: build clean; units 1012/1012; coverage 95.77/89.17/90.63/97.26,
+  touched files non-regressing (entry-list exact match; S&R branches +0.45);
+  playwright table above; lint clean; typecheck:e2e clean.
+- Deviations: none. Pin migrations: none needed (no existing pins broke).
+
+## Task complete
+
+All four phases green; awaiting user test + ff-merge go-ahead. Commit range
+on `feature/07-search-responsiveness`: `8d32256..0e0859e` (+ docs commits).
+Open items: none. Documented-not-built fallbacks (plan §7.1/§7.2): length-based
+debounce bypass under ~500 entries; per-item memoized folding if the haystack
+memory doubling ever bites — both recorded in module doc comments.
