@@ -35,3 +35,38 @@ Branch: `feature/08-test-keys-trigger-verdict` (off `develop` @ `ba67c85`)
 
 **Next:** P1 (core-engine) — §3.1 pure `st-trigger` verdict module + full
 truth-table spec incl. the user-report repro pin. Gate: `npm test`.
+
+## Phase 1 — Verdict module (2026-09-20, core-engine)
+
+- Commit: `233bd52 feat(core): evaluate the SillyTavern trigger verdict for an entry`
+- Files: `core/models/st-trigger.ts` (bare, framework-free, total; the §3.1
+  interface verbatim; evaluation order mirrors the vendored scan — module doc
+  pins the snapshot as ground truth, §7.1), `core/models/st-trigger.spec.ts`
+  (47 data-driven cases: 12 gate cases, probability table incl. clamps and
+  ±Infinity, disabled, constant ± probability, keyless, vectorized paths,
+  gate preconditions, out-of-enum logic fall-through, order pins, purity),
+  `core/models/README.md` updated.
+- **User-report repro pinned by name**: primary matched + secondary `Test`
+  matched under NOT_ANY → `blocked/secondary-logic-denied`.
+- NaN decision pinned: `extensions.probability = NaN` → treated as absent →
+  default 100 → `inserted/always`. The oracle's literal roll
+  (`Math.random()*100 <= NaN` = always false, entry silently never inserts)
+  is not a percentage anyone configured on purpose; ±Infinity clamp normally.
+- Gate: `CI=true npm test -- --watch=false` **green**; `st-trigger.ts`
+  coverage 100/100/100/100.
+- **Deviations from §3.1 (accepted by orchestrator, both documented in code
+  and tests):**
+  1. Keyless + vectorized → `inconclusive/vector-similarity-only` instead of
+     the literal step-4 `blocked/no-keys` (step 5's UNLESS extended to step
+     4). Ground truth: worldinfo.md :284 (keyless vector matching requires
+     the Vectorized status) + :293 — a keyless vectorized entry is the
+     canonical vector-only configuration; `blocked` there would be the exact
+     honesty failure the user reported. Keyless without the marker stays
+     `blocked/no-keys`.
+  2. `vectorPath` reads the raw `extensions.vectorized === true` marker, not
+     the `entryTriggerState` tri-state (they differ only for constant+
+     vectorized, where the constant path decides the outlook anyway); keeps
+     the field an honest "Vector Storage sees this entry" report.
+
+**Next:** §5 step 2 — user design checkpoint (verdict copy + per-row
+treatment mock). P2 dispatch is BLOCKED until the user answers.
