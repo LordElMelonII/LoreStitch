@@ -1,4 +1,11 @@
-import { isRegexShapedKey, isValidStRegex, matchStRegex, parseStRegex } from './st-regex';
+import {
+  classifyStKey,
+  isRegexShapedKey,
+  isValidStRegex,
+  matchStRegex,
+  parseStRegex,
+  type StKeyClass,
+} from './st-regex';
 
 describe('st-regex', () => {
   describe('parseStRegex', () => {
@@ -175,5 +182,42 @@ describe('st-regex', () => {
         expect(matchStRegex('/f/y', 'foo')).toBe(true);
       }
     });
+  });
+
+  describe('classifyStKey (Task 04 Tier 1 truth table)', () => {
+    const CLASS_CASES: readonly [key: string, expected: StKeyClass][] = [
+      // Plain text: no delimiter shape at all.
+      ['', 'text'],
+      ['plain', 'text'],
+      ['rose, lily', 'text'],
+      ['a/b', 'text'],
+      ['  /a/  ', 'text'],
+      // Shaped and compiling.
+      ['/rose/', 'regex'],
+      ['/rose/i', 'regex'],
+      ['/a[0-9]+/', 'regex'],
+      ['/a\\/b/', 'regex'],
+      ['/x/gimsuy', 'regex'],
+      // Shaped but dead: uncompilable body (world-info.js:2841-2845).
+      ['/(saber/', 'invalid-regex'],
+      ['/a[/i', 'invalid-regex'],
+      ['/a/ii', 'invalid-regex'],
+      // Shaped but dead: unescaped inner slash (world-info.js:2830-2835).
+      ['/a/b/', 'invalid-regex'],
+      ['///', 'invalid-regex'],
+      ['/a//', 'invalid-regex'],
+      // ST-unaccepted flags fail the shape gate itself — the flag class is
+      // [gimsuy]* (world-info.js:2823) — so ST never even parses them as
+      // regexes and matchKeys falls to plaintext like any unshaped key.
+      ['/x/d', 'text'],
+      ['/x/v', 'text'],
+      ['/x/dgimuy', 'text'],
+    ];
+
+    for (const [key, expected] of CLASS_CASES) {
+      it(`classifies ${JSON.stringify(key)} -> ${JSON.stringify(expected)}`, () => {
+        expect(classifyStKey(key)).toBe(expected);
+      });
+    }
   });
 });

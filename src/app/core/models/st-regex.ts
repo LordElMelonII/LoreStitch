@@ -93,6 +93,35 @@ export function isValidStRegex(key: string): boolean {
 }
 
 /**
+ * The activation class of a World Info key (Task 04 §3.1):
+ *
+ * - `'regex'` — shaped and compiling; ST runs it as a regex and ignores the
+ *   case/whole-word options (world-info.js:338-342).
+ * - `'invalid-regex'` — has the `/body/flags` delimiter shape but is dead:
+ *   the body would not compile (world-info.js:2841-2845) or carries an
+ *   unescaped inner `/` (world-info.js:2833). `matchKeys` still falls through
+ *   to plaintext matching of the raw key string (world-info.js:339-345), so
+ *   the class flags the defect; it does not change matching behavior.
+ * - `'text'` — no delimiter shape at all, including keys whose flags are not
+ *   in ST's accepted set (`[gimsuy]*`, world-info.js:2823): a key like
+ *   `/x/d` fails the shape gate itself and matches as plain text.
+ */
+export type StKeyClass = 'regex' | 'invalid-regex' | 'text';
+
+/**
+ * Classifies `key` for the chip/panel surfaces so every consumer of the
+ * shaped-vs-valid distinction (Task 04 §3.1) shares one predicate instead of
+ * re-deriving it. Pure; reuses the existing exported predicates — the shape
+ * gate first (`isRegexShapedKey`), then full validity (`isValidStRegex`).
+ */
+export function classifyStKey(key: string): StKeyClass {
+  if (!isRegexShapedKey(key)) {
+    return 'text';
+  }
+  return isValidStRegex(key) ? 'regex' : 'invalid-regex';
+}
+
+/**
  * True when the ST key regex matches `text`. `false` when the key is not a
  * valid ST regex (ST then treats it as plaintext, never as a regex) or the
  * test itself throws. The regex is parsed fresh per call, so stateful flags

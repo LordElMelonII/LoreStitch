@@ -31,6 +31,35 @@ export interface StMatchOptions {
   matchWholeWords?: boolean | null;
 }
 
+/** Half-open [start, end) span into the evaluated text. */
+export interface StKeyMatchRange {
+  /** Index of the first matched character. */
+  start: number;
+  /** Index one past the last matched character. */
+  end: number;
+}
+
+/** The tri-state overrides resolved against ST's defaults (`false`). */
+interface ResolvedStMatchOptions {
+  caseSensitive: boolean;
+  matchWholeWords: boolean;
+}
+
+/**
+ * Evaluated-text cap for `findStKeyMatches` — the same bound the linter's
+ * matcher applies to entry contents (`MATCH_CONTENT_CAP` in
+ * `core/services/linter.ts`, Task 04 §3.1); bounds catastrophic-pattern cost
+ * on huge texts.
+ */
+const MATCH_CONTENT_CAP = 5000;
+
+/**
+ * Per-key range cap for `findStKeyMatches` (Task 04 §3.1) — generous
+ * headroom over the UI's 200-highlight clamp; stops the scans once a key
+ * floods the evaluated text.
+ */
+const MAX_RANGES_PER_KEY = 500;
+
 /**
  * Escapes regex metacharacters for the oracle's whole-word pattern. ST
  * imports `escapeRegex` from utils.js (world-info.js:4, used at :356), which
@@ -39,6 +68,143 @@ export interface StMatchOptions {
  */
 function escapeRegExp(value: string): string {
   return value.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&');
+}
+
+/** The oracle's `#transformString` (world-info.js:268-270). */
+function transformStString(value: string, caseSensitive: boolean): string {
+  return caseSensitive ? value : value.toLowerCase();
+}
+
+/** Resolves the tri-state overrides; nullish means ST's default (`false`). */
+function resolveStMatchOptions(options: StMatchOptions): ResolvedStMatchOptions {
+  return {
+    caseSensitive: options.caseSensitive ?? false,
+    matchWholeWords: options.matchWholeWords ?? false,
+  };
+}
+
+/**
+ * Every `needle` occurrence in `haystack` as ranges — the range view of the
+ * oracle's `String#includes` paths (world-info.js:353, 362) as an `indexOf`
+ * loop, bounded by `MAX_RANGES_PER_KEY`.
+ */
+function collectSubstringRanges(haystack: string, needle: string): StKeyMatchRange[] {
+  const ranges: StKeyMatchRange[] = [];
+  let from = 0;
+  while (ranges.length < MAX_RANGES_PER_KEY) {
+    const found = haystack.indexOf(needle, from);
+    // `indexOf('')` clamps past-the-end positions to the haystack length
+    // instead of returning -1, so `found < from` catches that stall too.
+    if (found === -1 || found < from) {
+      return ranges;
+    }
+    ranges.push({ start: found, end: found + needle.length });
+    // An empty needle matches at every index; advance at least one character
+    // so the loop always progresses (the `includes('')` quirk, :362).
+    from = found + Math.max(needle.length, 1);
+  }
+  return ranges;
+}
+
+/**
+ * Ranges for the whole-word boundary scan (world-info.js:356). The oracle's
+ * pattern is `(?:^|\W)(key)(?:$|\W)`; the port captures the leading boundary
+ * and the key (`(?:^|(\W))(key)(?:$|\W)`) so the reported span can keep only
+ * the key — captures never change what a pattern matches, so the boolean
+ * contract of `matchStKey` is untouched. Runs on the case-folded haystack
+ * with the folded key, exactly like the oracle.
+ */
+function collectWholeWordRanges(haystack: string, transformedKey: string): StKeyMatchRange[] {
+  const boundary = new RegExp(`(?:^|(\\W))(${escapeRegExp(transformedKey)})(?:$|\\W)`, 'g');
+  const ranges: StKeyMatchRange[] = [];
+  while (ranges.length < MAX_RANGES_PER_KEY) {
+    const match = boundary.exec(haystack);
+    if (!match) {
+      return ranges;
+    }
+    // Group 1 is undefined exactly when the zero-width `^` branch matched;
+    // a `\W` boundary consumes exactly one character before the key. Group 2
+    // is a required capture group, so the `?? ''` fallback (noUnchecked-
+    // IndexedAccess) is unreachable for a successful exec.
+    const start = match.index + (match[1] !== undefined ? 1 : 0);
+    const end = start + (match[2] ?? '').length;
+    ranges.push({ start, end });
+    if (end === start) {
+      // Only the empty key on the empty haystack can zero-length-match here;
+      // the oracle's `.test` accepts it (world-info.js:356-360), so the
+      // boolean keeps it — advance lastIndex by hand or the global loop
+      // spins forever.
+      boundary.lastIndex += 1;
+    }
+  }
+  return ranges;
+}
+
+/**
+ * The range-returning view of `matchStKey`'s plaintext path
+ * (world-info.js:345-363), sharing the exact fold/boundary logic with it:
+ * case-fold both sides (world-info.js:345-346, 268-270); whole-word
+ * single-word keys report boundary-delimited key spans (world-info.js:356),
+ * multi-word keys (world-info.js:350-353) and the default path
+ * (world-info.js:362) keep substring semantics.
+ */
+function findPlaintextRanges(
+  key: string,
+  text: string,
+  caseSensitive: boolean,
+  matchWholeWords: boolean,
+): StKeyMatchRange[] {
+  const haystack = transformStString(text, caseSensitive);
+  const transformedKey = transformStString(key, caseSensitive);
+
+  if (matchWholeWords) {
+    // Multi-word keys keep substring semantics (world-info.js:352-353).
+    if (transformedKey.split(/\s+/).length > 1) {
+      return collectSubstringRanges(haystack, transformedKey);
+    }
+    // Custom boundaries include punctuation-adjacent matches; JS `\W` treats
+    // `_` as a word character (world-info.js:355-359).
+    return collectWholeWordRanges(haystack, transformedKey);
+  }
+
+  return collectSubstringRanges(haystack, transformedKey);
+}
+
+/**
+ * Ranges for a valid ST key regex (world-info.js:338-342): flags containing
+ * `g` yield every occurrence, otherwise the first match only. Zero-length
+ * matches are skipped and `lastIndex` is advanced by hand, so a global scan
+ * can never spin on `/(?:)/g`; a throwing `exec` yields no ranges.
+ */
+function collectRegexRanges(regex: RegExp, evaluatedText: string): StKeyMatchRange[] {
+  const ranges: StKeyMatchRange[] = [];
+  while (ranges.length < MAX_RANGES_PER_KEY) {
+    let match: RegExpExecArray | null;
+    try {
+      match = regex.exec(evaluatedText);
+    } catch {
+      return [];
+    }
+    if (!match) {
+      return ranges;
+    }
+    // match[0] is always defined for a successful exec; the ?? '' fallback
+    // only satisfies noUncheckedIndexedAccess.
+    const start = match.index;
+    const end = start + (match[0] ?? '').length;
+    if (end === start) {
+      if (!regex.global) {
+        return [];
+      }
+      regex.lastIndex += 1;
+      continue;
+    }
+    ranges.push({ start, end });
+    if (!regex.global) {
+      return ranges;
+    }
+  }
+  return ranges;
 }
 
 /**
@@ -67,23 +233,47 @@ export function matchStKey(key: string, text: string, options: StMatchOptions): 
     return keyRegex.regex.test(text);
   }
 
-  // #transformString (world-info.js:268-270) applied to both sides
-  // (world-info.js:345-346).
-  const caseSensitive = options.caseSensitive ?? false;
-  const matchWholeWords = options.matchWholeWords ?? false;
-  const haystack = caseSensitive ? text : text.toLowerCase();
-  const transformedKey = caseSensitive ? key : key.toLowerCase();
+  const { caseSensitive, matchWholeWords } = resolveStMatchOptions(options);
+  return findPlaintextRanges(key, text, caseSensitive, matchWholeWords).length > 0;
+}
 
-  if (matchWholeWords) {
-    const keyWords = transformedKey.split(/\s+/);
-    if (keyWords.length > 1) {
-      // Multi-word keys keep substring semantics (world-info.js:352-353).
-      return haystack.includes(transformedKey);
-    }
-    // Custom boundaries include punctuation-adjacent matches; JS `\W` treats
-    // `_` as a word character (world-info.js:355-359).
-    return new RegExp(`(?:^|\\W)(${escapeRegExp(transformedKey)})(?:$|\\W)`).test(haystack);
+/**
+ * All ranges where `key` matches `text` under ST rules — the range-returning
+ * counterpart of `matchStKey`, feeding excerpts and highlighted previews
+ * (Task 04 §3.1; `matchKeys`, world-info.js:337-366):
+ *
+ * 1. A valid regex key yields its matches and overrides every option
+ *    (world-info.js:338-342): flags containing `g` produce every occurrence,
+ *    otherwise the first match only; zero-length matches are skipped. The
+ *    regex is parsed fresh per call (the `parseStRegex` contract), so
+ *    stateful flags reset every evaluation.
+ * 2. Plain keys and invalid-regex-shaped keys go through the plaintext path
+ *    with `matchStKey`'s exact rules; a whole-word single-word key reports
+ *    the key's span, never the boundary characters.
+ * 3. The evaluated text is capped at 5,000 characters — the same bound the
+ *    linter's matcher applies (`MATCH_CONTENT_CAP` in
+ *    `core/services/linter.ts`) — and ranges at 500 per key.
+ *
+ * Ranges index the evaluated text: `text` truncated to the cap and, when
+ * `caseSensitive` is false, viewed through ST's `#transformString` case fold
+ * (world-info.js:268-270). Ordinary prose folds length-stably, so offsets
+ * coincide with the original text. Pure and deterministic; `matchStKey`
+ * remains the boolean oracle.
+ */
+export function findStKeyMatches(
+  key: string,
+  text: string,
+  options: StMatchOptions,
+): readonly StKeyMatchRange[] {
+  const evaluated = text.slice(0, MATCH_CONTENT_CAP);
+
+  // Regex first, options ignored (world-info.js:338-342); invalid-regex
+  // keys fall through to the plaintext path with the raw key string.
+  const keyRegex = parseStRegex(key);
+  if (keyRegex) {
+    return collectRegexRanges(keyRegex.regex, evaluated);
   }
 
-  return haystack.includes(transformedKey);
+  const { caseSensitive, matchWholeWords } = resolveStMatchOptions(options);
+  return findPlaintextRanges(key, evaluated, caseSensitive, matchWholeWords);
 }
