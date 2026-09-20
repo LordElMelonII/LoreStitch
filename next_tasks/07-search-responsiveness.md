@@ -39,9 +39,11 @@ previews, exports) must stay byte-identical — only *when* the computation runs
   reuse it for debounce tests.
 - **Pinned behavior to migrate**: `entry-list.spec.ts:113-130` sets
   `filterModel` and asserts `filtered()` synchronously — debounce breaks these
-  unless the spec flushes the timer (§3.6). The Search & Replace flow in
-  `e2e/round-trip.spec.ts` types then asserts — Playwright's auto-waiting
-  `expect` handles a 200ms settle, but verify, don't assume.
+  unless the spec flushes the timer (§3.6). The Search & Replace dialog has **no
+  e2e coverage today** (unit-only: `search-replace-dialog.spec.ts`; the
+  "Replace" hit in `round-trip.spec.ts:145` is a comment about fixture content) —
+  the qa phase adds a light S&R e2e (§3.6) rather than re-running something that
+  doesn't exist.
 
 ## 3. Design
 
@@ -77,9 +79,9 @@ export interface DebouncedSignal<T> extends Signal<T> {
   **once per entry change**, not once per keystroke; the per-keystroke cost of
   `filtered` becomes a zero-allocation `includes` scan.
   - Equivalence note: today's check is `title || keys || tags || content` — the
-    joined haystack matches the same queries because the filter input is a
-    single-line `type="text"` (browsers replace pasted newlines with spaces), so a
-    query can never span the `'\n'` separators. Pin this reasoning in a unit test.
+    joined haystack matches the same queries because a single-line text input
+    sanitizes newlines out of its value (WHATWG input sanitization), so a query
+    can never span the `'\n'` separators. Pin this reasoning in a unit test.
   - Memory: one extra string ≈ content size per entry (~doubles text memory for
     the open book). Acceptable; noted in the module doc comment.
 - **Debounce**: `protected readonly filterDebounced = debouncedSignal(this.filter, SEARCH_DEBOUNCE_MS);`
@@ -110,7 +112,7 @@ export interface DebouncedSignal<T> extends Signal<T> {
 | Unit — `debounced-signal.spec.ts` | trailing-edge timing (fake timers); `flush()`; rapid keystrokes collapse to the last value; destroy cancels pending; no-timer-while-idle |
 | Unit — `entry-list.spec.ts` | haystack equivalence pins (title/key/tag/content, case-insensitive, multi-word); separator-guard (query with spaces still matches across a single field only); debounce: `filterModel.set` then fake-advance → `filtered` settles; **migrate** the existing sync assertions (`:113-130`) to flush |
 | Unit — `search-replace-dialog.spec.ts` | rows empty until the debounce settles; invalid regex errors immediately while rows lag; `apply()` after flush replaces what the preview showed (byte-identical rows pre/post refactor if the single-pass lands) |
-| E2E | round-trip S&R flow re-run as-is (auto-waiting asserts); new light spec: fill the sidebar filter → count badge updates within the debounce window → clear → count restores |
+| E2E | new light sidebar-filter spec: fill → count badge settles within the debounce window → clear → count restores; new light S&R spec (none exists today): fill Find… → preview rows settle after the debounce → toggle a row off → Replace all → content reflects the replacement (desktop + one mobile viewport) |
 
 **Not a CI gate**: a manual perf trace protocol — synthetic ~3–5k-entry book,
 type 12 characters, record main-thread long tasks before/after in Chrome DevTools;
@@ -124,7 +126,7 @@ out of CI).
 | **P1 — Pure helpers** (core-engine) | `shared/util/debounced-signal.ts` (+spec), `shared/constants/` (const), `entry-list.model.ts` (haystack builder + `matchesQuery` if it aids testing) | §3.1, §3.2 pure parts |
 | **P2 — Wiring** (ui-specialist) | `entry-list.ts/.html` (+spec), `search-replace-dialog.ts` (+spec) | §3.2, §3.3 incl. the spec migrations |
 | **P3 — Review** (ts-reviewer) | all touched | decides the single-pass scan (§3.3 stretch); typing, lint |
-| **P4 — E2E & report** (qa-auditor) | `e2e/` (new filter spec; round-trip re-run) | §3.6 + manual perf trace in the phase report |
+| **P4 — E2E & report** (qa-auditor) | `e2e/` (new filter + S&R specs; full suite re-run) | §3.6 + manual perf trace in the phase report |
 
 ## 5. Orchestration
 

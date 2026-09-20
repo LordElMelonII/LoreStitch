@@ -99,11 +99,12 @@ Evaluation order mirrors `world-info.js` §2 exactly:
    `NOT_ALL` not-all, `NOT_ANY` none, `AND_ALL` all → else `blocked/
    secondary-logic-denied`.
 7. Probability: `useProbability = ext['useProbability'] !== false`
-   (default true), `probability = typeof ext['probability'] === 'number' &&
-   in [0,100] ? value : 100`. `!useProbability || probability >= 100` →
-   `inserted/always`; else `probabilistic/probability-roll` with the pct.
-   Out-of-scope (hint copy, not verdict): sticky/cooldown timers, inclusion
-   groups, token budget, recursion.
+   (default true), `probability = typeof ext['probability'] === 'number' ?
+   clamp(ext['probability'], 0, 100) : 100` (numeric garbage clamps — matches ST's
+   effective behavior at both ends; non-numbers take the default).
+   `!useProbability || probability >= 100` → `inserted/always`; else `probabilistic/
+   probability-roll` with the pct. Out-of-scope (hint copy, not verdict):
+   sticky/cooldown timers, inclusion groups, token budget, recursion.
 
 Full truth-table unit spec (4 logics × matched/mixed/unmatched secondaries ×
 probability on/off/50 × disabled × vectorized × keyless), including the
@@ -137,7 +138,7 @@ user-report repro: primary matched + secondary `Test` matched under `NOT_ANY` �
 
 | Tier | Required cases |
 |------|----------------|
-| Unit — `st-trigger.spec.ts` | §3.1 truth table incl. the user-report repro; defaults (`selectiveLogic` absent → AND_ANY; `probability` absent → no roll; `useProbability: false` → no roll); out-of-range `probability` falls back to 100; vectorized paths |
+| Unit — `st-trigger.spec.ts` | §3.1 truth table incl. the user-report repro; defaults (`selectiveLogic` absent → AND_ANY; `probability` absent → no roll; `useProbability: false` → no roll); `probability` clamps to [0,100] on garbage; vectorized paths |
 | Unit — `regex-test-panel.spec.ts` | verdict row renders per outlook; sample-text edits flip the verdict; matched-secondary-under-NOT treatment per checkpoint; hint lists the overrides; per-key rows unchanged |
 | E2E — `regex-sandbox.spec.ts` (extend) | existing `Matches` row pins (`:163-167`) survive; add: the NOT-Any repro (secondary matched + NOT Any → blocked verdict shown) and a probability roll verdict; one mobile-viewport pass over the panel |
 
