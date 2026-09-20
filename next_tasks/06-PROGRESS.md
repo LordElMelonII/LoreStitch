@@ -96,3 +96,16 @@ transplant-vs-bar-items). P2 dispatch is BLOCKED until the user answers.
   OWNED by the bar's stylesheet (entry-list's scoped rules nest under
   `.list-header` and stop applying once the node moves).
 - **GATE OPEN — awaiting the user's answer. No P2 dispatch.**
+
+## Checkpoint answer + rebase (2026-09-20, orchestrator)
+
+- **User answered Gate 06-1: variant A2** — the transplanted `.batch-bar`
+  toolbar in the bar strip, WITH the subtle `secondary-container` tonal
+  top edge (inset `box-shadow`) as the foreground cue. P2 implements A2.
+- User gave the ff-merge go-ahead for Task 07; `develop` fast-forwarded to
+  `0b7f9a4` and pushed. This branch **rebased onto the new develop** (clean —
+  P1's files are disjoint from 07's): P1 commit is now `f15b2f6`, branch
+  HEAD `c7bfdba`, force-pushed with lease.
+- Post-rebase sanity: `CI=true npm test -- --watch=false` **green**
+  (54 files / 1013 tests — the union of both tasks' suites).
+- **GATE CLOSED — P2 dispatched with the A2 decision.**
