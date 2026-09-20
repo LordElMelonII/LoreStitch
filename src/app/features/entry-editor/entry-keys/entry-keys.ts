@@ -19,8 +19,32 @@ import {
   ST_LOGIC_OPTIONS,
   entryTriggerState,
 } from '../../../core/models/lorebook.model';
+import { classifyStKey, parseStRegex, type StKeyClass } from '../../../core/models/st-regex';
 import { EntryUpdatesService } from '../entry-updates.service';
 import { type KeyEditTarget, type KeyListField } from '../entry-editor.model';
+
+/** §3.4 verbatim description of an invalid regex key. */
+const INVALID_KEY_TOOLTIP =
+  'Invalid regular expression — SillyTavern treats this key as plain text';
+
+/**
+ * §3.4 verbatim tooltip shape for a valid regex key, `/source/flags` filled
+ * from `parseStRegex`. Unreachable fallback keeps the shape well-typed when
+ * narrowing cannot see that `'regex'` implies a successful parse.
+ */
+function regexKeyTooltip(key: string): string {
+  const parsed = parseStRegex(key);
+  const shape = parsed ? `/${parsed.source}/${parsed.flags}` : key;
+  return `Regex key: ${shape} — case and whole-word options don't apply`;
+}
+
+/** Presentation state of one key chip: classification plus optional tooltip. */
+interface KeyChipState {
+  readonly key: string;
+  readonly cls: StKeyClass;
+  /** §3.4 verbatim tooltip, or null when the chip is a plain text key. */
+  readonly tooltip: string | null;
+}
 
 /**
  * Keys section of the entry options panel: the Selective (Optional Filter)
@@ -43,6 +67,29 @@ export class EntryKeys {
 
   /** True while the entry always triggers — key-based modifiers don't apply. */
   protected readonly isConstant = computed(() => entryTriggerState(this.entry()) === 'constant');
+
+  /**
+   * Chip classification for every primary / secondary key (Task 04 §3.2): a
+   * pure presentation view recomputed on add / remove / in-place edit through
+   * the `entry` input signal. Writes stay untouched (`addKey` / `setKeys`).
+   */
+  protected readonly keyStates = computed(() => {
+    const entry = this.entry();
+    const classify = (key: string): KeyChipState => {
+      const cls = classifyStKey(key);
+      if (cls === 'regex') {
+        return { key, cls, tooltip: regexKeyTooltip(key) };
+      }
+      if (cls === 'invalid-regex') {
+        return { key, cls, tooltip: INVALID_KEY_TOOLTIP };
+      }
+      return { key, cls, tooltip: null };
+    };
+    return {
+      primary: entry.keys.map(classify),
+      secondary: (entry.secondary_keys ?? []).map(classify),
+    };
+  });
 
   protected readonly logicOptions = ST_LOGIC_OPTIONS;
 

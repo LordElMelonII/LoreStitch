@@ -23,7 +23,7 @@
   >
     <mat-label>Primary Keys</mat-label>
     <mat-chip-grid #keysGrid aria-label="Primary keys">
-      @for (key of entry().keys; track $index) {
+      @for (state of keyStates().primary; track $index) {
         @if (isEditing('keys', $index)) {
           <input
             #keyEditInput
@@ -34,15 +34,27 @@
             (keydown.escape)="cancelEdit()"
             (blur)="commitEdit()"
             (click)="$event.stopPropagation()"
-            [attr.aria-label]="'Edit primary key ' + key"
+            [attr.aria-label]="'Edit primary key ' + state.key"
           />
         } @else {
           <mat-chip-row
+            [class.key-regex]="state.cls === 'regex'"
+            [class.key-invalid]="state.cls === 'invalid-regex'"
+            [matTooltip]="state.tooltip ?? ''"
             (removed)="updates.removeKey(entry(), 'keys', $index)"
-            (dblclick)="startEdit('keys', $index, key)"
+            (dblclick)="startEdit('keys', $index, state.key)"
           >
-            {{ key }}
-            <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + key">
+            @if (state.cls === 'regex') {
+              <!-- Quiet accent (§3.6 §3): the chip's leading-icon slot, decorative. -->
+              <mat-icon matChipAvatar aria-hidden="true">functions</mat-icon>
+            }
+            {{ state.key }}
+            @if (state.cls === 'invalid-regex') {
+              <!-- Loud defect mark (§3.6 §3): decoration only — the remove
+                   button below stays the chip's only interactive affordance. -->
+              <mat-icon matChipTrailingIcon aria-hidden="true">error</mat-icon>
+            }
+            <button matChipRemove type="button" [attr.aria-label]="'Remove key ' + state.key">
               <mat-icon>cancel</mat-icon>
             </button>
           </mat-chip-row>
@@ -69,7 +81,7 @@
     >
       <mat-label>Secondary Keys</mat-label>
       <mat-chip-grid #secondaryGrid aria-label="Secondary keys">
-        @for (key of entry().secondary_keys ?? []; track $index) {
+        @for (state of keyStates().secondary; track $index) {
           @if (isEditing('secondary_keys', $index)) {
             <input
               #keyEditInput
@@ -80,15 +92,28 @@
               (keydown.escape)="cancelEdit()"
               (blur)="commitEdit()"
               (click)="$event.stopPropagation()"
-              [attr.aria-label]="'Edit secondary key ' + key"
+              [attr.aria-label]="'Edit secondary key ' + state.key"
             />
           } @else {
             <mat-chip-row
+              [class.key-regex]="state.cls === 'regex'"
+              [class.key-invalid]="state.cls === 'invalid-regex'"
+              [matTooltip]="state.tooltip ?? ''"
               (removed)="updates.removeKey(entry(), 'secondary_keys', $index)"
-              (dblclick)="startEdit('secondary_keys', $index, key)"
+              (dblclick)="startEdit('secondary_keys', $index, state.key)"
             >
-              {{ key }}
-              <button matChipRemove type="button" [attr.aria-label]="'Remove secondary key ' + key">
+              @if (state.cls === 'regex') {
+                <mat-icon matChipAvatar aria-hidden="true">functions</mat-icon>
+              }
+              {{ state.key }}
+              @if (state.cls === 'invalid-regex') {
+                <mat-icon matChipTrailingIcon aria-hidden="true">error</mat-icon>
+              }
+              <button
+                matChipRemove
+                type="button"
+                [attr.aria-label]="'Remove secondary key ' + state.key"
+              >
                 <mat-icon>cancel</mat-icon>
               </button>
             </mat-chip-row>

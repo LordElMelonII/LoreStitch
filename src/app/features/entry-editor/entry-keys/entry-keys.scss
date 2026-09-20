@@ -35,3 +35,30 @@
     outline: none;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Key chip classification (Task 04 §3.6 §3): chips carry one host class per
+// classified state. The treatment rides `--mat-chip-*` component tokens on
+// the host class — Material's own chip rules read them — so no internal
+// selector, `::ng-deep` or `!important` is involved.
+// ---------------------------------------------------------------------------
+
+// Valid regex key — the quiet accent (decided: glyph, not a tonal fill; a
+// secondary-container fill would read as *selection* like the filter chips
+// above this very section). Only the chip's leading-icon slot takes color;
+// outline, fill and label ink stay default.
+mat-chip-row.key-regex {
+  --mat-chip-with-icon-icon-color: var(--mat-sys-secondary);
+}
+
+// Invalid regex — the loud state (defect), the linter's error vocabulary:
+// error outline, error-container fill, on-error-container ink. The fill goes
+// through the token Material's own background rule reads on the chip host
+// (`.mat-mdc-standard-chip` paints `var(--mat-chip-elevated-container-color)`);
+// the trailing `error` glyph follows the ink so it reads on the fill.
+mat-chip-row.key-invalid {
+  --mat-chip-outline-color: var(--mat-sys-error);
+  --mat-chip-label-text-color: var(--mat-sys-on-error-container);
+  --mat-chip-elevated-container-color: var(--mat-sys-error-container);
+  --mat-chip-with-trailing-icon-trailing-icon-color: var(--mat-sys-on-error-container);
+}

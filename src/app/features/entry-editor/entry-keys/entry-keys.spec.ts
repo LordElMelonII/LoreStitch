@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MatChipInputEvent } from '@angular/material/chips';
+import { MatTooltip } from '@angular/material/tooltip';
 import {
   CharacterBookEntry,
   createEmptyEntry,
@@ -155,6 +156,108 @@ describe('EntryKeys', () => {
     fixture.detectChanges();
 
     expect(currentEntry().selective).toBe(true);
+  });
+
+  describe('chip classification', () => {
+    /** The single primary chip's native element (specs here seed one key). */
+    function chipElement(): HTMLElement {
+      const chip = fixture.debugElement.query(By.css('mat-chip-row'));
+      assert(chip);
+      return chip.nativeElement as HTMLElement;
+    }
+
+    /** The MatTooltip directive parked on that chip. */
+    function chipTooltip(): MatTooltip {
+      const chip = fixture.debugElement.query(By.css('mat-chip-row'));
+      assert(chip);
+      return chip.injector.get(MatTooltip);
+    }
+
+    it('flags an invalid regex chip with the error class, glyph and verbatim description', async () => {
+      await createPane({ keys: ['/(saber/'] });
+      const chip = fixture.debugElement.query(By.css('mat-chip-row'));
+      assert(chip);
+
+      expect(chip.nativeElement.classList).toContain('key-invalid');
+      expect(chip.nativeElement.classList).not.toContain('key-regex');
+      // §3.4 verbatim: what happened, and what SillyTavern then does.
+      expect(chipTooltip().message).toBe(
+        'Invalid regular expression — SillyTavern treats this key as plain text',
+      );
+      // The trailing error glyph renders (decorative); the chip key text is
+      // still the raw key string.
+      expect(chip.nativeElement.querySelector('mat-icon.mat-mdc-chip-trailing-icon')).toBeTruthy();
+      expect(chip.nativeElement.textContent).toContain('/(saber/');
+    });
+
+    it('accents a valid regex chip with the leading glyph and the parsed-shape tooltip', async () => {
+      await createPane({ keys: ['/(?:saber|artoria)/i'] });
+      const chip = fixture.debugElement.query(By.css('mat-chip-row'));
+      assert(chip);
+
+      expect(chip.nativeElement.classList).toContain('key-regex');
+      expect(chip.nativeElement.classList).not.toContain('key-invalid');
+      // §3.4 verbatim shape with /source/flags filled from parseStRegex.
+      expect(chipTooltip().message).toBe(
+        "Regex key: /(?:saber|artoria)/i — case and whole-word options don't apply",
+      );
+      // The quiet accent is the leading `functions` glyph, inside the chip's
+      // leading-icon slot (not a tonal fill).
+      const glyph = chip.nativeElement.querySelector('mat-icon.mat-mdc-chip-avatar');
+      expect(glyph?.textContent?.trim()).toBe('functions');
+    });
+
+    it('leaves plain text chips pixel-unchanged: no class, no glyph, no tooltip', async () => {
+      await createPane({ keys: ['saber'], secondary_keys: ['artoria'], selective: true });
+      const element = fixture.nativeElement as HTMLElement;
+
+      for (const chip of element.querySelectorAll('mat-chip-row')) {
+        expect(chip.classList).not.toContain('key-regex');
+        expect(chip.classList).not.toContain('key-invalid');
+        expect(chip.querySelector('mat-icon.mat-mdc-chip-avatar')).toBeNull();
+        expect(chip.querySelector('mat-icon.mat-mdc-chip-trailing-icon')).toBeNull();
+      }
+      expect(chipTooltip().message).toBe('');
+    });
+
+    it('recomputes the classification through add, remove and in-place edit', async () => {
+      const component = await createPane({ keys: ['saber'] });
+      const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        'input[aria-label="Add primary key"]',
+      );
+      assert(input);
+      const chips = (): HTMLElement[] => [
+        ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('mat-chip-row'),
+      ];
+
+      // Plain start.
+      expect(chips()[0]?.classList.contains('key-invalid')).toBe(false);
+
+      // Add an invalid regex key through the real add path.
+      updates.addKey(currentEntry(), 'keys', {
+        value: '/(saber/',
+        input,
+      } as unknown as MatChipInputEvent);
+      bindEntry(currentEntry());
+      expect(chips()).toHaveLength(2);
+      expect(chips()[1]?.classList).toContain('key-invalid');
+
+      // Fix it in place — a double-click edit into a valid regex key flips
+      // the chip to the quiet accent.
+      component['startEdit']('keys', 1, '/(saber/');
+      component['setEditValue']({ target: { value: '/saber/' } } as unknown as Event);
+      component['commitEdit']();
+      bindEntry(currentEntry());
+      expect(chips()[1]?.classList).toContain('key-regex');
+      expect(chips()[1]?.classList).not.toContain('key-invalid');
+
+      // Remove it — the remaining plaintext key is unclassified again.
+      updates.removeKey(currentEntry(), 'keys', 1);
+      bindEntry(currentEntry());
+      expect(chips()).toHaveLength(1);
+      expect(chips()[0]?.classList.contains('key-regex')).toBe(false);
+      expect(chips()[0]?.classList.contains('key-invalid')).toBe(false);
+    });
   });
 
   describe('in-place chip editing', () => {
