@@ -159,13 +159,6 @@ describe('EntryKeys', () => {
   });
 
   describe('chip classification', () => {
-    /** The single primary chip's native element (specs here seed one key). */
-    function chipElement(): HTMLElement {
-      const chip = fixture.debugElement.query(By.css('mat-chip-row'));
-      assert(chip);
-      return chip.nativeElement as HTMLElement;
-    }
-
     /** The MatTooltip directive parked on that chip. */
     function chipTooltip(): MatTooltip {
       const chip = fixture.debugElement.query(By.css('mat-chip-row'));
