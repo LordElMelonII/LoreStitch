@@ -70,3 +70,23 @@ truth-table spec incl. the user-report repro pin. Gate: `npm test`.
 
 **Next:** §5 step 2 — user design checkpoint (verdict copy + per-row
 treatment mock). P2 dispatch is BLOCKED until the user answers.
+
+## Checkpoint evidence posted (2026-09-20, orchestrator)
+
+- Mocks rendered over the real app in the repro state
+  (`__screenshots__/08-test-keys-verdict/`, script `mock-verdict.mjs`):
+  `*-mock-blocked-verdict-suffix` (verdict row + "(blocks activation)"
+  suffix), `*-mock-blocked-verdict-tone` (verdict row + error-tone recolor),
+  desktop+mobile; desktop-only `mock-inserted-verdict` (AND Any contrast)
+  and `mock-verdict-copy-all-outlooks` (all four outlook rows for copy
+  review). Before-set probe pins the repro objectively: the `avalon`
+  secondary row shows state "Matches" under the "NOT Any" chip with a
+  neutral icon color — the dishonest green the user reported.
+- Verdict copy proposed (P2 implements whatever the user approves):
+  blocked → "Would **not** be inserted — the matched 'NOT Any' secondary
+  keys block activation."; inserted → "Would be inserted into SillyTavern's
+  context for this sample."; probabilistic → "Fires a probability roll in
+  SillyTavern — inserted P% of the time."; inconclusive → "Keys stayed
+  silent — Vector Storage may still insert this by similarity." (+ "Similarity
+  is not testable here." sub-line).
+- **GATE OPEN — awaiting the user's answer. No P2 dispatch.**
