@@ -463,7 +463,13 @@ function itemAt(list: EntryList, index: number) {
     await settleFilter();
 
     list['add']();
-    await vi.advanceTimersByTimeAsync(0);
+    fixture.detectChanges(); // flush the append-tracking effect synchronously
+    // The reveal is synchronous: the cleared query must already be in the
+    // debounced mirror — scrollToEntry looks the row up on the next
+    // macrotask, well inside the 200ms window, so a mirror still holding
+    // 'saber' would silently drop the reveal scroll.
+    expect(list['filterDebounced']()).toBe('');
+    expect(list['filtered']().map((i) => i.id)).toEqual([0, 1]);
     await settle();
 
     expect(workspace.entries()).toHaveLength(2);

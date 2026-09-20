@@ -1,8 +1,15 @@
-import { DestroyRef, effect, inject, signal, type Signal } from '@angular/core';
+import {
+  DestroyRef,
+  effect,
+  inject,
+  signal,
+  untracked,
+  type Signal,
+} from '@angular/core';
 
 /** A signal that mirrors `source`, lagging at most `delayMs` behind it. */
 export interface DebouncedSignal<T> extends Signal<T> {
-  /** Runs a pending timer immediately (search submit, destroy). */
+  /** Makes the mirror current with the source's value now (submit, reveal). */
   flush(): void;
 }
 
@@ -28,8 +35,11 @@ interface PendingValue<T> {
  * - Trailing edge only: a source change within the window REPLACES the
  *   pending value (the timer re-arms per change); after `delayMs` without
  *   further changes the mirror updates to the latest value.
- * - `flush()` applies a pending value immediately and cancels its timer; a
- *   no-op when nothing is pending.
+ * - `flush()` makes the mirror CURRENT: it cancels any pending timer and
+ *   applies what the source holds right now — a value the debounce effect
+ *   has not even picked up yet (it runs asynchronously, so a change made
+ *   inside another effect's body is not pending at that moment). A no-op
+ *   when the mirror already holds the source's value.
  * - Destroying the caller's injection context cancels any pending value —
  *   destroy cancels, never flushes — so a dying component cannot fire a
  *   stale update.
@@ -79,12 +89,20 @@ export function debouncedSignal<T>(source: Signal<T>, delayMs: number): Debounce
 
   return Object.assign(mirror, {
     flush(): void {
+      // The source's CURRENT value, not just an already-armed pending one:
+      // the debounce effect runs asynchronously, so a source change made
+      // inside another effect's body (entry-list's append reveal clears the
+      // filter and immediately needs the cleared view) is not pending yet.
+      // The read is untracked so calling flush() from inside an effect
+      // never couples that effect to the source.
+      const current = untracked(() => source());
       if (pending !== undefined) {
-        const scheduled = pending;
-        clearTimeout(scheduled.timer);
+        clearTimeout(pending.timer);
         pending = undefined;
-        settled = scheduled.value;
-        mirror.set(scheduled.value);
+      }
+      if (!Object.is(current, settled)) {
+        settled = current;
+        mirror.set(current);
       }
     },
   });

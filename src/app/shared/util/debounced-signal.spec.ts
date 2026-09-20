@@ -115,6 +115,41 @@ describe('debouncedSignal', () => {
     injector.destroy();
   });
 
+  it('flush() applies a change the debounce effect has not picked up yet', async () => {
+    // The reveal case: a change made inside ANOTHER effect's body and
+    // flushed in the same breath — the debounce effect runs asynchronously,
+    // so the new value is not pending when flush() is called.
+    const { source, debounced, injector } = createHarness('a');
+    await runEffects();
+
+    source.set('b'); // NO runEffects(): the change is not pending yet
+    debounced.flush();
+    expect(debounced()).toBe('b');
+
+    // The already-queued effect run lands on the applied value: it must not
+    // arm a timer for it (that would leave one running while idle).
+    await runEffects();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(DELAY_MS * 2);
+    expect(debounced()).toBe('b');
+    injector.destroy();
+  });
+
+  it('flush() applies the source’s latest value, superseding a stale pending one', async () => {
+    const { source, debounced, injector } = createHarness('a');
+    await runEffects();
+
+    source.set('b');
+    await runEffects(); // pending: 'b'
+    source.set('c'); // newer value, effect not yet run — 'b' is now stale
+    debounced.flush();
+    expect(debounced()).toBe('c');
+
+    await runEffects(); // the queued run sees 'c' already settled: no timer
+    expect(vi.getTimerCount()).toBe(0);
+    injector.destroy();
+  });
+
   it('destroying the context drops the pending value instead of applying it', async () => {
     const { source, debounced, injector } = createHarness('a');
     await runEffects();
