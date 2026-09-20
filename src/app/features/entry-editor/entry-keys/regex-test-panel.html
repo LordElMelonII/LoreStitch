@@ -27,12 +27,7 @@
        1fr clip, invisible and inert while closed, so the sample survives
        toggling. Collapse is the toggle's job only — no Escape handler
        anywhere in the panel. -->
-  <div
-    class="test-panel-anchor"
-    [class.open]="open()"
-    [attr.id]="panelId()"
-    [inert]="!open()"
-  >
+  <div class="test-panel-anchor" [class.open]="open()" [attr.id]="panelId()" [inert]="!open()">
     <div class="test-panel-clip">
       <div class="test-panel-body">
         <mat-form-field class="sample-field" subscriptSizing="dynamic" appearance="fill">
@@ -43,14 +38,14 @@
             [value]="sample()"
             (input)="setSample($event)"
             maxlength="5000"
-            placeholder="Artoria raised Excalibur as Saber…"
+            placeholder="Enter sample text..."
           ></textarea>
+          <mat-hint
+            >Matches against the raw text you provide — not SillyTavern's assembled chat history
+            (message names, scan depth, recursion). Unset options use SillyTavern's defaults:
+            case-insensitive, substring matching.
+          </mat-hint>
         </mat-form-field>
-        <p class="chip-hint">
-          Matches against the raw text you provide — not SillyTavern's assembled chat
-          history (message names, scan depth, recursion). Unset options use SillyTavern's
-          defaults: case-insensitive, substring matching.
-        </p>
 
         <!-- Match rows: textual facts in reading order — the icons are
              decoration, nothing in a row is focusable or clickable. -->

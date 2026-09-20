@@ -19,6 +19,7 @@ import {
   highlightSegments,
   type TextSegment,
 } from './highlight-segments';
+import { MatButtonModule } from '@angular/material/button';
 
 /** Radius around the first match when excerpting (~60 chars in total). */
 const EXCERPT_RADIUS = 30;
@@ -62,7 +63,7 @@ function excerptAround(text: string, range: StKeyMatchRange): string {
  */
 @Component({
   selector: 'app-regex-test-panel',
-  imports: [MatFormFieldModule, MatIconModule, MatInputModule, MatTooltipModule],
+  imports: [MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatTooltipModule],
   templateUrl: './regex-test-panel.html',
   styleUrl: './regex-test-panel.scss',
 })
