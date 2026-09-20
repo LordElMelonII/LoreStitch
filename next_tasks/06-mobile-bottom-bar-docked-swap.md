@@ -17,9 +17,11 @@
 > **Type**: Defect fix + interaction redesign (amends the archived Task 02 §3.3
 > amendment's *"hides while overlays or drawers are open"* rule)
 > **Suggested agents**: `ui-specialist` (lead) → `ts-reviewer` → `qa-auditor`
-> **Status**: 🟢 Planned — no implementation started (grounded against `develop` @ `2468de3`;
-> revised 2026-09-20 after self-review — §2 geometry corrected: a drawer never overlaps
-> the bar, so "background" is synthesized and the swap needs no z-index)
+> **Status**: 🟡 In progress — P1 phase (re-grounded against `develop` @ `aabdb3c`
+> on 2026-09-20, no reference drift — only docs commits since the `2468de3`
+> grounding; revised 2026-09-20 after self-review — §2 geometry corrected: a
+> drawer never overlaps the bar, so "background" is synthesized and the swap
+> needs no z-index)
 
 ---
 
