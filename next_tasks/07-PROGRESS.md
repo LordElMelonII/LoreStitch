@@ -50,3 +50,42 @@ Gate: `npm test`.
 **Next:** P2 (ui-specialist) — wire debounce + haystack into the sidebar
 filter (`entry-list.ts/.html` + spec migrations) and the S&R dialog
 (`search-replace-dialog.ts` + spec). Gate: `npm test` + `npm run build`.
+
+## Phase 2 — Wiring (2026-09-20, ui-specialist)
+
+- Commit: `290c8fa feat(search): debounce the sidebar filter and search-replace preview`
+- Files: `entry-list.model.ts` (`EntryListItem.search` field — the §3.2
+  interface edit belongs to wiring, P1 landed only helpers),
+  `entry-list.ts/.html/.spec.ts`, `search-replace-dialog.ts/.html/.spec.ts`,
+  both folder READMEs (search-replace README created).
+- What landed: `filterDebounced` mirror; `items` builds the haystack via
+  `entrySearchHaystack` (locals hoisted, single fold per entry change);
+  `filtered` scans `matchesQuery` off the debounced value (tag chips stay
+  immediate — pinned); count badge and empty-state read the settled view;
+  append-reveal flushes the mirror after filter-clear so the 0ms reveal
+  scroll still finds the row. S&R: `queryDebounced`/`replacementDebounced`;
+  `pattern`/`matchEntry` consume mirrors; toggles immediate;
+  `patternError` compiles the IMMEDIATE query (fresh compile, no book scan —
+  feedback lags in neither direction); `apply()` flushes both mirrors
+  before reading rows.
+- Spec migrations (strengthened, none loosened): entry-list filter tests +
+  4 hidden sync `filtered()` consumers (select-all, append-reveal, viewport
+  index mapping, out-of-range drops) now settle the debounce first; all 16
+  S&R tests `await typeIn`; new pins: debounce-settles, multi-word
+  separator guard, preview-empty-until-settle, immediate-invalid-regex,
+  apply-flush ×2, tag-chips-stay-immediate.
+- Gates: `CI=true npm test -- --watch=false` **green** (54 files / 1010
+  tests; coverage 95.76/89.16/90.61/97.26; entry-list.ts 91.32/84.21/89.83/92.52,
+  search-replace group 92.59/85.18/83.33/96.2); `npm run build` **green**.
+- Deviations (justified): (1) fake-timer idiom needed repo-specific
+  `toFake: ['setTimeout','clearTimeout']` (default set starves
+  `fixture.whenStable()`) and `detectChanges()` before clock-advance (the
+  debounce effect is a view effect flushed by `appRef.tick()`) — documented
+  in the spec helpers; (2) `patternError` compiles the immediate query
+  instead of reading a debounced `pattern()` — equivalent by construction,
+  pinned by the immediate/lag test; (3) §7.3 guard verified: `items` reads
+  only `entries()` + `dirtyEntryIds()` + pure helpers.
+- The §3.3 single-pass `matchAll()` stretch is untouched — P3 decides it.
+
+**Next:** P3 (ts-reviewer) — typing/signal-purity review + lint gate +
+single-pass scan decision.
