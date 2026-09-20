@@ -3,6 +3,28 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.3.0 — September 20, 2026
+
+The rehearsal release. Your keys no longer have to be a leap of faith: paste
+in some text and watch, live, which of them would fire and where.
+
+### Highlights
+
+- **Test keys against sample text** — entries with keys now carry a "Test
+  keys" section in the editor. Type a sample and every primary and secondary
+  key is checked against it on the spot: each row tells you whether the key
+  matches and shows the words around its first hit, and a highlighted preview
+  paints every match in place across your text. The test honors the entry's
+  case-sensitivity and whole-word settings, and options left at "Default"
+  use SillyTavern's own defaults — case-insensitive, substring matching.
+- **Regex keys look the part** — a key like `/(?:saber|artoria)/i` now wears
+  a small function symbol on its chip, in both the primary and secondary
+  lists, so regex keys are recognizable at a glance.
+- **Broken regexes are caught on sight** — a key that has the `/regex/flags`
+  shape but doesn't compile gets an error mark on its chip with a tooltip
+  saying so, and the test panel reports it the way SillyTavern treats it:
+  as plain text.
+
 ## 1.2.0 — September 19, 2026
 
 The health-check release. One click tells you what SillyTavern never does:
