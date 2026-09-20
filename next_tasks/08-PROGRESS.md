@@ -90,3 +90,12 @@ treatment mock). P2 dispatch is BLOCKED until the user answers.
   silent — Vector Storage may still insert this by similarity." (+ "Similarity
   is not testable here." sub-line).
 - **GATE OPEN — awaiting the user's answer. No P2 dispatch.**
+
+## Checkpoint answer (2026-09-20, orchestrator)
+
+- **User answered Gate 08-1: treatment 1** — the verdict banner + the
+  "(blocks activation)" error suffix on the offending matched-secondary row
+  (treatment 2's tone recolor rejected). The copy shown in the mocks is
+  approved as rendered (blocked/inserted/probabilistic/inconclusive lines in
+  the 08 ledger's checkpoint entry above). P2 implements exactly that.
+- **GATE CLOSED — P2 dispatched with the treatment-1 decision.**
