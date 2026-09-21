@@ -1,0 +1,29 @@
+<mat-button-toggle-group
+  class="strategy-toggle"
+  [value]="triggerState()"
+  (change)="updates.setTriggerState(entry(), $event.value)"
+  hideSingleSelectionIndicator
+  aria-label="Trigger strategy"
+>
+  <mat-button-toggle
+    value="normal"
+    matTooltip="🟢 Triggered only in the presence of a key"
+    aria-label="Normal: keyword-triggered"
+  >
+    🟢 Normal
+  </mat-button-toggle>
+  <mat-button-toggle
+    value="constant"
+    matTooltip="🔵 Does not need any keywords, and will trigger regardless of content"
+    aria-label="Constant: always inserted"
+  >
+    🔵 Constant
+  </mat-button-toggle>
+  <mat-button-toggle
+    value="vectorized"
+    matTooltip="🔗 Allowed to be inserted by embedding similarity (Vector Storage)"
+    aria-label="Vectorized: inserted by embedding similarity"
+  >
+    🔗 Vector
+  </mat-button-toggle>
+</mat-button-toggle-group>

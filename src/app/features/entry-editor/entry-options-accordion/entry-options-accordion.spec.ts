@@ -51,4 +51,18 @@ describe('EntryOptionsAccordion', () => {
     fixture.detectChanges();
     expect(el.classList.contains('mobile')).toBe(true);
   });
+
+  it('renders strategy toggle in control strip on desktop and in panel on mobile', async () => {
+    const viewport = signal<ViewportClass>('desktop');
+    const fixture = await mount(viewport);
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelector('.control-strip app-entry-strategy-toggle')).toBeTruthy();
+    expect(el.querySelector('.panel .strategy-section app-entry-strategy-toggle')).toBeNull();
+
+    viewport.set('mobile');
+    fixture.detectChanges();
+    expect(el.querySelector('.control-strip app-entry-strategy-toggle')).toBeNull();
+    expect(el.querySelector('.panel .strategy-section app-entry-strategy-toggle')).toBeTruthy();
+  });
 });

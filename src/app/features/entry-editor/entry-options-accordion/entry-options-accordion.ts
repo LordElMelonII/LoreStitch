@@ -1,18 +1,13 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
-import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule, MatLabel } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import {
-  CharacterBookEntry,
-  WiTriggerState,
-  entryTriggerState,
-} from '../../../core/models/lorebook.model';
+import { CharacterBookEntry } from '../../../core/models/lorebook.model';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { entrySliceSignal } from '../entry-edit-form';
 import { EntryActivation } from '../entry-activation/entry-activation';
@@ -21,6 +16,7 @@ import { EntryKeys } from '../entry-keys/entry-keys';
 import { EntryMatchingSources } from '../entry-matching-sources/entry-matching-sources';
 import { EntryPlacement } from '../entry-placement/entry-placement';
 import { EntryRecursionTiming } from '../entry-recursion-timing/entry-recursion-timing';
+import { EntryStrategyToggle } from '../entry-strategy-toggle/entry-strategy-toggle';
 import { EntryUpdatesService } from '../entry-updates.service';
 import { EntryOptionsPanelState } from './entry-options-panel-state';
 
@@ -46,7 +42,6 @@ interface TriggerStripModel {
   imports: [
     FormField,
     MatButtonModule,
-    MatButtonToggleModule,
     MatCardModule,
     MatFormFieldModule,
     MatIconModule,
@@ -60,6 +55,7 @@ interface TriggerStripModel {
     EntryMatchingSources,
     EntryPlacement,
     EntryRecursionTiming,
+    EntryStrategyToggle,
   ],
   templateUrl: './entry-options-accordion.html',
   styleUrl: './entry-options-accordion.scss',
@@ -91,9 +87,6 @@ export class EntryOptionsAccordion {
   // source of viewport truth), which drives the expansion direction: the
   // panel opens downward in flow on mobile, upward on desktop.
   protected readonly isMobile = inject(LayoutService).isMobile;
-
-  /** The entry's trigger strategy: normal 🟢 / constant 🔵 / vectorized 🔗. */
-  protected readonly triggerState = computed<WiTriggerState>(() => entryTriggerState(this.entry()));
 
   /** Chevron pointing where the panel will move: closed shows an up chevron
    * (the panel opens upward, anchored above the strip), open shows a down

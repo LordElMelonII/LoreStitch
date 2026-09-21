@@ -33,6 +33,15 @@
   margin-left: auto;
 }
 
+// Mobile-only section in the options panel for activation strategy.
+.strategy-section {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 16px;
+}
+
 // MD3 segmented buttons use the full corner shape.
 .strategy-toggle {
   --mat-button-toggle-shape: var(--mat-sys-corner-full);
@@ -111,6 +120,14 @@
   .panel-anchor {
     position: static;
     margin-bottom: 12px;
+  }
+
+  .expand-toggle {
+    margin-left: revert;
+  }
+
+  .order {
+    margin-left: auto;
   }
 }
 

@@ -1,0 +1,8 @@
+:host {
+  display: inline-flex;
+}
+
+// MD3 segmented buttons use the full corner shape.
+.strategy-toggle {
+  --mat-button-toggle-shape: var(--mat-sys-corner-full);
+}
