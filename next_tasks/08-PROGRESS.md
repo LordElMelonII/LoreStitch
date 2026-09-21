@@ -147,3 +147,43 @@ treatment mock). P2 dispatch is BLOCKED until the user answers.
 - Gates: `npm run lint` **clean**; units **1073/1073**.
 
 **Next:** P4 (qa-auditor) — regex-sandbox e2e extensions + screenshots.
+
+## Phase 4 — E2E & evidence (2026-09-21, qa-auditor)
+
+- Commit: `7fee7c5 test(e2e): pin the trigger verdict in the sandbox`
+- Existing `Matches` row pins and the whole-word flip leg survive untouched
+  (the verdict legs run first and restore AND Any + probability 100).
+- New e2e: the NOT-Any repro end-to-end (mat-select flip → `verdict-blocked`
+  banner with the approved headline, `Matches (blocks activation)` suffix on
+  avalon; AND Any flips back to inserted + suffix gone). **Probabilistic
+  verdict pinned end-to-end too** — the plan's "no probability editor"
+  premise was outdated: the Activation section has a real `Probability %`
+  field writing `extensions.probability` through the workspace mutator
+  (entry-activation.html:44); 50 → "Fires a probability roll … inserted 50%
+  of the time.", 100 → inserted again. Mobile-chrome leg green (the
+  mobile-safari describe skip kept).
+- Playwright per project: desktop-chrome 55p/12s, mobile-chrome 32p/35s,
+  mobile-safari 29p/37s + 1 unrelated WebKit timing flake (token meter;
+  passed 5/5 on isolated re-run).
+- Screenshots: after-set re-captured with the pinned script (one disclosed
+  minimal fix: a `revealTestKeys` scroll — the banner lands below the
+  options accordion's own scroll fold; pinned conditions untouched).
+  Verified: state 01 shows the red blocked banner + suffix on both
+  1280×800 and 390×844; state 02 the inserted banner + plain Matches row.
+- Checklist: build clean; typecheck:e2e clean; coverage at baseline (panel
+  ts 97.53/91.8/100/97.22, html 100/95.55/100/100, st-trigger 100;
+  globals 95.83/89.46/90.75/97.27); lint clean.
+- **Flake flagged for the user (pre-existing, not this diff)**:
+  `entry-editor.spec.ts > renders the writing surface…` intermittently hits
+  vitest's 5s `whenStable` limit under full-suite parallel load (3 of 7
+  runs; isolated reruns always pass) — a `testTimeout` bump is the likely
+  fix, left as a user decision.
+- Deviations: none material (the capture-script scroll helper disclosed
+  above).
+
+## Task complete
+
+All four phases green; awaiting user test + ff-merge go-ahead. Commit range
+on `feature/08-test-keys-trigger-verdict` (rebased onto develop @ `0b7f9a4`):
+`dd77670..7fee7c5`; code phases: P1 `1df3007`, P2 `0dbb5fa`, P3 `b95d836`,
+P4 `7fee7c5`. Open items: the pre-existing entry-editor unit flake above.
