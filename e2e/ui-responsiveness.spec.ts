@@ -495,9 +495,13 @@ test.describe('responsive studio shell', () => {
           await page.keyboard.press('Escape');
           await expect(exportPane).toBeHidden();
 
-          // Release the drawer (its Escape handling must not swallow the
-          // next leg) before opening the More menu.
-          await page.keyboard.press('Escape');
+          // Release the drawer before opening the More menu. The two sheet
+          // Escapes above restored focus onto the bar's swapped triggers
+          // (Task 06 §3.2 — on phones the batch controls live on the docked
+          // strip, OUTSIDE the drawer pane), so the pane's own Escape
+          // listener no longer hears the key: close from the hamburger, as a
+          // drawer user would.
+          await page.locator('[aria-label="Toggle entries panel"]').click();
           await expect(page.locator('.entries-sidenav')).not.toBeInViewport();
 
           // Merge pane as a sheet via the More menu, with the fixture as the
@@ -534,8 +538,11 @@ test.describe('responsive studio shell', () => {
           await expectTouchTargets(page, 'app-entry-options-accordion .control-strip', 48);
           await page.locator('[aria-label="Toggle entry options"]').click();
 
-          // Entry rows and the batch toolbar (Material icon buttons pick up
-          // the global 48px mobile rule) inside the drawer.
+          // Entry rows, and the batch toolbar after the selection (Material
+          // icon buttons pick up the global 48px mobile rule). On phones the
+          // toolbar is the bottom bar's transplanted one (`app-entry-list`
+          // renders its header toolbar on docked widths only, and the bar is
+          // a phone-only surface, so `.batch-bar` never double-resolves).
           await selectFirstTwoRows(page);
           await expectTouchTargets(page, 'app-entry-list .entry-item', 44);
           await expectTouchTargets(page, '.batch-bar button', 48);

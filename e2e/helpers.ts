@@ -87,8 +87,14 @@ export async function openFirstEntry(page: Page): Promise<void> {
  *
  * Viewport-aware: below the shell's 768px breakpoint the entries sidenav is
  * an off-canvas `over` drawer, so the rows (and their checkboxes) are not
- * visible until the drawer is toggled open. The batch toolbar lives inside
- * the drawer too, so the whole selection flow stays within it.
+ * visible until the drawer is toggled open. The `Batch actions` toolbar that
+ * appears with the selection keeps one DOM contract everywhere — role,
+ * aria-label, the `N selected` count — but its location is
+ * breakpoint-dependent by design (Task 06 §3.2): the inline header toolbar
+ * inside the drawer on tablet/desktop, the docked bottom bar's transplanted
+ * toolbar on phones. The single `getByRole` assertion below therefore
+ * resolves to the bar's strip on phones and to the drawer's header on wider
+ * viewports — callers need no viewport branch.
  */
 export async function selectFirstTwoRows(page: Page): Promise<void> {
   const viewport = page.viewportSize();
