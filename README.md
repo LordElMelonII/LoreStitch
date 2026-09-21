@@ -39,7 +39,7 @@ Then open `http://localhost:4321/` in your browser (the port is pinned in `angul
 
 - Create multiple projects, each holding one lorebook and its own version history.
 - Everything persists in your browser's IndexedDB with debounced auto-saving, so you never lose edits — even if you close the tab. The last-opened project reopens automatically on your next visit.
-- Recent projects are listed on the welcome screen and in the topbar for quick switching, renaming, and deletion.
+- Recent projects are listed on the welcome screen and in the topbar for quick switching and deletion.
 
 ### Deep, SillyTavern-faithful entry editor
 
