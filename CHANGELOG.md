@@ -3,6 +3,43 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.4.0 — September 21, 2026
+
+The straight-answers release. Test keys now says outright whether the entry
+would make it into SillyTavern's context; searching enormous lorebooks no
+longer stutters; and the phone bottom bar finally sits still.
+
+### Highlights
+
+- **A verdict, not just clues** — the "Test keys" panel now ends with a clear
+  entry-level answer: "Would be inserted into SillyTavern's context for this
+  sample" or "Would **not** be inserted", with the reason named — a disabled
+  entry, no primary keys, no primary key matching, or the secondary-key logic
+  turning a match away. It reads your entry's secondary logic exactly the way
+  SillyTavern does, so a matched secondary key under NOT Any / NOT All shows
+  its true color: a block, not a green light.
+- **Probability, honestly told** — entries that rely on a probability roll
+  (anything below 100%) get their own verdict: insertion depends on a roll of
+  the dice, shown with a dice mark instead of a promise. The verdict also
+  states its known limits — chat history, scan depth, recursion, timed
+  effects and inclusion groups are not simulated here.
+- **Typing without the stall** — on enormous lorebooks, the sidebar filter and
+  the Search & Replace preview now wait for a beat (~200ms) after your last
+  keystroke before scanning, instead of re-reading every entry on every
+  letter. The results themselves are unchanged — they just arrive without the
+  typing struggle.
+- **The phone bottom bar stays put** — opening a drawer or dialog no longer
+  makes the bottom bar vanish and pop back; it stays docked, merely dimmed
+  and inert behind whatever you opened. No more stutter in the layout.
+- **Batch actions where your thumb is** — on phones, selecting several entries
+  swaps the bottom bar's quick actions for the batch toolbar (edit, delete,
+  and the rest) in place — fully tappable, just below the drawer. The rows no
+  longer jump down when a selection toolbar appears, and the toolbar's ✕ no
+  longer overflows on narrow screens. Tablets and desktops keep their inline
+  toolbar as it was.
+- **A steadier batch delete** — cancelling the delete confirmation while batch
+  editing on a phone no longer disrupts the bar's focus recovery.
+
 ## 1.3.0 — September 20, 2026
 
 The rehearsal release. Your keys no longer have to be a leap of faith: paste
