@@ -6,27 +6,9 @@ Completed plans live in [archive/](./archive/).
 
 ## Pending
 
-Three plans from the 2026-09-20 user bug report (numbered off the archive; none
-started). Recommended order:
-
-1. **[06 — Mobile bottom bar: always-docked bar & multi-select action swap](./06-mobile-bottom-bar-docked-swap.md)** —
-   bar no longer unstamps under drawers/dialogs (stutter fix; drawers never overlap
-   it, so "background" is a synthesized veil + inert state); batch toolbar
-   relocates into a foreground bar swap while the entries drawer holds a selection
-   (fixes the row-skip and the ✕ overflow on phones). Phone focus policy rides
-   along. Design checkpoint before the swap phase.
-2. **[07 — Search responsiveness: debounced filter & preview](./07-search-responsiveness.md)** —
-   ~200ms trailing debounce + haystack pre-fold for the sidebar filter, debounced
-   preview for Search & Replace; results stay byte-identical.
-3. **[08 — Test keys: SillyTavern trigger verdict](./08-test-keys-trigger-verdict.md)** —
-   pure `st-trigger` module evaluates disabled/constant/keys/secondary-logic/
-   probability exactly like the vendored `world-info.js`; panel gains an explicit
-   "would it be inserted?" verdict row (fixes the green-on-blocking-key report).
-   Design checkpoint before the panel phase.
-
-06 and 07 both end in `e2e/` work — serialize their qa phases; 06 and 08 are
-otherwise file-disjoint and could interleave, but run them sequentially to keep
-the single verification pipeline honest.
+None — the 2026-09-20 bug-report batch (06–08) is implemented on feature
+branches and archived (see [archive/README.md](./archive/README.md) for the
+landing table; 06/08 await user test + ff-merge as of 2026-09-21).
 
 ## Shared Conventions (apply to every task)
 

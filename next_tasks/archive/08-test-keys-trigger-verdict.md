@@ -9,7 +9,9 @@
 > panel never states the joint, entry-level outcome)
 > **Suggested agents**: `core-engine` (lead: pure verdict module) → `ui-specialist`
 > (panel) → `ts-reviewer` → `qa-auditor`
-> **Status**: 🟢 Planned — no implementation started (grounded against `develop` @ `2468de3`)
+> **Status**: ✅ Implemented on `feature/08-test-keys-trigger-verdict`
+> (P1–P4 all green — see [08-PROGRESS.md](./08-PROGRESS.md); design 08-1
+> answered treatment 1; awaiting user test + ff-merge go-ahead)
 
 ---
 
