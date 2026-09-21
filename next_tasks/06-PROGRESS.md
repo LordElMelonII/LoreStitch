@@ -182,3 +182,56 @@ transplant-vs-bar-items). P2 dispatch is BLOCKED until the user answers.
 
 **Next:** P4 (qa-auditor) — §3.6 e2e migrations + new swap flow; full suite;
 screenshots + side-by-side.
+
+## Phase 4 — E2E & evidence (2026-09-21, qa-auditor work completed by
+orchestrator — deviation)
+
+- **Deviation**: after the model switch, two qa dispatch attempts died to
+  infrastructure (a rate limit, then a 10-minute inactivity timeout during
+  the ~20-minute full-suite run). The cancelled attempts had already written
+  complete, high-quality e2e migrations into the tree; the orchestrator
+  audited them (typecheck:e2e clean, full diff review) and executed the
+  remaining gates directly instead of re-dispatching a third time.
+- Commit: `f9b4615 test(e2e): pin the always-docked bar and the batch swap`
+  (`e2e/mobile-bottom-bar.spec.ts` +260: rewritten drawer pin — bar stays
+  docked, `[inert]` + veil + forced-tap no-op probe, veil color polled;
+  Escape-from-every-open-path WITHOUT the old `history.focus()` workaround;
+  About-sheet persistence pin; the full swap flow — backgrounded → two rows
+  → swapped foreground (header toolbar absent on phone) → batch sheet above
+  → close/apply → backgrounded → ✕ clear with in-pane focus recovery
+  asserted in-browser → Escape → normal. `e2e/helpers.ts` comment updated
+  to the breakpoint-dependent toolbar reality; `e2e/ui-responsiveness.spec.ts`
+  Escape-from-hamburger migration (the swapped bar now holds focus after
+  sheet Escapes) + touch-target scoping note).
+- Gates: full `npx playwright test` **122 passed / 0 failed** (88 skipped =
+  by-design project pinning; 6.8 min); `CI=true npm test -- --watch=false`
+  1026/1026; `npm run build` clean; `npm run lint` clean;
+  `npm run typecheck:e2e` clean; coverage run exit 0 — all-files
+  95.79/89.36/90.84/97.22, entry-list.ts 91.41 (baseline held).
+- **Coverage note (honest baseline)**: app.ts now 88.07/89.23/92.3/88.54 vs
+  ~90 post-P1 — the uncovered lines are the focus-recovery branches P3
+  documented as jsdom-unobservable (Material's focus trap parks focus in
+  the pane); the same behavior IS pinned end-to-end by the new e2e flow
+  test (in-pane focus assertion after ✕ clear). No test pruned; global
+  thresholds green.
+- Visual evidence: after-set re-captured with the identical pinned script;
+  state 03 probe: bar carries the transplanted toolbar (`2 selected`, 5
+  controls), `bar-batch` A2 edge on, no `bar-backgrounded`, header toolbar
+  absent on the phone, clear-✕ right edge 356px vs bar right 390px (**34px
+  clearance — defect 3 fixed**; was 5px/clipped). Screenshots:
+  `__screenshots__/06-mobile-bar-swap/{before,after}/mobile-390x844-0*.png`.
+- **Known follow-up (flagged by P3, confirmed scope per plan §3.2)**: the
+  batch-sheet APPLY path collapses the selection after the sheet closes but
+  is outside the focus-recovery contract (clear/delete only) — focus can
+  land on the unmounted bar trigger until the next interaction; the new
+  apply leg waits out the snackbar and asserts state (works), but the focus
+  handoff there is unpolished. Left for a user decision.
+- `.tmp-cov.cjs` scratch file from the cancelled attempt deleted (was
+  untracked).
+
+## Task complete
+
+All four phases green; awaiting user test + ff-merge go-ahead. Commit range
+on `feature/06-mobile-bar-docked-swap` (rebased onto develop @ `0b7f9a4`):
+`bcd0ee3..f9b4615` code phases: P1 `f15b2f6`, P2 `70a1505`, P3 `455199a`+
+`8b1708f`, P4 `f9b4615`. Open items: the apply-path focus follow-up above.
