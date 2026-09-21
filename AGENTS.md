@@ -4,7 +4,7 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 
 ## Operating Principles
 
-- **Route Before Acting**: Inspect your assigned task and read the corresponding persona guide in `.agents/` before modifying code.
+- **Route Before Acting**: Inspect your assigned task and read the corresponding persona guide in `.zcode/agents/` before modifying code.
 - **Strict Invariants**:
   - Never drop unknown vendor keys during import/export.
   - No `::ng-deep` or legacy CSS overrides.
@@ -18,16 +18,16 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 - **Verification First**: Always run tests and builds before completing a task.
 - **Visual Feature Baseline**: any task that adds or reshapes UI captures before/after screenshots under the gitignored `__screenshots__/<task>/{before,after}/` (double underscore — the `.gitignore` rule and the `__screenshots__/linter/capture.mjs` precedent), with identical pinned conditions for both sets — same browser, fixed viewports (1280×800 desktop, 1024×768 tablet, 390×844 mobile), one explicit theme (never system), the same seeded project, settled rendering — and posts the side-by-side comparison to the user with the phase report.
 - **Design Checkpoint Evidence**: a visual design gate is approved against evidence, not prose alone — every new interactive control in a design spec cites the in-app exemplar it reuses or attaches a rendered mock; prose-only specs hide affordance and state problems (all three of Task 03's post-acceptance fixes trace to a prose-only checkpoint).
-- **Commit Per Task**: For each completed task, create an atomic git commit following Conventional Commits 1.0.0 — `<type>(<scope>): <description>` in imperative mood (e.g., `fix(delimiters): detect mismatched whole-content wrappers`); breaking behavior changes carry `!` or a `BREAKING CHANGE:` footer. Full spec and house rules: `.agents/rules/conventional-commits.md` (always-on).
+- **Commit Per Task**: For each completed task, create an atomic git commit following Conventional Commits 1.0.0 — `<type>(<scope>): <description>` in imperative mood (e.g., `fix(delimiters): detect mismatched whole-content wrappers`); breaking behavior changes carry `!` or a `BREAKING CHANGE:` footer. Full spec and house rules: `.zcode/agents/rules/conventional-commits.md` (always-on).
 
 ## Persona Directory
 
-| Task Scope | File Path Focus | Agent File | Skills & MCP |
-| :--- | :--- | :--- | :--- |
-| Views, Components, Material Design 3 | `src/app/features/`, `src/app/shared/`, `src/app/app.*` | `.agents/ui-specialist.md` | Skill: `angular-developer`, `material-3`, `frontend-design`<br>MCP: `angular-cli` (if connected) |
-| JSON Serialization, VCS, Hashing | `src/app/core/` | `.agents/core-engine.md` | Skill: `typescript-advanced-types`, `angular-developer` |
-| End-to-End, Unit Tests, Coverage, Round-trips | `e2e/`, `**/*.spec.ts` | `.agents/qa-auditor.md` | Skill: `playwright-cli`, `angular-developer`<br>MCP: `playwright` |
-| Cross-cutting Architecture, Typing, Linting | `src/app/**`, `tsconfig*.json`, `eslint.config.js` | `.agents/ts-reviewer.md` | Skill: `typescript-advanced-types`<br>MCP: `angular-cli` (if connected) |
+| Task Scope                                    | File Path Focus                                         | Agent File                       | Skills & MCP                                                                                     |
+| :-------------------------------------------- | :------------------------------------------------------ | :------------------------------- | :----------------------------------------------------------------------------------------------- |
+| Views, Components, Material Design 3          | `src/app/features/`, `src/app/shared/`, `src/app/app.*` | `.zcode/agents/ui-specialist.md` | Skill: `angular-developer`, `material-3`, `frontend-design`<br>MCP: `angular-cli` (if connected) |
+| JSON Serialization, VCS, Hashing              | `src/app/core/`                                         | `.zcode/agents/core-engine.md`   | Skill: `typescript-advanced-types`, `angular-developer`                                          |
+| End-to-End, Unit Tests, Coverage, Round-trips | `e2e/`, `**/*.spec.ts`                                  | `.zcode/agents/qa-auditor.md`    | Skill: `playwright-cli`, `angular-developer`<br>MCP: `playwright`                                |
+| Cross-cutting Architecture, Typing, Linting   | `src/app/**`, `tsconfig*.json`, `eslint.config.js`      | `.zcode/agents/ts-reviewer.md`   | Skill: `typescript-advanced-types`<br>MCP: `angular-cli` (if connected)                          |
 
 ## Standard Verification Commands
 
@@ -54,3 +54,7 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 - History is linear: merge with fast-forward only, no merge commits. Releases: `chore(release): vX.Y.Z` touching `package.json`, both `lore-stitch` version fields in `package-lock.json`, and `CHANGELOG.md` (writer-facing voice; no git tags). Releases change pinned behavior too — grep e2e specs for release-specific pins (e.g. the About changelog test) and migrate them in the release commit.
 - Check `git status --short` before each phase commit; unrelated local edits (e.g. `.gitignore`) may appear mid-session — keep them out of atomic phase commits.
 - When a task changes pinned behavior, grep existing unit AND e2e specs for tests pinning the old behavior and migrate them within the changing phase.
+- Component-spec fake timers: `vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })` — the default set starves `fixture.whenStable()`; settle debounces with `fixture.detectChanges()` then `advanceTimersByTimeAsync` (debounce-arming effects are view effects flushed by `appRef.tick()`). CDK's internal debounce runs on RxJS's interval-backed scheduler — a setTimeout-faked clock cannot settle it; use a real-timer ~10ms window for viewport flips (topbar.spec precedent).
+- Long gates kill subagent dispatches (~10-min inactivity timeout; full three-project Playwright runs take 7–20 min): brief qa agents to run Playwright per project (`npx playwright test --project=<name>`) and keep every single command under ~8 minutes, reporting between.
+- A cancelled/killed subagent leaves uncommitted partial work: before re-dispatching, check `git status` + `git stash list` and prefer an audit-and-complete brief (it preserved two full phases in the 06/08 batch) over a restart-from-scratch brief.
+- Design-checkpoint mocks built by driving the real app (precedents `__screenshots__/*/[mock-]*.mjs`): scoped SCSS does not follow a moved DOM node (`.batch-bar` styles live under `.list-header`), and raw `mat-icon` elements need `class="mat-icon notranslate material-symbols-outlined"` to render the ligature font.
