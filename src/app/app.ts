@@ -269,6 +269,13 @@ export class App {
         // `onHistoryDrawerOpened`, once the drawer has actually opened.
         this.toggleRight();
         break;
+      default: {
+        // Union-level exhaustiveness (see runBatchBarAction): a new
+        // `MobileBarAction` member added without a case must not route
+        // silently to nothing.
+        const unhandled: never = action;
+        throw new Error(`Unhandled bar action: ${String(unhandled)}`);
+      }
     }
   }
 
@@ -295,9 +302,9 @@ export class App {
    * `selectionCount()` to 0 mid-tap, flipping `batch` → `backgrounded` and
    * unmounting the tapped control — focus falls to `<body>` under the
    * now-inert strip (the same class of accident §3.4's pane-focus policy
-   * fixes). The shell re-focuses the entries pane after both, mirroring
-   * `focusPaneOnPhone` (entries pane only, phone only); for delete it waits
-   * for the async confirm dialog to resolve and the selection to clear.
+ * fixes). The shell re-focuses the entries pane after both, mirroring
+ * `focusPaneOnPhone` (entries pane only, phone only); for delete it waits
+ * for the async confirm dialog to resolve and the selection to clear.
    */
   protected async runBatchBarAction(action: BatchBarAction): Promise<void> {
     const list = this.entryList();
@@ -335,6 +342,14 @@ export class App {
         list.clearSelection();
         this.refocusEntriesPaneAfterSelectionCollapse();
         break;
+      default: {
+        // Union-level exhaustiveness: with every member cased above, `action`
+        // narrows to `never` here — so a new `BatchBarAction` member added
+        // without a case is a COMPILE error, never a silent fallthrough to
+        // nothing (the routing test in app.spec.ts walks all nine members).
+        const unhandled: never = action;
+        throw new Error(`Unhandled batch bar action: ${String(unhandled)}`);
+      }
     }
   }
 
