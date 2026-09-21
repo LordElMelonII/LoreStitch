@@ -3,6 +3,21 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.4.1 — September 21, 2026
+
+A shape-up for the phone batch bar. Selecting several entries used to trade
+the bottom bar's labeled buttons for a cramped strip of icons — now it wears
+the same comfortable five-button shape as the rest of the app.
+
+### Highlights
+
+- **Batch actions look at home** — on phones, picking entries used to swap
+  the bottom bar for a squeezed pill: a bare checkbox, a count, and unlabeled
+  icons. It now shows the same full-width strip of five labeled buttons as
+  the default bar — Select all (with the count and a checkbox mark that
+  follows your selection), Batch edit, Export, More, and Clear — so every
+  action is named and just as easy to hit as before.
+
 ## 1.4.0 — September 21, 2026
 
 The straight-answers release. Test keys now says outright whether the entry
