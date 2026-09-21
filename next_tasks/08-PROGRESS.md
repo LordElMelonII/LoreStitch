@@ -99,3 +99,35 @@ treatment mock). P2 dispatch is BLOCKED until the user answers.
   approved as rendered (blocked/inserted/probabilistic/inconclusive lines in
   the 08 ledger's checkpoint entry above). P2 implements exactly that.
 - **GATE CLOSED — P2 dispatched with the treatment-1 decision.**
+
+## Phase 2 — Panel (2026-09-21, ui-specialist)
+
+- Commit: `0dbb5fa feat(test-keys): state the SillyTavern trigger verdict`
+- What landed: pure `verdict` computed off the existing `rows` facts →
+  `evaluateStTrigger`; `role="status"` banner above `.match-rows` with the
+  approved mock copy (M3 container tokens per outlook, icon `@switch`);
+  `(blocks activation)` error suffix on the offending matched-secondary row,
+  verdict-driven so panel and verdict can never disagree; hint extended
+  with the §3.2 override list (probability rolls, sticky/cooldown, inclusion
+  groups, recursion, Vector Storage). 13 new spec tests (28 in file);
+  `entry-keys/README.md` updated.
+- **icons:refresh WAS needed** — `block`, `casino`, `blur_on` were missing
+  ligatures; subset 60 → 63, regenerated font staged in the same commit.
+- Gates: `CI=true npm test -- --watch=false` **green** (55 files / 1072
+  tests; panel html 100/95.55/100/100, ts 97.53/91.8/100/97.22); `npm run
+  build` **green**. (One intermediate 5s `whenStable` flake in an untouched
+  spec under machine load; clean full re-run is the gate result.)
+- **Deviations (accepted — all preserve honesty)**: (1) suffix narrowed to
+  NOT_ALL/NOT_ANY denials — under AND_ALL a matched row is not what blocks
+  (the missing key is), so suffixing it would be dishonest; still
+  verdict-driven, pinned. (2) AND_ANY/AND_ALL denied headlines reworded to
+  not name an empty set ("no 'AND Any' secondary key matches…"), keeping
+  the "Would **not** be inserted —" frame. (3) Out-of-enum `selectiveLogic`
+  gets a generic cause with no quoted label/suffix (mirrors the P1 oracle
+  fall-through). (4) `OnPush` added to the panel.
+- Non-approved-reason copy (orchestrator-approved, follows the approved
+  sentence shape): no-key-matched → "no primary key matches this sample.";
+  no-keys → "the entry has no primary keys, so the keyword scan skips it.";
+  disabled → "the entry is disabled."
+
+**Next:** P3 (ts-reviewer) — exhaustive-reason typing, signal purity, lint.
