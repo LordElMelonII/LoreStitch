@@ -157,3 +157,28 @@ transplant-vs-bar-items). P2 dispatch is BLOCKED until the user answers.
   (forced by RxJS interval-backed CDK debounce; justified in-spec).
 
 **Next:** P3 (ts-reviewer) — typing of the two unions, signal purity, lint.
+
+## Phase 3 — Review (2026-09-21, ts-reviewer)
+
+- Commits: `455199a refactor(shell): guard the bar action switches against
+  silent fallthrough` (never-narrowing default in both `runBatchBarAction`
+  and the pre-existing `runBarAction`), `8b1708f fix(shell): skip the batch
+  focus recovery on a cancelled delete confirm` (recovery now guards on
+  `selectionCount() === 0`; a cancelled confirm previously stole focus off
+  the restored bar trigger) + new cancel-path pin (jsdom can't observe the
+  focus fact — pinned on the discriminating state facts instead).
+- Waived: `as never` spec mocks (match the file's pre-existing stub idiom).
+- Verified clean: union typing/branch coverage, signal purity (barState pure
+  read, `?? 0` viewChild timing per §7.4), presentational bar, A2 edge
+  batch-only / veil-inert never in batch, no Task 07 debounce interaction,
+  no RxJS creep, `tsc --noEmit` clean.
+- **Residual risk flagged for P4 report (outside Task 06's contract):** the
+  batch-sheet APPLY path also collapses the selection after the sheet
+  closes; focus restore can land on the unmounted bar trigger → `<body>` →
+  drawer Escape dead until the next interaction. Plan §3.2 deliberately
+  scopes recovery to clear/delete only.
+- Gates: `npm run lint` **clean**; `CI=true npm test -- --watch=false`
+  **green** (54 files / 1026 tests).
+
+**Next:** P4 (qa-auditor) — §3.6 e2e migrations + new swap flow; full suite;
+screenshots + side-by-side.
