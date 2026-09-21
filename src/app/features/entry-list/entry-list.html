@@ -52,7 +52,11 @@
     </div>
   }
 
-  @if (selectionCount() > 0) {
+  <!-- Tablet/desktop only: on phones the batch actions render in the docked
+       bottom bar instead (MobileBottomBar's `batch` state, Task 06 §3.2) —
+       an inline toolbar here would shift every visible row down when the
+       selection appears and clips the trailing ✕ inside the drawer. -->
+  @if (selectionCount() > 0 && !layout.isMobile()) {
     <div class="batch-bar" role="toolbar" aria-label="Batch actions">
       <mat-checkbox
         class="select-all"

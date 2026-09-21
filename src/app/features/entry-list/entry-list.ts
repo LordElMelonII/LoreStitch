@@ -28,6 +28,7 @@ import { estimateEntryTokens, formatTokenCount } from '../../core/services/token
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { paneResult, ProjectActionsService } from '../shell/project-actions.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
+import { LayoutService } from '../../shared/services/layout.service';
 import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { debouncedSignal } from '../../shared/util/debounced-signal';
 import { entrySearchHaystack, matchesQuery, type EntryListItem } from './entry-list.model';
@@ -63,6 +64,14 @@ interface EntryFilterModel {
 export class EntryList {
   protected readonly workspace = inject(WorkspaceService);
   protected readonly actions = inject(ProjectActionsService);
+  /**
+   * Viewport truth (`LayoutService` owns every media query). The in-drawer
+   * header batch toolbar renders on tablet/desktop only: on phones the docked
+   * bottom bar swaps to the batch actions while a selection is active (Task
+   * 06 §3.2/§3.3), so an inline toolbar would shift the rows (defect 2) and
+   * overflow the drawer (defect 3).
+   */
+  protected readonly layout = inject(LayoutService);
   private readonly dialog = inject(MatDialog);
   private readonly overlays = inject(ResponsiveOverlayService);
   private readonly snackBar = inject(MatSnackBar);
@@ -249,15 +258,27 @@ export class EntryList {
 
   protected readonly activeId = computed(() => this.workspace.activeTabId());
 
-  protected readonly selectionCount = computed(() => this.selection().size);
+  /**
+   * How many entries the batch suite holds. Public (Task 06 §3.3): the shell
+   * computes the bottom bar's `batch` state from it and forwards the count to
+   * the bar's transplanted toolbar.
+   */
+  readonly selectionCount = computed(() => this.selection().size);
 
-  protected readonly allFilteredSelected = computed(() => {
+  /**
+   * Whether every shown (filtered) entry is selected — the select-all
+   * checkbox's checked side. Public so the shell can drive the bar's
+   * transplanted checkbox and resolve the bar's select-all-shown emission.
+   */
+  readonly allFilteredSelected = computed(() => {
     const view = this.filtered();
     const selection = this.selection();
     return view.length > 0 && view.every((item) => selection.has(item.id));
   });
 
-  protected readonly someFilteredSelected = computed(() => {
+  /** Whether some — but not all — shown entries are selected (the checkbox's
+   * indeterminate side). Public for the same bar contract as above. */
+  readonly someFilteredSelected = computed(() => {
     const view = this.filtered();
     const selection = this.selection();
     return view.some((item) => selection.has(item.id)) && !this.allFilteredSelected();
@@ -284,6 +305,16 @@ export class EntryList {
     }
   }
 
+  /**
+   * Shell entry point for the bar's select-all-shown affordance (Task 06
+   * §3.3): the same semantics as the header checkbox — checked selects every
+   * shown entry, unchecked drops only the shown ones (entries selected but
+   * hidden by the filter survive).
+   */
+  selectAllShown(checked: boolean): void {
+    this.toggleSelectAll(checked);
+  }
+
   protected toggleRow(item: EntryListItem, checked: boolean): void {
     this.selection.update((current) => {
       const next = new Set(current);
@@ -296,7 +327,9 @@ export class EntryList {
     });
   }
 
-  protected clearSelection(): void {
+  /** Drops the whole selection. Public (Task 06 §3.3): the bar's ✕ in the
+   * batch swap routes here through the shell. */
+  clearSelection(): void {
     this.selection.set(new Set());
   }
 
@@ -345,7 +378,9 @@ export class EntryList {
     this.workspace.duplicateEntry(item.id);
   }
 
-  protected duplicateSelection(): void {
+  /** Duplicates the selection. Public (Task 06 §3.3): the bar's batch menu
+   * routes here through the shell. */
+  duplicateSelection(): void {
     const ids = [...this.selection()];
     if (!ids.length) {
       return;
@@ -368,7 +403,9 @@ export class EntryList {
     });
   }
 
-  protected setSelectionEnabled(enabled: boolean): void {
+  /** Bulk-enables or bulk-disables the selection. Public (Task 06 §3.3): the
+   * bar's batch menu routes here through the shell. */
+  setSelectionEnabled(enabled: boolean): void {
     const ids = [...this.selection()];
     this.workspace.updateManyEntries(ids, () => ({ enabled }));
     this.snackBar.open(
@@ -378,7 +415,11 @@ export class EntryList {
     );
   }
 
-  protected async deleteSelection(): Promise<void> {
+  /** Deletes the selection behind its confirm dialog, then clears it. Public
+   * (Task 06 §3.3): the bar's batch menu routes here through the shell, which
+   * also re-focuses the entries pane once the (async) flow collapses the
+   * selection. */
+  async deleteSelection(): Promise<void> {
     const ids = [...this.selection()];
     if (!ids.length) {
       return;
@@ -445,7 +486,9 @@ export class EntryList {
     }
   }
 
-  protected exportSelection(): void {
+  /** Exports the selection as a standalone lorebook. Public (Task 06 §3.3):
+   * the bar's call_split in the batch swap routes here through the shell. */
+  exportSelection(): void {
     void this.actions.exportSelectedEntries([...this.selection()]);
   }
 

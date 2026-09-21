@@ -3,14 +3,12 @@ import { By } from '@angular/platform-browser';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
-import {
-  CharacterBookEntry,
-  createEmptyEntry,
-} from '../../core/models/lorebook.model';
+import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { ProjectActionsService } from '../shell/project-actions.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
 import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
+import { installMatchMediaStub } from '../../../testing/match-media-stub';
 import { EntryList } from './entry-list';
 import { BatchOperationsDialog } from './batch-operations-dialog';
 import { projectOf } from '../../../testing/project-fixtures';
@@ -31,6 +29,7 @@ describe('EntryList', () => {
   let snackBar: MatSnackBar;
   let dialogOpen: ReturnType<typeof vi.fn>;
   let openResponsive: ReturnType<typeof vi.fn>;
+  let viewport: ReturnType<typeof installMatchMediaStub>;
   let fixture: ComponentFixture<EntryList>;
 
   async function createList(
@@ -43,13 +42,12 @@ describe('EntryList', () => {
     return fixture.componentInstance;
   }
 
-
-/** The i-th visible row, asserted (rows are indexed directly in these specs). */
-function itemAt(list: EntryList, index: number) {
-  const item = list['items']()[index];
-  assert(item);
-  return item;
-}
+  /** The i-th visible row, asserted (rows are indexed directly in these specs). */
+  function itemAt(list: EntryList, index: number) {
+    const item = list['items']()[index];
+    assert(item);
+    return item;
+  }
 
   /** Flushes component effects after direct signal mutations. */
   async function settle(): Promise<void> {
@@ -73,24 +71,15 @@ function itemAt(list: EntryList, index: number) {
     // precedent) so specs can pin the lag explicitly and flush it cheaply.
     // Only the timer pair debouncedSignal uses is faked: the default set
     // also fakes microtask/rAF scheduling, which starves
-    // fixture.whenStable() and hangs every component spec.
+    // fixture.whenStable() and hangs every component spec (an interval-based
+    // faked clock would too — so the viewport flips below settle on real
+    // timers instead; see the test).
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    // CDK BreakpointObserver (via ProjectActionsService) needs matchMedia.
-    if (!window.matchMedia) {
-      Object.defineProperty(window, 'matchMedia', {
-        writable: true,
-        value: (query: string) => ({
-          matches: false,
-          media: query,
-          onchange: null,
-          addListener: () => undefined,
-          removeListener: () => undefined,
-          addEventListener: () => undefined,
-          removeEventListener: () => undefined,
-          dispatchEvent: () => false,
-        }),
-      });
-    }
+    // The shell's viewport truth (LayoutService over CDK BreakpointObserver,
+    // read by this component and ProjectActionsService) needs matchMedia;
+    // the stub's desktop/mobile answers can be flipped mid-test — the
+    // toolbar-presence pins exercise both window classes.
+    viewport = installMatchMediaStub();
     dialogOpen = vi.fn().mockReturnValue({ afterClosed: () => of(true) });
     // The batch pane opens through the responsive overlay (dialog or sheet);
     // the plain-object ref makes the caller take its afterDismissed branch.
@@ -273,23 +262,25 @@ function itemAt(list: EntryList, index: number) {
     list['filterModel'].set({ query: 'saber' });
     await settleFilter();
 
-    list['toggleSelectAll'](true);
+    // `selectAllShown` is the public wrapper the bar's swap drives (Task 06
+    // §3.3); its semantics are the header checkbox's toggleSelectAll.
+    list.selectAllShown(true);
     expect(list['selection']()).toEqual(new Set([0]));
-    expect(list['allFilteredSelected']()).toBe(true);
+    expect(list.allFilteredSelected()).toBe(true);
 
     // Add a hidden entry to the selection, then uncheck select-all: only the
     // shown entry is deselected, the hidden one stays selected.
     list['toggleRow'](itemAt(list, 1), true);
-    expect(list['allFilteredSelected']()).toBe(true);
-    list['toggleSelectAll'](false);
+    expect(list.allFilteredSelected()).toBe(true);
+    list.selectAllShown(false);
     expect(list['selection']()).toEqual(new Set([1]));
 
     // Partial coverage of the shown view reads as indeterminate.
     list['filterModel'].set({ query: '' });
     await settleFilter();
-    expect(list['someFilteredSelected']()).toBe(true);
+    expect(list.someFilteredSelected()).toBe(true);
 
-    list['clearSelection']();
+    list.clearSelection();
     expect(list['selection']().size).toBe(0);
   });
 
@@ -306,6 +297,40 @@ function itemAt(list: EntryList, index: number) {
     expect(fixture.nativeElement.querySelector('.batch-count')?.textContent).toContain(
       '1 selected',
     );
+  });
+
+  it('hides the in-drawer batch toolbar on phones — the docked bottom bar owns it there', async () => {
+    await createList([entry(0), entry(1)]);
+    const list = fixture.componentInstance;
+    list.selectAllShown(true);
+    fixture.detectChanges();
+    // Desktop default: the inline header toolbar, exactly as today (§3.5).
+    expect(fixture.nativeElement.querySelector('.batch-bar')).toBeTruthy();
+    expect(list.selectionCount()).toBe(2);
+
+    // Phones: the toolbar disappears (Task 06 §3.2/§3.3) — the batch
+    // actions render in the docked bottom bar's swap instead, removing the
+    // row shift and the clipped ✕ (defects 2 + 3). The selection itself
+    // survives the viewport flip untouched.
+    // The flip rides CDK's BreakpointObserver, whose debounced re-emit lives
+    // on RxJS's interval-backed asyncScheduler — a real-event-loop timer the
+    // fake setTimeout clock above never controls, and faking intervals here
+    // would hang every await. So the window around each flip runs on real
+    // timers and waits the debounce out, the same settle the topbar spec
+    // uses for its own flip pin.
+    vi.useRealTimers();
+    viewport.setMobile(true);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.batch-bar')).toBeNull();
+    expect(list.selectionCount()).toBe(2);
+    expect(list.allFilteredSelected()).toBe(true);
+
+    // Back on desktop the toolbar returns with the same selection.
+    viewport.setMobile(false);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.batch-bar')).toBeTruthy();
   });
 
   it('prunes selected ids that no longer exist (rollback / batch delete)', async () => {
@@ -335,11 +360,11 @@ function itemAt(list: EntryList, index: number) {
     const duplicateSpy = vi.spyOn(workspace, 'duplicateEntries');
     const list = await createList([entry(0), entry(1)]);
 
-    list['duplicateSelection']();
+    list.duplicateSelection();
     expect(duplicateSpy).not.toHaveBeenCalled();
 
     list['toggleRow'](itemAt(list, 1), true);
-    list['duplicateSelection']();
+    list.duplicateSelection();
     expect(duplicateSpy).toHaveBeenCalledWith([1]);
     expect(snackBar.open).toHaveBeenCalledWith('Duplicated 1 entry.', 'OK', { duration: 3000 });
   });
@@ -349,11 +374,11 @@ function itemAt(list: EntryList, index: number) {
     list['toggleRow'](itemAt(list, 0), true);
     list['toggleRow'](itemAt(list, 1), true);
 
-    list['setSelectionEnabled'](false);
+    list.setSelectionEnabled(false);
     expect(workspace.entries().every((e) => !e.enabled)).toBe(true);
     expect(snackBar.open).toHaveBeenCalledWith('Disabled 2 entries.', 'OK', { duration: 3000 });
 
-    list['setSelectionEnabled'](true);
+    list.setSelectionEnabled(true);
     expect(workspace.entries().every((e) => e.enabled)).toBe(true);
     expect(snackBar.open).toHaveBeenCalledWith('Enabled 2 entries.', 'OK', { duration: 3000 });
   });
@@ -364,7 +389,7 @@ function itemAt(list: EntryList, index: number) {
     list['toggleRow'](itemAt(list, 0), true);
     list['toggleRow'](itemAt(list, 1), true);
 
-    await list['deleteSelection']();
+    await list.deleteSelection();
 
     expect(dialogOpen).toHaveBeenCalledTimes(1);
     expect(deleteSpy).toHaveBeenCalledWith([0, 1]);
@@ -378,7 +403,7 @@ function itemAt(list: EntryList, index: number) {
     const list = await createList([entry(0)]);
     list['toggleRow'](itemAt(list, 0), true);
 
-    await list['deleteSelection']();
+    await list.deleteSelection();
 
     expect(dialogOpen).toHaveBeenCalledTimes(1);
     expect(deleteSpy).not.toHaveBeenCalled();
@@ -428,7 +453,7 @@ function itemAt(list: EntryList, index: number) {
   it('no-ops batch actions and dialogs without a selection', async () => {
     const list = await createList([entry(0)]);
 
-    await list['deleteSelection']();
+    await list.deleteSelection();
     await list.openBatchOperations();
 
     expect(dialogOpen).not.toHaveBeenCalled();
@@ -445,7 +470,7 @@ function itemAt(list: EntryList, index: number) {
     const list = await createList([entry(0), entry(1)]);
     list['toggleRow'](itemAt(list, 1), true);
 
-    list['exportSelection']();
+    list.exportSelection();
 
     expect(exportSpy).toHaveBeenCalledWith([1]);
   });

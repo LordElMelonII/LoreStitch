@@ -1,15 +1,11 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  input,
-  output,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { MatBadgeModule } from '@angular/material/badge';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatButtonModule } from '@angular/material/button';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ProjectActionsService } from '../project-actions.service';
@@ -23,6 +19,29 @@ import { ProjectActionsService } from '../project-actions.service';
  * shell for it, so a union member would only ever be a dead switch case.
  */
 export type MobileBarAction = 'new-entry' | 'search-replace' | 'batch' | 'history';
+
+/**
+ * Batch actions the swapped strip routes through the shell
+ * (`App.runBatchBarAction` → the `EntryList` public API, Task 06 §3.2/§3.3).
+ *
+ * `export-selected` and `more-batch-actions` describe the two menu-looking
+ * controls of the transplanted toolbar: `export-selected` is emitted directly
+ * by the call_split button (the shell routes it to `EntryList.exportSelection`),
+ * while `more-batch-actions` is NEVER emitted — the more_vert trigger opens
+ * the bar's own batch menu in place (like the Export item above). The member
+ * stays in the union (plan §3.2 fixes its shape) and the shell treats it as a
+ * documented no-op.
+ */
+export type BatchBarAction =
+  | 'batch-edit'
+  | 'export-selected'
+  | 'more-batch-actions'
+  | 'duplicate-selection'
+  | 'enable-selection'
+  | 'disable-selection'
+  | 'delete-selection'
+  | 'select-all-shown'
+  | 'clear-selection';
 
 /**
  * What the phone strip is doing beneath whatever else is open. `batch` is
@@ -48,19 +67,43 @@ export type BarState = 'normal' | 'backgrounded' | 'batch';
  * sheets, menus) simply cover and dim the strip, so they carry no bar-side
  * state at all.
  *
- * Presentational by design: it renders its state and emits `action`; the
- * shell (`App`) routes each action to the owning component or service and
- * computes the `barState` it feeds back.
+ * In `batch` (entries drawer open + a selection) the five quick actions are
+ * replaced by the entry-list batch toolbar, transplanted into the strip
+ * (variant A2, design checkpoint 06-1): same `.batch-bar` DOM contract as
+ * the drawer's toolbar (`div.batch-bar[role=toolbar]`), centered, with a
+ * subtle tonal top edge on the host as the approved emphasis cue. The bar
+ * is presentational here too: the toolbar and its menu only emit
+ * `batchAction`; the shell routes every member to the `EntryList` public API
+ * (`App.runBatchBarAction`).
+ *
+ * Selection-fact contract (inputs below): the shell reads the count and the
+ * select-all tri-state off `EntryList`'s public signals and forwards them —
+ * the bar holds no workspace/selection state of its own. The checkbox only
+ * emits `select-all-shown`; the shell resolves the boolean against the same
+ * public tri-state facts (emit → shell handler is synchronous, so the
+ * pre-tap fact is authoritative): when everything shown is already selected
+ * the tap means deselect-shown, otherwise select-all-shown — the exact
+ * behavior the drawer checkbox had, with the menu leaf (enabled only when
+ * not-all-selected) reducing to the same rule.
  */
 @Component({
   selector: 'app-mobile-bottom-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatBadgeModule, MatDividerModule, MatIconModule, MatMenuModule],
+  imports: [
+    MatBadgeModule,
+    MatButtonModule,
+    MatCheckboxModule,
+    MatDividerModule,
+    MatIconModule,
+    MatMenuModule,
+    MatTooltipModule,
+  ],
   templateUrl: './mobile-bottom-bar.html',
   styleUrl: './mobile-bottom-bar.scss',
   host: {
     '[class.bar-hidden]': '!visible()',
     '[class.bar-backgrounded]': 'backgrounded()',
+    '[class.bar-batch]': 'batched()',
   },
 })
 export class MobileBottomBar {
@@ -71,13 +114,29 @@ export class MobileBottomBar {
   /**
    * The strip's state, owned by the shell (`App.barState`): `normal` on the
    * idle phone surface, `backgrounded` while a drawer overlays the editor
-   * (veiled + inert — the scrim look it cannot inherit), `batch` once the
-   * P2 selection swap lands (fully interactive).
+   * (veiled + inert — the scrim look it cannot inherit), `batch` while the
+   * entries drawer is open with an active selection (the transplanted
+   * toolbar, fully interactive).
    */
   readonly barState = input<BarState>('normal');
 
+  /**
+   * Selection facts the shell mirrors off `EntryList`'s public API (Task 06
+   * §3.3) for the batch strip: the rendered count, and the select-all
+   * checkbox's tri-state sides. Meaningless outside `batch` (the toolbar
+   * branch never renders them) but always kept live so the swap never shows
+   * a stale count on the transition frames.
+   */
+  readonly selectionCount = input(0);
+  readonly allShownSelected = input(false);
+  readonly someShownSelected = input(false);
+
   /** Emits the triggered quick action; the shell routes it to its owner. */
   readonly action = output<MobileBarAction>();
+
+  /** Emits the triggered batch action; the shell routes it to the
+   * `EntryList` public API (see the class doc for the contract). */
+  readonly batchAction = output<BatchBarAction>();
 
   /** Rendered only on phones with an open project — never unmounted by a
    * drawer or dialog (the always-docked contract; see the class doc). */
@@ -88,7 +147,24 @@ export class MobileBottomBar {
   /** Whether the strip is scrim-veiled and inert beneath an open drawer. */
   protected readonly backgrounded = computed(() => this.barState() === 'backgrounded');
 
+  /** Whether the strip is foreground-swapped to the batch toolbar. */
+  protected readonly batched = computed(() => this.barState() === 'batch');
+
   protected select(action: MobileBarAction): void {
     this.action.emit(action);
+  }
+
+  protected emitBatch(action: BatchBarAction): void {
+    this.batchAction.emit(action);
+  }
+
+  /**
+   * The select-all checkbox's change handler: emits the bare member for both
+   * toggle sides — the shell resolves the boolean from `EntryList`'s public
+   * tri-state fact (see the class doc), which is synchronous to this emit
+   * and therefore always the pre-tap state.
+   */
+  protected emitSelectAllChange(): void {
+    this.batchAction.emit('select-all-shown');
   }
 }

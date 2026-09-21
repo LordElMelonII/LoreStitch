@@ -4,7 +4,9 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { ANIMATION_MODULE_TYPE } from '@angular/core';
 import { MatIconRegistry } from '@angular/material/icon';
 import { MatSidenav } from '@angular/material/sidenav';
+import { MatDialog } from '@angular/material/dialog';
 import { ESCAPE } from '@angular/cdk/keycodes';
+import { Subject } from 'rxjs';
 import { App } from './app';
 import { WorkspaceService } from './core/services/workspace.service';
 import { LayoutService } from './shared/services/layout.service';
@@ -28,8 +30,7 @@ function installViewportStub(): { setViewport: (viewport: ViewportClass) => void
     tablet: TABLET_BREAKPOINT_QUERY,
     desktop: DESKTOP_BREAKPOINT_QUERY,
   };
-  const registered: { query: string; listeners: Set<(event: { matches: boolean }) => void> }[] =
-    [];
+  const registered: { query: string; listeners: Set<(event: { matches: boolean }) => void> }[] = [];
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => {
@@ -132,10 +133,9 @@ describe('App', () => {
     expect(compiled.querySelector('app-entry-list')).toBeTruthy();
     expect(compiled.querySelector('app-entry-editor')).toBeTruthy();
     // The history drawer defers on idle; give its scheduling a moment.
-    await vi.waitFor(
-      () => expect(compiled.querySelector('app-commit-history')).toBeTruthy(),
-      { timeout: 5000 },
-    );
+    await vi.waitFor(() => expect(compiled.querySelector('app-commit-history')).toBeTruthy(), {
+      timeout: 5000,
+    });
   });
 
   it('defaults both drawers open on desktop', async () => {
@@ -421,5 +421,158 @@ describe('App', () => {
 
     bar.querySelector('[aria-label="Toggle history drawer"]')?.dispatchEvent(new Event('click'));
     expect(app['rightOpened']()).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Batch swap (Task 06 §3.2): the barState machine over drawers + selection.
+  // -------------------------------------------------------------------------
+
+  /** Boots the phone shell with a two-entry project and an open entries drawer. */
+  async function createPhoneShellWithSelection(): Promise<App> {
+    viewport.setViewport('mobile');
+    await workspace.createProject('Fuyuki');
+    workspace.addEntry();
+    workspace.addEntry();
+    const app = await createApp();
+    await fixture.whenStable();
+    // Let any boot-time simulated animation timer land before interacting
+    // (jsdom has no real transitionend; Material completes via setTimeout).
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const list = app['entryList']();
+    assert(list);
+    app['toggleLeft']();
+    return app;
+  }
+
+  it('walks the bar through normal, backgrounded and batch as drawers and the selection change', async () => {
+    const app = await createPhoneShellWithSelection();
+    const list = app['entryList']();
+    assert(list);
+
+    // Entries drawer open, nothing selected: backgrounded (visible, inert).
+    expect(app['barState']()).toBe('backgrounded');
+
+    // A selection arrives while the history drawer is closed: batch.
+    list.selectAllShown(true);
+    expect(app['barState']()).toBe('batch');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const bar = (fixture.nativeElement as HTMLElement).querySelector('app-mobile-bottom-bar');
+    assert(bar);
+    expect(bar.classList.contains('bar-batch')).toBe(true);
+    expect(bar.classList.contains('bar-backgrounded')).toBe(false);
+    expect(bar.querySelector('.batch-bar')).toBeTruthy();
+    expect(bar.querySelectorAll('.bar-item')).toHaveLength(0);
+
+    // The swap needs the history drawer closed: opening it veils the bar.
+    app['toggleRight']();
+    expect(app['barState']()).toBe('backgrounded');
+    app['toggleRight']();
+    expect(app['barState']()).toBe('batch');
+
+    // The bar's ✕ clears the selection (entries drawer still open):
+    // backgrounded again, with the five items back.
+    await app['runBatchBarAction']('clear-selection');
+    expect(app['barState']()).toBe('backgrounded');
+    expect(list.selectionCount()).toBe(0);
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(bar.querySelector('.batch-bar')).toBeNull();
+
+    // Drawer closes: normal again.
+    app['toggleLeft']();
+    expect(app['barState']()).toBe('normal');
+  });
+
+  it('recovers the entries-pane focus after the bar clears the selection mid-tap', async () => {
+    const app = await createPhoneShellWithSelection();
+    const list = app['entryList']();
+    assert(list);
+    list.selectAllShown(true);
+    expect(app['barState']()).toBe('batch');
+
+    // The ✕ tap: clear-selection collapses the count to 0, flipping batch →
+    // backgrounded and unmounting the tapped control — focus falls to
+    // <body> under the now-inert strip. The shell re-focuses the entries
+    // pane (mirror of the drawer-open focus policy), so Escape keeps
+    // working after the swap collapses.
+    await app['runBatchBarAction']('clear-selection');
+    expect(app['barState']()).toBe('backgrounded');
+    const pane = (fixture.nativeElement as HTMLElement).querySelector('.entries-sidenav');
+    assert(pane);
+    expect(pane.contains(document.activeElement)).toBe(true);
+  });
+
+  it('keeps batch under the delete confirm dialog and recovers pane focus after it resolves', async () => {
+    const app = await createPhoneShellWithSelection();
+    const list = app['entryList']();
+    assert(list);
+    list.selectAllShown(true);
+    expect(app['barState']()).toBe('batch');
+
+    // The delete confirmation is held open by a deferred subject.
+    const confirmed = new Subject<boolean>();
+    const openDialog = vi.spyOn(TestBed.inject(MatDialog), 'open').mockReturnValue({
+      afterClosed: () => confirmed,
+    } as never);
+
+    void app['runBatchBarAction']('delete-selection');
+    await vi.waitFor(() => expect(openDialog).toHaveBeenCalledTimes(1), { timeout: 4000 });
+
+    // §7.6: the bar stays `batch` under the open dialog — CDK overlays
+    // cover and dim the strip themselves; the computed has no overlay
+    // member and nothing special-cases the dialog away.
+    expect(app['barState']()).toBe('batch');
+
+    confirmed.next(true);
+    confirmed.complete();
+    // The delete resolves: entries gone, selection cleared → backgrounded,
+    // and the entries pane holds focus again (the batch-swap focus
+    // recovery waits for the async dialog, unlike the sync clear path).
+    await vi.waitFor(() => expect(app['barState']()).toBe('backgrounded'), { timeout: 4000 });
+    expect(list.selectionCount()).toBe(0);
+    expect(workspace.entries()).toHaveLength(0);
+    const pane = (fixture.nativeElement as HTMLElement).querySelector('.entries-sidenav');
+    assert(pane);
+    await vi.waitFor(() => expect(pane.contains(document.activeElement)).toBe(true), {
+      timeout: 4000,
+    });
+  });
+
+  it('routes every batch action leaf to the EntryList public method that owns it', async () => {
+    const app = await createPhoneShellWithSelection();
+    const list = app['entryList']();
+    assert(list);
+    const openSpy = vi.spyOn(list, 'openBatchOperations').mockResolvedValue(undefined);
+    const exportSpy = vi.spyOn(list, 'exportSelection').mockImplementation(() => undefined);
+    const duplicateSpy = vi.spyOn(list, 'duplicateSelection').mockImplementation(() => undefined);
+    const enabledSpy = vi.spyOn(list, 'setSelectionEnabled').mockImplementation(() => undefined);
+    const selectAllSpy = vi.spyOn(list, 'selectAllShown'); // calls through
+
+    await app['runBatchBarAction']('batch-edit');
+    await app['runBatchBarAction']('export-selected');
+    // Deliberate no-op (the bar's more_vert opens its own menu in place).
+    await app['runBatchBarAction']('more-batch-actions');
+    await app['runBatchBarAction']('duplicate-selection');
+    await app['runBatchBarAction']('enable-selection');
+    await app['runBatchBarAction']('disable-selection');
+    await app['runBatchBarAction']('select-all-shown');
+
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(exportSpy).toHaveBeenCalledTimes(1);
+    expect(duplicateSpy).toHaveBeenCalledTimes(1);
+    expect(enabledSpy).toHaveBeenCalledTimes(2);
+    expect(enabledSpy).toHaveBeenNthCalledWith(1, true);
+    expect(enabledSpy).toHaveBeenNthCalledWith(2, false);
+    // The bare select-all member resolves against the public tri-state fact:
+    // nothing selected yet, so the tap means select-the-shown.
+    expect(selectAllSpy).toHaveBeenCalledWith(true);
+    expect(list.selectionCount()).toBe(2);
+
+    // With everything shown already selected the same member means
+    // deselect-shown — the drawer checkbox's own semantics.
+    await app['runBatchBarAction']('select-all-shown');
+    expect(selectAllSpy).toHaveBeenLastCalledWith(false);
+    expect(list.selectionCount()).toBe(0);
   });
 });

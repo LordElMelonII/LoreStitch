@@ -5,121 +5,234 @@
      dialogs never unstamp it — they lower it to `backgrounded` (or simply
      cover it) instead. -->
 @if (visible()) {
-  <!-- M3 bottom action bar: five icon-over-label rows, always visible while
+  @switch (barState()) {
+    <!-- The selection swap (Task 06 §3.2, approved variant A2): the
+         entry-list batch toolbar transplanted into the strip — same
+         `.batch-bar` DOM contract as the drawer's toolbar
+         (role=toolbar, aria-label="Batch actions", select-all checkbox,
+         `N selected` count, tune / call_split / more_vert / close) so the
+         shared e2e helper and touch-target selectors keep working. Fully
+         interactive (foreground: the bar and the drawer are spatially
+         disjoint — no veil, no inert); everything here only EMITS
+         `batchAction`, the shell routes it to the `EntryList` public API. -->
+    @case ('batch') {
+      <!-- Strip container: the same 64px geometry as the item row below;
+           the host's `bar-batch` class centers the pill and adds the
+           approved tonal top edge (see the stylesheet). -->
+      <div class="bar">
+        <div class="batch-bar" role="toolbar" aria-label="Batch actions">
+          <mat-checkbox
+            class="select-all"
+            [checked]="allShownSelected()"
+            [indeterminate]="someShownSelected()"
+            (change)="emitSelectAllChange()"
+            matTooltip="Select / deselect shown entries"
+            [attr.aria-label]="'Select all shown entries'"
+          />
+          <span class="batch-count">{{ selectionCount() }} selected</span>
+          <button
+            matIconButton
+            type="button"
+            (click)="emitBatch('batch-edit')"
+            matTooltip="Batch edit selection"
+            aria-label="Batch edit selection"
+          >
+            <mat-icon>tune</mat-icon>
+          </button>
+          <button
+            matIconButton
+            type="button"
+            (click)="emitBatch('export-selected')"
+            matTooltip="Export selection as lorebook"
+            aria-label="Export selection as lorebook"
+          >
+            <mat-icon>call_split</mat-icon>
+          </button>
+          <!-- Standalone menu trigger: opens the batch menu below in place
+               (like the Export item in the default branch); NEVER emits —
+               `more-batch-actions` stays a shell-side no-op by contract. -->
+          <button
+            matIconButton
+            type="button"
+            [matMenuTriggerFor]="batchMenu"
+            matTooltip="More batch actions"
+            aria-label="More batch actions"
+          >
+            <mat-icon>more_vert</mat-icon>
+          </button>
+          <button
+            matIconButton
+            type="button"
+            (click)="emitBatch('clear-selection')"
+            matTooltip="Clear selection"
+            aria-label="Clear selection"
+          >
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <!-- The drawer batch menu, transplanted with its toolbar and extended
+           with the select-all leaf (mirrors the checkbox's tri-state,
+           disabled when everything shown is already selected) so the
+           affordance stays reachable in the swap. The leaves are
+           presentational too: each one only emits `batchAction`; the shell
+           routes it to the `EntryList` public method that owns the action.
+           `yPosition="above"`: the trigger is docked to the viewport's
+           bottom edge, so the panel must open upward from it. -->
+      <mat-menu #batchMenu="matMenu" yPosition="above">
+        <button
+          mat-menu-item
+          [disabled]="allShownSelected()"
+          (click)="emitBatch('select-all-shown')"
+        >
+          <mat-icon>check_circle</mat-icon>
+          <span>Select all shown entries</span>
+        </button>
+        <button mat-menu-item (click)="emitBatch('duplicate-selection')">
+          <mat-icon>content_copy</mat-icon>
+          <span>Duplicate selected</span>
+        </button>
+        <button mat-menu-item (click)="emitBatch('enable-selection')">
+          <mat-icon>visibility</mat-icon>
+          <span>Enable selected</span>
+        </button>
+        <button mat-menu-item (click)="emitBatch('disable-selection')">
+          <mat-icon>visibility_off</mat-icon>
+          <span>Disable selected</span>
+        </button>
+        <button mat-menu-item (click)="emitBatch('delete-selection')">
+          <mat-icon class="menu-danger-icon">delete</mat-icon>
+          <span>Delete selected…</span>
+        </button>
+      </mat-menu>
+    }
+
+    <!-- M3 bottom action bar: five icon-over-label rows, always visible while
        shown (no expanded/collapsed state to manage). Visible labels are short
        (navigation-bar style); buttons that need a longer accessible name
        carry an explicit aria-label. -->
-  <!-- While a drawer is open the strip goes `backgrounded`: it sits below
+    <!-- While a drawer is open the strip goes `backgrounded`: it sits below
        the sidenav container, so it cannot inherit the drawer's scrim — the
        host carries the synthesized veil (see the stylesheet) and this
        content goes inert, removing it from the tab order and the a11y tree
        (house precedent: the regex-test-panel collapse). Inerting content
        that holds focus releases focus to <body>, which is why the shell
        focuses the drawer pane on phones (App's pane-focus policy). -->
-  <nav class="bar" aria-label="Quick actions" [attr.inert]="backgrounded() ? '' : null">
-  <button type="button" class="bar-item" (click)="select('new-entry')">
-    <mat-icon aria-hidden="true">post_add</mat-icon>
-    <span class="bar-label">New entry</span>
-  </button>
+    @default {
+      <nav class="bar" aria-label="Quick actions" [attr.inert]="backgrounded() ? '' : null">
+        <button type="button" class="bar-item" (click)="select('new-entry')">
+          <mat-icon aria-hidden="true">post_add</mat-icon>
+          <span class="bar-label">New entry</span>
+        </button>
 
-  <!-- Short visible label (M3 navigation-bar style — the row is ~72px wide on
+        <!-- Short visible label (M3 navigation-bar style — the row is ~72px wide on
        a 390px phone); the aria-label keeps the full action name for AT and
        the shell e2e. -->
-  <button type="button" class="bar-item" aria-label="Search & replace" (click)="select('search-replace')">
-    <mat-icon aria-hidden="true">find_replace</mat-icon>
-    <span class="bar-label">Search</span>
-  </button>
+        <button
+          type="button"
+          class="bar-item"
+          aria-label="Search & replace"
+          (click)="select('search-replace')"
+        >
+          <mat-icon aria-hidden="true">find_replace</mat-icon>
+          <span class="bar-label">Search</span>
+        </button>
 
-  <!-- Standalone menu trigger: deliberately NOT carrying
+        <!-- Standalone menu trigger: deliberately NOT carrying
        appTouchSafeNestedMenuTrigger. That directive exists for nested
        `mat-menu-item` submenus, whose hover stream opens them mid-tap from a
        parent menu panel; this trigger sits on a bar button with no parent
        menu, so the emulated-hover bug it fixes cannot occur here (the
        directive's own doc mandates standalone triggers must not carry it). -->
-  <button type="button" class="bar-item" [matMenuTriggerFor]="exportMenu">
-    <mat-icon aria-hidden="true">file_download</mat-icon>
-    <span class="bar-label">Export</span>
-  </button>
+        <button type="button" class="bar-item" [matMenuTriggerFor]="exportMenu">
+          <mat-icon aria-hidden="true">file_download</mat-icon>
+          <span class="bar-label">Export</span>
+        </button>
 
-  <button type="button" class="bar-item" (click)="select('batch')">
-    <mat-icon aria-hidden="true">checklist</mat-icon>
-    <span class="bar-label">Batch edit</span>
-  </button>
+        <button type="button" class="bar-item" (click)="select('batch')">
+          <mat-icon aria-hidden="true">checklist</mat-icon>
+          <span class="bar-label">Batch edit</span>
+        </button>
 
-  <button
-    type="button"
-    class="bar-item"
-    aria-label="Toggle history drawer"
-    (click)="select('history')"
-  >
-    <!-- Same unsaved-changes warn badge as the topbar's history button
+        <button
+          type="button"
+          class="bar-item"
+          aria-label="Toggle history drawer"
+          (click)="select('history')"
+        >
+          <!-- Same unsaved-changes warn badge as the topbar's history button
          (which phones no longer render — the affordance moved here). No
          aria-hidden on this icon: the badge carries meaning, mirroring the
          topbar markup; the button's aria-label names it. -->
-    <mat-icon
-      [matBadge]="workspace.hasUnsavedChanges() ? '!' : null"
-      matBadgeColor="warn"
-      [matBadgeHidden]="!workspace.hasUnsavedChanges()"
-    >
-      history
-    </mat-icon>
-    <span class="bar-label">History</span>
-  </button>
-</nav>
+          <mat-icon
+            [matBadge]="workspace.hasUnsavedChanges() ? '!' : null"
+            matBadgeColor="warn"
+            [matBadgeHidden]="!workspace.hasUnsavedChanges()"
+          >
+            history
+          </mat-icon>
+          <span class="bar-label">History</span>
+        </button>
+      </nav>
 
-<!-- The SAME five-entry export menu the topbar offers: section headers,
+      <!-- The SAME five-entry export menu the topbar offers: section headers,
      descriptions and dividers are intentionally duplicated markup (charter:
      duplicate markup, never logic) — every click handler calls the shared
      `ProjectActionsService` wrappers, one implementation home. The global
      `.mat-mdc-menu-panel.export-menu` rules style this panel identically.
      `yPosition="above"`: the trigger is docked to the viewport's bottom
      edge, so the panel must open upward from it. -->
-<mat-menu #exportMenu="matMenu" yPosition="above" class="export-menu">
-  <div class="menu-section">Use in SillyTavern</div>
-  <button mat-menu-item (click)="actions.exportStNative()">
-    <mat-icon>data_object</mat-icon>
-    <span class="menu-text">
-      <span class="menu-title">World Info JSON</span>
-      <span class="menu-desc">Import via SillyTavern’s World Info panel</span>
-    </span>
-  </button>
+      <mat-menu #exportMenu="matMenu" yPosition="above" class="export-menu">
+        <div class="menu-section">Use in SillyTavern</div>
+        <button mat-menu-item (click)="actions.exportStNative()">
+          <mat-icon>data_object</mat-icon>
+          <span class="menu-text">
+            <span class="menu-title">World Info JSON</span>
+            <span class="menu-desc">Import via SillyTavern’s World Info panel</span>
+          </span>
+        </button>
 
-  <div class="menu-section">Backup</div>
-  <button mat-menu-item (click)="actions.exportProjectArchive()">
-    <mat-icon>archive</mat-icon>
-    <span class="menu-text">
-      <span class="menu-title">Project archive (.stproj)</span>
-      <span class="menu-desc"
-        >Full backup with version history — export regularly, reopen in LoreStitch</span
-      >
-    </span>
-  </button>
+        <div class="menu-section">Backup</div>
+        <button mat-menu-item (click)="actions.exportProjectArchive()">
+          <mat-icon>archive</mat-icon>
+          <span class="menu-text">
+            <span class="menu-title">Project archive (.stproj)</span>
+            <span class="menu-desc"
+              >Full backup with version history — export regularly, reopen in LoreStitch</span
+            >
+          </span>
+        </button>
 
-  <mat-divider></mat-divider>
-  <div class="menu-section">Split a modular lorebook</div>
-  <button mat-menu-item (click)="actions.exportSelectedEntries()">
-    <mat-icon>call_split</mat-icon>
-    <span class="menu-text">
-      <span class="menu-title">Export selected entries…</span>
-      <span class="menu-desc">Write a subset of entries as a standalone lorebook</span>
-    </span>
-  </button>
+        <mat-divider></mat-divider>
+        <div class="menu-section">Split a modular lorebook</div>
+        <button mat-menu-item (click)="actions.exportSelectedEntries()">
+          <mat-icon>call_split</mat-icon>
+          <span class="menu-text">
+            <span class="menu-title">Export selected entries…</span>
+            <span class="menu-desc">Write a subset of entries as a standalone lorebook</span>
+          </span>
+        </button>
 
-  <mat-divider></mat-divider>
-  <div class="menu-section">Reference &amp; proofreading</div>
-  <button mat-menu-item (click)="actions.exportBook()">
-    <mat-icon>book</mat-icon>
-    <span class="menu-text">
-      <span class="menu-title">Character Book JSON</span>
-      <span class="menu-desc">Standard V2 spec for character cards &amp; third-party tools</span>
-    </span>
-  </button>
-  <button mat-menu-item (click)="actions.exportDigest()">
-    <mat-icon>description</mat-icon>
-    <span class="menu-text">
-      <span class="menu-title">Proofread digest (Markdown)</span>
-      <span class="menu-desc">All entries as readable text</span>
-    </span>
-  </button>
-</mat-menu>
+        <mat-divider></mat-divider>
+        <div class="menu-section">Reference &amp; proofreading</div>
+        <button mat-menu-item (click)="actions.exportBook()">
+          <mat-icon>book</mat-icon>
+          <span class="menu-text">
+            <span class="menu-title">Character Book JSON</span>
+            <span class="menu-desc"
+              >Standard V2 spec for character cards &amp; third-party tools</span
+            >
+          </span>
+        </button>
+        <button mat-menu-item (click)="actions.exportDigest()">
+          <mat-icon>description</mat-icon>
+          <span class="menu-text">
+            <span class="menu-title">Proofread digest (Markdown)</span>
+            <span class="menu-desc">All entries as readable text</span>
+          </span>
+        </button>
+      </mat-menu>
+    }
+  }
 }

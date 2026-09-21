@@ -68,9 +68,16 @@
      see mobile-bottom-bar.scss for the surface rationale). The bar stays
      docked while drawers and dialogs are open: [barState] lowers it to
      `backgrounded` under a drawer (it sits below the sidenav container, so
-     it synthesizes the scrim look itself), and full-viewport CDK overlays
-     simply cover it. -->
+     it synthesizes the scrim look itself), swaps it to `batch` while the
+     entries drawer holds a selection (the transplanted toolbar), and
+     full-viewport CDK overlays simply cover it. The selection facts ride
+     the same public `EntryList` signals the state computation reads (the
+     bar contract, Task 06 §3.2/§3.3). -->
 <app-mobile-bottom-bar
   [barState]="barState()"
+  [selectionCount]="barSelectionCount()"
+  [allShownSelected]="barAllShownSelected()"
+  [someShownSelected]="barSomeShownSelected()"
   (action)="runBarAction($event)"
+  (batchAction)="runBatchBarAction($event)"
 />

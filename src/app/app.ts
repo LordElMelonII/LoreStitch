@@ -19,6 +19,7 @@ import { WelcomeScreen } from './features/shell/welcome-screen/welcome-screen';
 import {
   MobileBottomBar,
   MobileBarAction,
+  BatchBarAction,
   BarState,
 } from './features/shell/mobile-bottom-bar/mobile-bottom-bar';
 import { LayoutService } from './shared/services/layout.service';
@@ -86,14 +87,33 @@ export class App {
   protected readonly anyDrawerOpen = computed(() => this.leftOpened() || this.rightOpened());
 
   /**
-   * The bottom bar's state: `backgrounded` while either drawer overlays the
-   * editor (the docked bar veils and inerts itself), `normal` otherwise.
-   * Full-viewport CDK overlays need no member here — they cover the strip
-   * themselves. Task 06 P2 will extend this with the `batch` case once the
-   * entries drawer owns a selection; do not pre-wire selection here.
+   * The bottom bar's state (Task 06 §3.2): `batch` while the entries drawer
+   * is open with an active selection (the transplanted toolbar, foreground);
+   * otherwise `backgrounded` while either drawer overlays the editor (the
+   * docked bar veils and inerts itself); `normal` otherwise. Full-viewport
+   * CDK overlays (dialogs, sheets, menus) need no member here — they cover
+   * the strip themselves, so `batch` deliberately stays `batch` under an
+   * open dialog.
    */
-  protected readonly barState = computed<BarState>(() =>
-    this.anyDrawerOpen() ? 'backgrounded' : 'normal',
+  protected readonly barState = computed<BarState>(() => {
+    if (this.leftOpened() && !this.rightOpened() && this.barSelectionCount() > 0) {
+      return 'batch';
+    }
+    return this.anyDrawerOpen() ? 'backgrounded' : 'normal';
+  });
+
+  /**
+   * Selection facts the shell mirrors off the `EntryList` public API (Task
+   * 06 §3.3) and forwards to the bar's batch strip: the count and the
+   * select-all checkbox's tri-state sides. `?? defaults` mask the window
+   * before the deferred entries list resolves.
+   */
+  protected readonly barSelectionCount = computed(() => this.entryList()?.selectionCount() ?? 0);
+  protected readonly barAllShownSelected = computed(
+    () => this.entryList()?.allFilteredSelected() ?? false,
+  );
+  protected readonly barSomeShownSelected = computed(
+    () => this.entryList()?.someFilteredSelected() ?? false,
   );
 
   constructor() {
@@ -201,6 +221,11 @@ export class App {
    * triggers keep their focus (the desktop persistent-trigger pin), and
    * `side`-mode drawers have no backdrop semantics to mirror.
    *
+   * Also reused by the batch swap's focus recovery
+   * (`refocusEntriesPaneAfterSelectionCollapse`): a bar action that
+   * collapses the selection unmounts the tapped control and lowers the bar
+   * to `backgrounded` — the same focus-to-`<body>` accident, same cure.
+   *
    * Implemented here, not in the bar: the bar is presentational by charter
    * (render, emit) and holds no pane reference — the shell owns the
    * drawers, so it owns their focus policy.
@@ -245,5 +270,80 @@ export class App {
         this.toggleRight();
         break;
     }
+  }
+
+  /**
+   * Routes a mobile bottom-bar BATCH action (the selection swap, Task 06
+   * §3.2) to the `EntryList` public method that owns it — the bar's
+   * transplanted toolbar and menu stay presentational and only emit.
+   *
+   * `more-batch-actions` is a deliberate no-op: the bar's more_vert trigger
+   * opens its own batch menu in place (like the Export item), so nothing is
+   * ever routed through the shell for it — the member exists to keep the
+   * plan's union shape.
+   *
+   * `select-all-shown` arrives as a bare member from both the checkbox and
+   * the menu leaf; the bar carries no boolean, so the shell resolves the
+   * intent against the same public tri-state fact it feeds the bar with
+   * (`EntryList.allFilteredSelected`, read synchronously inside this
+   * handler — still the pre-tap state): everything shown already selected
+   * means the tap deselects the shown entries, otherwise it selects them
+   * all — exactly the drawer checkbox's behavior, with the leaf (disabled
+   * when all-selected) reducing to the same rule.
+   *
+   * Focus recovery: `clear-selection` and `delete-selection` can collapse
+   * `selectionCount()` to 0 mid-tap, flipping `batch` → `backgrounded` and
+   * unmounting the tapped control — focus falls to `<body>` under the
+   * now-inert strip (the same class of accident §3.4's pane-focus policy
+   * fixes). The shell re-focuses the entries pane after both, mirroring
+   * `focusPaneOnPhone` (entries pane only, phone only); for delete it waits
+   * for the async confirm dialog to resolve and the selection to clear.
+   */
+  protected async runBatchBarAction(action: BatchBarAction): Promise<void> {
+    const list = this.entryList();
+    if (!list) {
+      return;
+    }
+    switch (action) {
+      case 'batch-edit':
+        void list.openBatchOperations();
+        break;
+      case 'export-selected':
+        list.exportSelection();
+        break;
+      case 'more-batch-actions':
+        // Never emitted by the bar (its menu opens in place); kept so the
+        // switch stays exhaustive over the plan's union.
+        break;
+      case 'duplicate-selection':
+        list.duplicateSelection();
+        break;
+      case 'enable-selection':
+        list.setSelectionEnabled(true);
+        break;
+      case 'disable-selection':
+        list.setSelectionEnabled(false);
+        break;
+      case 'select-all-shown':
+        list.selectAllShown(!list.allFilteredSelected());
+        break;
+      case 'delete-selection':
+        await list.deleteSelection();
+        this.refocusEntriesPaneAfterSelectionCollapse();
+        break;
+      case 'clear-selection':
+        list.clearSelection();
+        this.refocusEntriesPaneAfterSelectionCollapse();
+        break;
+    }
+  }
+
+  /**
+   * The batch-swap focus recovery: mirror of `focusPaneOnPhone` for the
+   * entries pane — phone only, entries pane only, re-run after a bar action
+   * that unmounts the control the user just tapped.
+   */
+  private refocusEntriesPaneAfterSelectionCollapse(): void {
+    this.focusPaneOnPhone(this.entriesPaneEl());
   }
 }
