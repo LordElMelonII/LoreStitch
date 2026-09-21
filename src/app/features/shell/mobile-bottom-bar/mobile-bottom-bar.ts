@@ -1,10 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { MatBadgeModule } from '@angular/material/badge';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { LayoutService } from '../../../shared/services/layout.service';
@@ -68,17 +66,15 @@ export type BarState = 'normal' | 'backgrounded' | 'batch';
  * state at all.
  *
  * In `batch` (entries drawer open + a selection) the five quick actions are
- * replaced by the entry-list batch toolbar, transplanted into the strip
- * (variant A2, design checkpoint 06-1): same `.batch-bar` DOM contract as
- * the drawer's toolbar (`div.batch-bar[role=toolbar]`), centered, with a
- * subtle tonal top edge on the host as the approved emphasis cue. The bar
+ * replaced by five batch action items across the strip (`div.batch-bar[role=toolbar]`),
+ * with a subtle tonal top edge on the host as the approved emphasis cue. The bar
  * is presentational here too: the toolbar and its menu only emit
  * `batchAction`; the shell routes every member to the `EntryList` public API
  * (`App.runBatchBarAction`).
  *
  * Selection-fact contract (inputs below): the shell reads the count and the
  * select-all tri-state off `EntryList`'s public signals and forwards them —
- * the bar holds no workspace/selection state of its own. The checkbox only
+ * the bar holds no workspace/selection state of its own. The select-all button
  * emits `select-all-shown`; the shell resolves the boolean against the same
  * public tri-state facts (emit → shell handler is synchronous, so the
  * pre-tap fact is authoritative): when everything shown is already selected
@@ -89,15 +85,7 @@ export type BarState = 'normal' | 'backgrounded' | 'batch';
 @Component({
   selector: 'app-mobile-bottom-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    MatBadgeModule,
-    MatButtonModule,
-    MatCheckboxModule,
-    MatDividerModule,
-    MatIconModule,
-    MatMenuModule,
-    MatTooltipModule,
-  ],
+  imports: [MatBadgeModule, MatDividerModule, MatIconModule, MatMenuModule, MatTooltipModule],
   templateUrl: './mobile-bottom-bar.html',
   styleUrl: './mobile-bottom-bar.scss',
   host: {
@@ -159,7 +147,7 @@ export class MobileBottomBar {
   }
 
   /**
-   * The select-all checkbox's change handler: emits the bare member for both
+   * The select-all button's click handler: emits the bare member for both
    * toggle sides — the shell resolves the boolean from `EntryList`'s public
    * tri-state fact (see the class doc), which is synchronous to this emit
    * and therefore always the pre-tap state.

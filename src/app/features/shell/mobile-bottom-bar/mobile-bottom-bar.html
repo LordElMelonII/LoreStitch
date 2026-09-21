@@ -19,57 +19,70 @@
       <!-- Strip container: the same 64px geometry as the item row below;
            the host's `bar-batch` class centers the pill and adds the
            approved tonal top edge (see the stylesheet). -->
-      <div class="bar">
-        <div class="batch-bar" role="toolbar" aria-label="Batch actions">
-          <mat-checkbox
-            class="select-all"
-            [checked]="allShownSelected()"
-            [indeterminate]="someShownSelected()"
-            (change)="emitSelectAllChange()"
-            matTooltip="Select / deselect shown entries"
-            [attr.aria-label]="'Select all shown entries'"
-          />
-          <span class="batch-count">{{ selectionCount() }} selected</span>
-          <button
-            matIconButton
-            type="button"
-            (click)="emitBatch('batch-edit')"
-            matTooltip="Batch edit selection"
-            aria-label="Batch edit selection"
-          >
-            <mat-icon>tune</mat-icon>
-          </button>
-          <button
-            matIconButton
-            type="button"
-            (click)="emitBatch('export-selected')"
-            matTooltip="Export selection as lorebook"
-            aria-label="Export selection as lorebook"
-          >
-            <mat-icon>call_split</mat-icon>
-          </button>
-          <!-- Standalone menu trigger: opens the batch menu below in place
+      <div class="bar batch-bar" role="toolbar" aria-label="Batch actions">
+        <button
+          class="bar-item select-all"
+          type="button"
+          role="checkbox"
+          [attr.aria-checked]="
+            allShownSelected() ? 'true' : someShownSelected() ? 'mixed' : 'false'
+          "
+          (click)="emitSelectAllChange()"
+          matTooltip="Select / deselect shown entries"
+          [attr.aria-label]="'Select all shown entries (' + selectionCount() + ' selected)'"
+        >
+          @if (allShownSelected()) {
+            <mat-icon>check_box</mat-icon>
+          } @else if (someShownSelected()) {
+            <mat-icon>indeterminate_check_box</mat-icon>
+          } @else {
+            <mat-icon>check_box_outline_blank</mat-icon>
+          }
+          <span class="bar-label batch-count">{{ selectionCount() }} selected</span>
+        </button>
+        <button
+          class="bar-item"
+          type="button"
+          (click)="emitBatch('batch-edit')"
+          matTooltip="Batch edit selection"
+          aria-label="Batch edit selection"
+        >
+          <mat-icon>tune</mat-icon>
+          <span class="bar-label">Batch edit</span>
+        </button>
+        <button
+          class="bar-item"
+          type="button"
+          (click)="emitBatch('export-selected')"
+          matTooltip="Export selection as lorebook"
+          aria-label="Export selection as lorebook"
+        >
+          <mat-icon>call_split</mat-icon>
+          <span class="bar-label">Export</span>
+        </button>
+        <!-- Standalone menu trigger: opens the batch menu below in place
                (like the Export item in the default branch); NEVER emits —
                `more-batch-actions` stays a shell-side no-op by contract. -->
-          <button
-            matIconButton
-            type="button"
-            [matMenuTriggerFor]="batchMenu"
-            matTooltip="More batch actions"
-            aria-label="More batch actions"
-          >
-            <mat-icon>more_vert</mat-icon>
-          </button>
-          <button
-            matIconButton
-            type="button"
-            (click)="emitBatch('clear-selection')"
-            matTooltip="Clear selection"
-            aria-label="Clear selection"
-          >
-            <mat-icon>close</mat-icon>
-          </button>
-        </div>
+        <button
+          class="bar-item"
+          type="button"
+          [matMenuTriggerFor]="batchMenu"
+          matTooltip="More batch actions"
+          aria-label="More batch actions"
+        >
+          <mat-icon>more_vert</mat-icon>
+          <span class="bar-label">More</span>
+        </button>
+        <button
+          class="bar-item"
+          type="button"
+          (click)="emitBatch('clear-selection')"
+          matTooltip="Clear selection"
+          aria-label="Clear selection"
+        >
+          <mat-icon>close</mat-icon>
+          <span class="bar-label">Clear</span>
+        </button>
       </div>
 
       <!-- The drawer batch menu, transplanted with its toolbar and extended

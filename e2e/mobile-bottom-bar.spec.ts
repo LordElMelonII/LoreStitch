@@ -87,7 +87,13 @@ test.describe('mobile bottom action bar (phones)', () => {
     // Visible labels plus the full accessible names (the Search item shows
     // the M3 navigation-bar style short label but carries the full
     // aria-label; History is named by its aria-label).
-    for (const name of ['New entry', 'Search & replace', 'Export', 'Batch edit', 'Toggle history drawer']) {
+    for (const name of [
+      'New entry',
+      'Search & replace',
+      'Export',
+      'Batch edit',
+      'Toggle history drawer',
+    ]) {
       await expect(barNav(page).getByRole('button', { name, exact: true })).toBeVisible();
     }
 
@@ -109,9 +115,7 @@ test.describe('mobile bottom action bar (phones)', () => {
     // The editor gains a tab for the fresh entry and the sidebar header's
     // entry count increments (the drawer is off-canvas, but its header stays
     // stamped — the count is read from the DOM, not the viewport).
-    await expect(
-      page.locator('.entry-tabs .mat-mdc-tab', { hasText: 'New entry' }),
-    ).toHaveCount(1);
+    await expect(page.locator('.entry-tabs .mat-mdc-tab', { hasText: 'New entry' })).toHaveCount(1);
     await expect(page.locator('.entry-tabs .mat-mdc-tab')).toHaveCount(tabsBefore + 1);
     await expect(page.locator('.list-header .count')).toHaveText(String(countBefore + 1));
   });
@@ -282,15 +286,13 @@ test.describe('mobile bottom action bar (phones)', () => {
     const rows = page.locator('.entry-item');
     await rows.first().locator('.row-select').click();
     await rows.nth(1).locator('.row-select').click();
-    await expect(page.getByRole('toolbar', { name: 'Batch actions' })).toContainText(
-      '2 selected',
-    );
+    await expect(page.getByRole('toolbar', { name: 'Batch actions' })).toContainText('2 selected');
     await expect(barBatchToolbar(page)).toHaveCount(1);
     await expect(barBatchToolbar(page)).toHaveAttribute('role', 'toolbar');
     await expect(barBatchToolbar(page)).toHaveAttribute('aria-label', 'Batch actions');
     await expect(page.locator('app-entry-list .batch-bar')).toHaveCount(0);
     await expect(barNav(page)).toHaveCount(0);
-    await expect(page.locator('app-mobile-bottom-bar .bar-item')).toHaveCount(0);
+    await expect(page.locator('app-mobile-bottom-bar .bar-item')).toHaveCount(5);
     await expect(barHost(page)).toHaveClass(/bar-batch/);
     await expect(barHost(page)).not.toHaveClass(/bar-backgrounded/);
     await expect.poll(veilColor.bind(null, page)).toBe(TRANSPARENT);
@@ -335,9 +337,7 @@ test.describe('mobile bottom action bar (phones)', () => {
     // own Escape handling stays alive right after the strip interaction.
     await rows.first().locator('.row-select').click();
     await rows.nth(1).locator('.row-select').click();
-    await expect(page.getByRole('toolbar', { name: 'Batch actions' })).toContainText(
-      '2 selected',
-    );
+    await expect(page.getByRole('toolbar', { name: 'Batch actions' })).toContainText('2 selected');
     await barBatchToolbar(page).getByRole('button', { name: 'Clear selection' }).click();
     const paneHoldsFocus = await page.evaluate(
       () => (document.activeElement as HTMLElement | null)?.matches('.entries-sidenav') ?? false,
@@ -386,9 +386,7 @@ test.describe('mobile bottom action bar (tablet/desktop absence)', () => {
     ).toBeVisible();
   });
 
-  test('with a selection the inline header batch toolbar stays in the drawer', async ({
-    page,
-  }) => {
+  test('with a selection the inline header batch toolbar stays in the drawer', async ({ page }) => {
     await page.goto('/');
     await importLorebook(page, FATE_PATH);
     await selectFirstTwoRows(page);

@@ -462,7 +462,8 @@ describe('App', () => {
     expect(bar.classList.contains('bar-batch')).toBe(true);
     expect(bar.classList.contains('bar-backgrounded')).toBe(false);
     expect(bar.querySelector('.batch-bar')).toBeTruthy();
-    expect(bar.querySelectorAll('.bar-item')).toHaveLength(0);
+    expect(bar.querySelector('nav.bar')).toBeNull();
+    expect(bar.querySelectorAll('.bar-item')).toHaveLength(5);
 
     // The swap needs the history drawer closed: opening it veils the bar.
     app['toggleRight']();

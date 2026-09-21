@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { MatCheckbox } from '@angular/material/checkbox';
 import { MatMenuTrigger } from '@angular/material/menu';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { ProjectActionsService } from '../project-actions.service';
@@ -225,15 +224,15 @@ describe('MobileBottomBar', () => {
   // the entry-list batch toolbar, transplanted into the strip (variant A2).
   // -------------------------------------------------------------------------
 
-  it('swaps the five items out for the transplanted batch toolbar in batch state', async () => {
+  it('swaps the five quick actions for the five batch action items in batch state', async () => {
     await createBatchBar();
 
-    // The swap is exclusive: no quick-action row, no veil class.
+    // The swap is exclusive: no quick-action nav, no veil class.
     expect(host().querySelector('nav.bar')).toBeNull();
-    expect(itemButtons()).toHaveLength(0);
+    expect(itemButtons()).toHaveLength(5);
     expect(host().classList.contains('bar-backgrounded')).toBe(false);
 
-    // The toolbar keeps the drawer's DOM contract (role/label/classes) so
+    // The toolbar keeps the `.batch-bar` DOM contract (role/label/classes) so
     // the shared e2e helper (`getByRole('toolbar', { name: 'Batch actions' })`)
     // and the `.batch-bar button` touch-target selectors keep working.
     const toolbar = host().querySelector('.batch-bar');
@@ -241,7 +240,7 @@ describe('MobileBottomBar', () => {
     expect(toolbar.getAttribute('role')).toBe('toolbar');
     expect(toolbar.getAttribute('aria-label')).toBe('Batch actions');
     expect(toolbar.querySelector('.batch-count')?.textContent).toContain('2 selected');
-    expect(toolbar.querySelectorAll('button').length).toBeGreaterThanOrEqual(4);
+    expect(toolbar.querySelectorAll('button').length).toBe(5);
     expect(toolbar.querySelector('.select-all')).toBeTruthy();
 
     // Leaving batch brings the five items back — and the veil with them.
@@ -253,23 +252,30 @@ describe('MobileBottomBar', () => {
     expect(host().classList.contains('bar-backgrounded')).toBe(true);
   });
 
-  it('wires the select-all checkbox tri-state from the shell-passed selection facts', async () => {
+  it('wires the select-all button tri-state from the shell-passed selection facts', async () => {
     await createBatchBar({ count: 2, someShown: true });
-    const checkboxDebug = barFixture.debugElement.query(By.directive(MatCheckbox));
-    assert(checkboxDebug);
-    const checkbox = checkboxDebug.componentInstance as MatCheckbox;
+    const button = host().querySelector<HTMLButtonElement>('.select-all');
+    assert(button);
     // Mixed tri-state: some shown entries selected but not all.
-    expect(checkbox.checked).toBe(false);
-    expect(checkbox.indeterminate).toBe(true);
+    expect(button.getAttribute('role')).toBe('checkbox');
+    expect(button.getAttribute('aria-checked')).toBe('mixed');
+    expect(button.querySelector('mat-icon')?.textContent?.trim()).toBe('indeterminate_check_box');
 
     // The shell mirrors `EntryList.allFilteredSelected`/`someFilteredSelected`
-    // into these inputs; the checkbox follows them one-way.
+    // into these inputs; the button follows them one-way.
     barFixture.componentRef.setInput('allShownSelected', true);
     barFixture.componentRef.setInput('someShownSelected', false);
     await barFixture.whenStable();
     barFixture.detectChanges();
-    expect(checkbox.checked).toBe(true);
-    expect(checkbox.indeterminate).toBe(false);
+    expect(button.getAttribute('aria-checked')).toBe('true');
+    expect(button.querySelector('mat-icon')?.textContent?.trim()).toBe('check_box');
+
+    barFixture.componentRef.setInput('allShownSelected', false);
+    barFixture.componentRef.setInput('someShownSelected', false);
+    await barFixture.whenStable();
+    barFixture.detectChanges();
+    expect(button.getAttribute('aria-checked')).toBe('false');
+    expect(button.querySelector('mat-icon')?.textContent?.trim()).toBe('check_box_outline_blank');
   });
 
   it('emits the batch actions from the toolbar buttons', async () => {
@@ -289,21 +295,21 @@ describe('MobileBottomBar', () => {
     expect(emitted).toEqual(['batch-edit', 'export-selected', 'clear-selection']);
   });
 
-  it('emits select-all-shown from the select-all checkbox on either toggle side', async () => {
+  it('emits select-all-shown from the select-all button on either toggle side', async () => {
     const bar = await createBatchBar();
     const emitted: BatchBarAction[] = [];
     bar.batchAction.subscribe((action) => emitted.push(action));
 
-    // The checkbox only emits the bare member; the shell resolves the
+    // The button only emits the bare member; the shell resolves the
     // boolean against the public tri-state facts it owns (documented
     // contract). Both toggle sides must emit the same member.
-    const input = host().querySelector<HTMLInputElement>('input.mdc-checkbox__native-control');
-    assert(input);
-    input.click(); // unchecked → checked side
+    const button = host().querySelector<HTMLButtonElement>('.select-all');
+    assert(button);
+    button.click(); // unchecked → checked side
     barFixture.detectChanges();
     expect(emitted).toEqual(['select-all-shown']);
 
-    input.click(); // checked → unchecked side (deselect-shown intent)
+    button.click(); // checked → unchecked side (deselect-shown intent)
     barFixture.detectChanges();
     expect(emitted).toEqual(['select-all-shown', 'select-all-shown']);
   });
