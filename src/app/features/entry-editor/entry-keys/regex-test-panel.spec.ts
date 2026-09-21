@@ -65,6 +65,11 @@ describe('RegexTestPanel', () => {
     fixture.detectChanges();
   }
 
+  /** Raw textContent keeps the template's source newlines; assertions read collapsed prose. */
+  function textOf(el: HTMLElement | null): string {
+    return (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  }
+
   beforeEach(() => {
     TestBed.configureTestingModule({ imports: [RegexTestPanel] });
     fixture = TestBed.createComponent(RegexTestPanel);
@@ -244,6 +249,254 @@ describe('RegexTestPanel', () => {
 
       typeSample('a single match only');
       expect(fixture.nativeElement.textContent).not.toContain('Showing first 200 matches');
+    });
+  });
+
+  describe('trigger verdict (Task 08 §3.2, checkpoint 08-1)', () => {
+    function verdictElement(): HTMLElement | null {
+      return (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.verdict');
+    }
+
+    function headlineText(): string {
+      const headline = verdictElement()?.querySelector<HTMLElement>('.verdict-headline');
+      assert(headline);
+      return textOf(headline);
+    }
+
+    function hintElement(): HTMLElement {
+      const hint = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('mat-hint');
+      assert(hint);
+      return hint;
+    }
+
+    it('lives inside the collapsible body — mounted while collapsed, inert until opened', () => {
+      bindEntry({ keys: ['saber'] });
+      expect(verdictElement()).toBeTruthy();
+      expect(isInert(anchorElement())).toBe(true);
+
+      toggleOpen();
+      expect(isInert(anchorElement())).toBe(false);
+      expect(verdictElement()).toBeTruthy();
+    });
+
+    it('states the approved inserted verdict when every gate passes', () => {
+      bindEntry({ keys: ['saber'] });
+      toggleOpen();
+      typeSample('Saber is the King of Knights');
+
+      const verdict = verdictElement();
+      assert(verdict);
+      expect(verdict.className).toContain('verdict-inserted');
+      expect(verdict.querySelector('.verdict-icon')?.textContent?.trim()).toBe('check_circle');
+      expect(headlineText()).toBe('Would be inserted into SillyTavern’s context for this sample.');
+      // The good news carries no negation emphasis.
+      expect(verdict.querySelector('.verdict-headline strong')).toBeNull();
+    });
+
+    it('states the approved blocked verdict with the entry’s actual logic label (the report repro)', () => {
+      bindEntry({
+        keys: ['servant'],
+        secondary_keys: ['avalon'],
+        selective: true,
+        extensions: { selectiveLogic: 2 }, // NOT Any
+      });
+      toggleOpen();
+      typeSample('Servant with avalon');
+
+      const verdict = verdictElement();
+      assert(verdict);
+      expect(verdict.className).toContain('verdict-blocked');
+      expect(verdict.querySelector('.verdict-icon')?.textContent?.trim()).toBe('block');
+      expect(headlineText()).toBe(
+        'Would not be inserted — the matched “NOT Any” secondary keys block activation.',
+      );
+      expect(verdict.querySelector('.verdict-headline strong')?.textContent).toBe('not');
+    });
+
+    it('keeps the blocked copy parallel for the other secondary logics', () => {
+      // AND Any denied: no secondary key matched.
+      bindEntry({
+        keys: ['servant'],
+        secondary_keys: ['avalon'],
+        selective: true,
+        extensions: { selectiveLogic: 0 },
+      });
+      toggleOpen();
+      typeSample('Servant rides out');
+      expect(headlineText()).toBe(
+        'Would not be inserted — no “AND Any” secondary key matches this sample.',
+      );
+
+      // AND All denied: some secondary key did not match.
+      bindEntry({
+        keys: ['servant'],
+        secondary_keys: ['avalon', 'camelot'],
+        selective: true,
+        extensions: { selectiveLogic: 3 },
+      });
+      typeSample('Servant with avalon'); // camelot stays silent
+      expect(headlineText()).toBe(
+        'Would not be inserted — not every “AND All” secondary key matches this sample.',
+      );
+
+      // NOT All denied: every secondary key matched.
+      bindEntry({
+        keys: ['servant'],
+        secondary_keys: ['avalon'],
+        selective: true,
+        extensions: { selectiveLogic: 1 },
+      });
+      typeSample('Servant with avalon');
+      expect(headlineText()).toBe(
+        'Would not be inserted — the matched “NOT All” secondary keys block activation.',
+      );
+    });
+
+    it('falls back to a generic cause when a vendor writes an out-of-enum logic value', () => {
+      bindEntry({
+        keys: ['servant'],
+        secondary_keys: ['avalon'],
+        selective: true,
+        extensions: { selectiveLogic: 99 }, // satisfies no gate branch — ST denies
+      });
+      toggleOpen();
+      typeSample('Servant with avalon');
+
+      expect(verdictElement()?.className).toContain('verdict-blocked');
+      expect(headlineText()).toBe(
+        'Would not be inserted — the entry’s secondary-key logic denies activation.',
+      );
+      // No matched row claims to block — the gate denied on unknown logic.
+      for (const row of matchRows()) {
+        expect(row.querySelector('.blocks-suffix')).toBeNull();
+      }
+    });
+
+    it('states the probabilistic verdict with the imported roll percentage', () => {
+      bindEntry({ keys: ['saber'], extensions: { probability: 60, useProbability: true } });
+      toggleOpen();
+      typeSample('Saber is the King of Knights');
+
+      const verdict = verdictElement();
+      assert(verdict);
+      expect(verdict.className).toContain('verdict-probabilistic');
+      expect(verdict.querySelector('.verdict-icon')?.textContent?.trim()).toBe('casino');
+      expect(headlineText()).toBe(
+        'Fires a probability roll in SillyTavern — inserted 60% of the time.',
+      );
+    });
+
+    it('states the inconclusive verdict for a vectorized entry whose keys stayed silent', () => {
+      bindEntry({ keys: ['saber'], extensions: { vectorized: true } });
+      toggleOpen();
+      typeSample('nothing relevant here');
+
+      const verdict = verdictElement();
+      assert(verdict);
+      expect(verdict.className).toContain('verdict-inconclusive');
+      expect(verdict.querySelector('.verdict-icon')?.textContent?.trim()).toBe('blur_on');
+      expect(headlineText()).toBe(
+        'Keys stayed silent — Vector Storage may still insert this by similarity.',
+      );
+      const sub = verdict.querySelector<HTMLElement>('.verdict-sub');
+      assert(sub);
+      expect(textOf(sub)).toBe('Similarity is not testable here.');
+    });
+
+    it('stays honest about blocked entries: disabled and keyless', () => {
+      bindEntry({ keys: ['saber'], enabled: false });
+      toggleOpen();
+      typeSample('Saber rules');
+      expect(verdictElement()?.className).toContain('verdict-blocked');
+      expect(headlineText()).toBe('Would not be inserted — the entry is disabled.');
+
+      // A selective entry holding only secondary keys has no primary scan at
+      // all — the panel still opens, and the verdict says why it blocks.
+      bindEntry({ secondary_keys: ['avalon'], selective: true });
+      typeSample('avalon shines');
+      expect(headlineText()).toBe(
+        'Would not be inserted — the entry has no primary keys, so the keyword scan skips it.',
+      );
+    });
+
+    it('flips the verdict as the sample text changes', () => {
+      bindEntry({ keys: ['saber'], extensions: { probability: 60, useProbability: true } });
+      toggleOpen();
+      typeSample('nothing relevant here');
+      expect(verdictElement()?.className).toContain('verdict-blocked');
+      expect(headlineText()).toBe('Would not be inserted — no primary key matches this sample.');
+
+      typeSample('Saber arrives');
+      expect(verdictElement()?.className).toContain('verdict-probabilistic');
+      expect(headlineText()).toBe(
+        'Fires a probability roll in SillyTavern — inserted 60% of the time.',
+      );
+    });
+
+    it('marks the matched secondary row as blocking under NOT Any (treatment 1)', () => {
+      bindEntry({
+        keys: ['servant'],
+        secondary_keys: ['avalon'],
+        selective: true,
+        extensions: { selectiveLogic: 2 },
+      });
+      toggleOpen();
+      typeSample('Servant with avalon');
+
+      const rows = matchRows();
+      expect(rows).toHaveLength(2);
+      // The suffix lives on the offending row's state word, after "Matches".
+      expect(textOf(rows[1]?.querySelector('.row-state') ?? null)).toBe(
+        'Matches (blocks activation)',
+      );
+      const suffix = rows[1]?.querySelector<HTMLElement>('.blocks-suffix');
+      assert(suffix);
+      expect(textOf(suffix)).toBe('(blocks activation)');
+      // The matched PRIMARY row never reads as blocking.
+      expect(rows[0]?.querySelector('.blocks-suffix')).toBeNull();
+    });
+
+    it('leaves matched secondary rows alone under AND Any — the entry is simply inserted', () => {
+      bindEntry({
+        keys: ['servant'],
+        secondary_keys: ['avalon'],
+        selective: true,
+        extensions: { selectiveLogic: 0 },
+      });
+      toggleOpen();
+      typeSample('Servant with avalon');
+
+      expect(verdictElement()?.className).toContain('verdict-inserted');
+      for (const row of matchRows()) {
+        expect(row.querySelector('.blocks-suffix')).toBeNull();
+      }
+    });
+
+    it('does not blame matched secondaries under AND All — the missing one blocks', () => {
+      bindEntry({
+        keys: ['servant'],
+        secondary_keys: ['avalon', 'camelot'],
+        selective: true,
+        extensions: { selectiveLogic: 3 },
+      });
+      toggleOpen();
+      typeSample('Servant with avalon');
+
+      expect(verdictElement()?.className).toContain('verdict-blocked');
+      for (const row of matchRows()) {
+        expect(row.querySelector('.blocks-suffix')).toBeNull();
+      }
+    });
+
+    it('lists the live-outcome overrides in the hint', () => {
+      bindEntry({ keys: ['saber'] });
+      toggleOpen();
+
+      const text = textOf(hintElement());
+      expect(text).toContain(
+        'Probability rolls, sticky/cooldown timers, the inclusion-group budget, recursion, and Vector Storage for vectorized entries',
+      );
+      expect(text).toContain('change the live outcome');
     });
   });
 

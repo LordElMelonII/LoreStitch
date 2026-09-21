@@ -81,6 +81,68 @@
   }
 }
 
+// Verdict banner (Task 08 §3.2; checkpoint 08-1, treatment 1): the entry-level
+// joint outcome pinned above the per-key rows. One container/on-container M3
+// pair per outlook — the preview's contrast-engineered tone-pair idiom, so
+// both tracks stay readable in light and dark.
+.verdict {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  margin: 0 0 8px;
+  border-radius: var(--mat-sys-corner-medium);
+}
+
+.verdict-blocked {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.verdict-inserted {
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+}
+
+.verdict-probabilistic {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.verdict-inconclusive {
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.verdict-icon-slot {
+  display: inline-flex;
+  justify-content: center;
+  flex: none;
+}
+
+// The mock's 20px glyph (the global symbols class and mat-icon both ship
+// 24px — overridden on our own class, never on Material's).
+.verdict-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+}
+
+.verdict-copy {
+  min-width: 0;
+}
+
+.verdict-headline {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+}
+
+.verdict-sub {
+  margin: 2px 0 0;
+  font: var(--mat-sys-body-small);
+  opacity: 0.85;
+}
+
 // Match rows: the linter `.diagnostic-row` grid minus `.row-actions` — a 40px
 // decorative icon slot and a message column. Rows are textual, never
 // focusable, never clickable.
@@ -143,6 +205,14 @@
 // philosophy.
 .row-key {
   overflow-wrap: anywhere;
+}
+
+// Checkpoint 08-1 per-row honesty: the matched secondary key that denies
+// activation under a NOT_* gate must not read as success — the mock's
+// error-colored label-medium suffix on the offending row's state word.
+.blocks-suffix {
+  font: var(--mat-sys-label-medium);
+  color: var(--mat-sys-error);
 }
 
 // Secondary rows' logic label: the linter's decorative 28px tonal chip

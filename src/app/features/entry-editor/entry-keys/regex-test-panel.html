@@ -43,9 +43,76 @@
           <mat-hint
             >Matches against the raw text you provide — not SillyTavern's assembled chat history
             (message names, scan depth, recursion). Unset options use SillyTavern's defaults:
-            case-insensitive, substring matching.
+            case-insensitive, substring matching. Probability rolls, sticky/cooldown timers, the
+            inclusion-group budget, recursion, and Vector Storage for vectorized entries can each
+            still change the live outcome.
           </mat-hint>
         </mat-form-field>
+
+        <!-- Entry-level verdict (Task 08 §3.2, checkpoint 08-1): the joint
+             SillyTavern outcome over exactly the per-key facts listed below,
+             evaluated in the vendored scan's order (st-trigger.ts).
+             role="status" — a polite live region as the sample changes. -->
+        <div [class]="verdictClass()" role="status">
+          <span class="verdict-icon-slot">
+            @switch (verdict().outlook) {
+              @case ('blocked') {
+                <mat-icon aria-hidden="true" class="verdict-icon">block</mat-icon>
+              }
+              @case ('inserted') {
+                <mat-icon aria-hidden="true" class="verdict-icon">check_circle</mat-icon>
+              }
+              @case ('probabilistic') {
+                <mat-icon aria-hidden="true" class="verdict-icon">casino</mat-icon>
+              }
+              @case ('inconclusive') {
+                <mat-icon aria-hidden="true" class="verdict-icon">blur_on</mat-icon>
+              }
+            }
+          </span>
+          <div class="verdict-copy">
+            @switch (verdict().reason) {
+              @case ('disabled') {
+                <p class="verdict-headline">
+                  Would <strong>not</strong> be inserted — the entry is disabled.
+                </p>
+              }
+              @case ('no-keys') {
+                <p class="verdict-headline">
+                  Would <strong>not</strong> be inserted — the entry has no primary keys, so the
+                  keyword scan skips it.
+                </p>
+              }
+              @case ('no-key-matched') {
+                <p class="verdict-headline">
+                  Would <strong>not</strong> be inserted — no primary key matches this sample.
+                </p>
+              }
+              @case ('secondary-logic-denied') {
+                <p class="verdict-headline">
+                  Would <strong>not</strong> be inserted — {{ verdictCause() }}
+                </p>
+              }
+              @case ('always') {
+                <p class="verdict-headline">
+                  Would be inserted into SillyTavern’s context for this sample.
+                </p>
+              }
+              @case ('probability-roll') {
+                <p class="verdict-headline">
+                  Fires a probability roll in SillyTavern — inserted {{ verdict().probability }}% of
+                  the time.
+                </p>
+              }
+              @case ('vector-similarity-only') {
+                <p class="verdict-headline">
+                  Keys stayed silent — Vector Storage may still insert this by similarity.
+                </p>
+                <p class="verdict-sub">Similarity is not testable here.</p>
+              }
+            }
+          </div>
+        </div>
 
         <!-- Match rows: textual facts in reading order — the icons are
              decoration, nothing in a row is focusable or clickable. -->
@@ -68,7 +135,14 @@
               </span>
               <div class="row-body">
                 <p class="row-line">
-                  <span class="row-state">{{ row.stateLabel }}</span>
+                  <span class="row-state"
+                    >{{ row.stateLabel }}
+                    @if (
+                      row.tone === 'secondary' && row.kind === 'matched' && matchedSecondaryBlocks()
+                    ) {
+                      &ngsp;<span class="blocks-suffix">(blocks activation)</span>
+                    }
+                  </span>
                   <span class="row-key">{{ row.key }}</span>
                   @if (row.logicLabel; as label) {
                     <span class="logic-chip">{{ label }}</span>
