@@ -539,6 +539,43 @@ describe('App', () => {
     });
   });
 
+  it('leaves the swap and its trigger alive when the delete confirm is cancelled', async () => {
+    const app = await createPhoneShellWithSelection();
+    const list = app['entryList']();
+    assert(list);
+    list.selectAllShown(true);
+
+    // The delete confirmation is held open by a deferred subject, then
+    // cancelled — `deleteSelection` resolves without clearing.
+    const cancelled = new Subject<boolean>();
+    const openDialog = vi.spyOn(TestBed.inject(MatDialog), 'open').mockReturnValue({
+      afterClosed: () => cancelled,
+    } as never);
+    const deleteSpy = vi.spyOn(workspace, 'deleteEntries');
+
+    void app['runBatchBarAction']('delete-selection');
+    await vi.waitFor(() => expect(openDialog).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    cancelled.next(false);
+    cancelled.complete();
+    // Let the floating handler's continuation (the recovery decision) run
+    // before asserting — without this tick the guard's choice is unobserved.
+    await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // A cancelled confirm keeps `selectionCount()` (and with it the batch
+    // swap) alive: the shell's collapse-focus recovery does not apply —
+    // nothing unmounted under the tap, so Material restores focus onto the
+    // bar's own trigger and the shell must not steal it into the pane. That
+    // focus fact is unobservable in jsdom (Material's own sidenav focus trap
+    // parks focus inside the open pane regardless — the sibling confirmed
+    // test waits for exactly that), so the cancel path is pinned by its
+    // discriminating facts: the delete did not run and the selection the
+    // swap edits survived with the bar still foregrounded.
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(list.selectionCount()).toBe(2);
+    expect(app['barState']()).toBe('batch');
+  });
+
   it('routes every batch action leaf to the EntryList public method that owns it', async () => {
     const app = await createPhoneShellWithSelection();
     const list = app['entryList']();

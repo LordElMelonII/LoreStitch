@@ -302,9 +302,11 @@ export class App {
    * `selectionCount()` to 0 mid-tap, flipping `batch` → `backgrounded` and
    * unmounting the tapped control — focus falls to `<body>` under the
    * now-inert strip (the same class of accident §3.4's pane-focus policy
- * fixes). The shell re-focuses the entries pane after both, mirroring
- * `focusPaneOnPhone` (entries pane only, phone only); for delete it waits
- * for the async confirm dialog to resolve and the selection to clear.
+   * fixes). The shell re-focuses the entries pane after both, mirroring
+   * `focusPaneOnPhone` (entries pane only, phone only); for delete it waits
+   * for the async confirm dialog to resolve and only recovers when the
+   * selection actually cleared — a cancelled confirm keeps the swap alive
+   * with its trigger intact and focus stays with the bar.
    */
   protected async runBatchBarAction(action: BatchBarAction): Promise<void> {
     const list = this.entryList();
@@ -334,10 +336,20 @@ export class App {
       case 'select-all-shown':
         list.selectAllShown(!list.allFilteredSelected());
         break;
-      case 'delete-selection':
+      case 'delete-selection': {
         await list.deleteSelection();
-        this.refocusEntriesPaneAfterSelectionCollapse();
+        // Recover focus only when the selection ACTUALLY collapsed — the
+        // case a cancelled confirm dialog leaves behind is a still-active
+        // swap (`selectionCount() > 0`) whose tapped control never
+        // unmounted: Material restores focus onto it, so the shell must not
+        // steal it into the pane (bar interaction must keep working). The
+        // unmount → `<body>` focus drop the recovery cures only exists on
+        // the confirmed path, where the count became 0.
+        if (list.selectionCount() === 0) {
+          this.refocusEntriesPaneAfterSelectionCollapse();
+        }
         break;
+      }
       case 'clear-selection':
         list.clearSelection();
         this.refocusEntriesPaneAfterSelectionCollapse();
