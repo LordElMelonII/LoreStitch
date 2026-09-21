@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
+import type { StTriggerVerdict } from '../../../core/models/st-trigger';
 import { RegexTestPanel } from './regex-test-panel';
 
 describe('RegexTestPanel', () => {
@@ -17,21 +18,23 @@ describe('RegexTestPanel', () => {
   }
 
   function panelRoot(): HTMLElement {
-    const el = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-header');
+    const el = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '.test-keys-header',
+    );
     assert(el);
     return el;
   }
 
   function anchorElement(): HTMLElement {
-    const el = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-panel-anchor');
+    const el = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '.test-panel-anchor',
+    );
     assert(el);
     return el;
   }
 
   function matchRows(): HTMLElement[] {
-    return [
-      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.match-row'),
-    ];
+    return [...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.match-row')];
   }
 
   /**
@@ -78,12 +81,16 @@ describe('RegexTestPanel', () => {
   describe('mount gating', () => {
     it('renders nothing for a keyless entry', () => {
       bindEntry({});
-      expect((fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-header')).toBeNull();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-header'),
+      ).toBeNull();
     });
 
     it('renders nothing while the entry is constant — keys are ignored', () => {
       bindEntry({ keys: ['saber'], constant: true });
-      expect((fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-header')).toBeNull();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-header'),
+      ).toBeNull();
     });
 
     it('renders for a keyed, non-constant entry', () => {
@@ -93,14 +100,18 @@ describe('RegexTestPanel', () => {
 
     it('renders for a selective entry holding only secondary keys', () => {
       bindEntry({ secondary_keys: ['artoria'], selective: true });
-      expect((fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-header')).toBeTruthy();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-header'),
+      ).toBeTruthy();
     });
   });
 
   describe('collapse', () => {
     it('starts collapsed with the accordion ARIA and inert content', () => {
       bindEntry({ keys: ['saber'] });
-      const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-toggle');
+      const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '.test-keys-toggle',
+      );
       assert(toggle);
 
       expect(toggle.getAttribute('aria-expanded')).toBe('false');
@@ -117,7 +128,9 @@ describe('RegexTestPanel', () => {
     it('expands through the toggle and releases the content', () => {
       bindEntry({ keys: ['saber'] });
       toggleOpen();
-      const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-toggle');
+      const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '.test-keys-toggle',
+      );
       assert(toggle);
 
       expect(toggle.getAttribute('aria-expanded')).toBe('true');
@@ -498,18 +511,68 @@ describe('RegexTestPanel', () => {
       );
       expect(text).toContain('change the live outcome');
     });
+
+    it('renders copy for every machine reason — the reason @switch is exhaustively guarded', () => {
+      // Angular's `@switch` does no compile-time exhaustiveness checking: a
+      // future member of StTriggerVerdict['reason'] would otherwise compile
+      // clean and silently render an empty banner. This typed record is the
+      // guard — it fails THIS file's typecheck the moment the union grows
+      // without a fixture, and the loop below fails when the matching
+      // `@case` copy or the outlook icon is missing from the template. The
+      // fixtures double as coverage of every outlook of the icon `@switch`.
+      const reasonFixtures: Readonly<
+        Record<StTriggerVerdict['reason'], { entry: Partial<CharacterBookEntry>; sample: string }>
+      > = {
+        disabled: { entry: { keys: ['saber'], enabled: false }, sample: 'Saber rules' },
+        'no-keys': {
+          entry: { secondary_keys: ['avalon'], selective: true },
+          sample: 'avalon shines',
+        },
+        'no-key-matched': { entry: { keys: ['saber'] }, sample: 'nothing relevant here' },
+        'secondary-logic-denied': {
+          entry: {
+            keys: ['servant'],
+            secondary_keys: ['avalon'],
+            selective: true,
+            extensions: { selectiveLogic: 2 }, // NOT Any
+          },
+          sample: 'Servant with avalon',
+        },
+        always: { entry: { keys: ['saber'] }, sample: 'Saber is the King of Knights' },
+        'probability-roll': {
+          entry: { keys: ['saber'], extensions: { probability: 60, useProbability: true } },
+          sample: 'Saber is the King of Knights',
+        },
+        'vector-similarity-only': {
+          entry: { keys: ['saber'], extensions: { vectorized: true } },
+          sample: 'nothing relevant here',
+        },
+      };
+
+      bindEntry({ keys: ['saber'] });
+      toggleOpen(); // the open signal survives re-binds; open once for realism
+      for (const [reason, reasonCase] of Object.entries(reasonFixtures)) {
+        bindEntry(reasonCase.entry);
+        typeSample(reasonCase.sample);
+        const headline = verdictElement()?.querySelector<HTMLElement>('.verdict-headline');
+        assert(headline, `reason "${reason}" renders no headline`);
+        expect(textOf(headline), `reason "${reason}" renders an empty headline`).not.toBe('');
+        const icon = verdictElement()?.querySelector<HTMLElement>('.verdict-icon');
+        assert(icon, `outlook of reason "${reason}" renders no icon`);
+      }
+    });
   });
 
   it('never collapses on Escape inside the textarea — collapse is the toggle alone', () => {
     bindEntry({ keys: ['saber'] });
     toggleOpen();
 
-    textareaElement().dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-    );
+    textareaElement().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     fixture.detectChanges();
 
-    const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.test-keys-toggle');
+    const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '.test-keys-toggle',
+    );
     assert(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(isInert(anchorElement())).toBe(false);
