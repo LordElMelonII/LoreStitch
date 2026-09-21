@@ -126,3 +126,34 @@ transplant-vs-bar-items). P2 dispatch is BLOCKED until the user answers.
   (qa-auditor incl. re-captured after-set with the swapped state), task
   status commit, STOP for user test. After that: Task 08 P2 (treatment 1)
   → P3 → P4, then the archive step.
+
+## Phase 2 — Batch swap (2026-09-21 after machine restart, ui-specialist)
+
+- Commit: `70a1505 feat(shell): swap the mobile bar to batch actions during selection`
+- **Resumed by auditing + completing the stashed partial attempt** (user
+  direction: don't discard it). Audit verdict: the attempt was essentially
+  correct across all 10 files; three gaps fixed — a failing viewport-flip
+  spec (CDK's debounce runs through RxJS's interval-backed asyncScheduler,
+  which the file's `toFake: ['setTimeout','clearTimeout']` clock never
+  controls → the window around each flip runs on real timers, the
+  topbar-spec settle pattern; a debug `console.log` removed), uncovered
+  `runBatchBarAction` arms (new every-leaf routing pin), untouched READMEs
+  (now updated). No test pruned (diff-verified).
+- What landed: `@switch (barState())` batch branch (transplanted toolbar,
+  exact DOM contract, select-all menu leaf, `yPosition="above"`, veil/inert
+  never in batch, A2 batch-only tonal top edge, 48px checkbox floor);
+  `BatchBarAction` union + `batchAction` output; EntryList public API
+  (selectionCount, tri-state facts, export/duplicate/enable/disable/delete/
+  clear/selectAllShown) with header toolbar gated `!isMobile()`; shell
+  `barState` batch case + `runBatchBarAction` routing + clear/delete focus
+  recovery (phone-only, entries pane); selection facts bound as three
+  narrow inputs off the EntryList signals.
+- Gates: `CI=true npm test -- --watch=false` **green** (54 files / 1025
+  tests; coverage 95.85/89.41/90.84/97.31; bar 100%, app.ts 91.35%,
+  entry-list.ts 91.41%); `npm run build` **green**.
+- Stash hygiene: both superseded P2 partial stashes dropped after the green
+  commit (the pre-existing develop WIP stash untouched).
+- Deviations: real-timer settle window in the entry-list viewport-flip spec
+  (forced by RxJS interval-backed CDK debounce; justified in-spec).
+
+**Next:** P3 (ts-reviewer) — typing of the two unions, signal purity, lint.
