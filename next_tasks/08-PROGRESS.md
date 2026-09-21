@@ -131,3 +131,19 @@ treatment mock). P2 dispatch is BLOCKED until the user answers.
   disabled → "the entry is disabled."
 
 **Next:** P3 (ts-reviewer) — exhaustive-reason typing, signal purity, lint.
+
+## Phase 3 — Review (2026-09-21, ts-reviewer)
+
+- Commit: `b95d836 test(test-keys): guard the verdict reason switch
+  exhaustively` (test-only): Angular 22's `@switch` does no compile-time
+  exhaustiveness checking, so a future 8th `reason` member would have
+  silently rendered an empty banner — added a typed
+  `Record<StTriggerVerdict['reason'], {entry, sample}>` fixture loop
+  asserting non-empty copy + icon per reason (verified the guard bites:
+  removing a key is a compile error).
+- Verified clean: st-trigger typing + oracle fidelity spot-check;
+  verdict computeds pure; logicLabel/selectiveLogic split behavior-identical;
+  suffix verdict-driven only; banner inert while collapsed; OnPush safe.
+- Gates: `npm run lint` **clean**; units **1073/1073**.
+
+**Next:** P4 (qa-auditor) — regex-sandbox e2e extensions + screenshots.
