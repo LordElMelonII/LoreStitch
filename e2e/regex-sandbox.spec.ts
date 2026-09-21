@@ -20,9 +20,19 @@ import { createProject, FATE_PATH, importLorebook, openFirstEntry } from './help
  *     substring-only `grail` hit to No match while the whole-word
  *     `excalibur` hit, the options-immune regex key and the secondary hit
  *     stay — no reload (the component-local sample survives in the field).
- *  6. The "Showing first 200 matches" clamp note is absent for a small
+ *  6. The entry-level verdict banner (Task 08 §3.6): the `role="status"`
+ *     banner reads as a guaranteed insertion under the fixture's AND Any
+ *     default; flipping Secondary Logic to NOT Any flips it to the blocked
+ *     verdict and pins the "(blocks activation)" honesty suffix onto the
+ *     matched avalon row (the user-report repro), flipping back to AND Any
+ *     restores the inserted headline and drops the suffix; rolling the
+ *     Activation section's "Probability %" field to 50 flips the banner to
+ *     the probabilistic verdict (the field writes `extensions.probability`
+ *     through the entrySliceSignal mutator — the real UI path, so the
+ *     probabilistic branch is pinned end-to-end, not unit-only).
+ *  7. The "Showing first 200 matches" clamp note is absent for a small
  *     sample and appears once the sample floods past the clamp.
- *  7. A fresh keyless entry renders no Test keys section at all (mount
+ *  8. A fresh keyless entry renders no Test keys section at all (mount
  *     gating).
  *
  * The fixture's first entry (uid 1) is Selective with seven plaintext keys
@@ -186,6 +196,63 @@ test.describe('regex key sandbox (Test keys panel)', () => {
 
     // A small sample stays far below the highlight clamp.
     await expect(tab.getByText('Showing first 200 matches')).toHaveCount(0);
+
+    // ── Task 08 §3.6: the entry-level verdict banner ──
+    // The panel states the joint SillyTavern outcome in a role="status"
+    // banner evaluated over exactly the rows below (evaluateStTrigger). The
+    // fixture's first entry is enabled, selective, non-vectorized, with
+    // extensions.probability 100 — so the default AND Any gate passes and
+    // the banner reads as a guaranteed insertion.
+    const verdictBanner = tab.locator('.verdict');
+    await expect(verdictBanner).toHaveAttribute('role', 'status');
+    await expect(verdictBanner).toHaveClass(/verdict-inserted/);
+    await expect(verdictBanner.locator('.verdict-headline')).toHaveText(
+      'Would be inserted into SillyTavern’s context for this sample.',
+    );
+
+    // The user-report repro (Task 08 §1): flipping Secondary Logic to
+    // NOT Any turns the MATCHED secondary row into the blocker — the banner
+    // flips to the blocked verdict and the avalon row stops reading as
+    // success.
+    const logicSelect = tab.getByRole('combobox', { name: 'Secondary Logic' });
+    await logicSelect.click();
+    await page.getByRole('option', { name: 'NOT Any', exact: true }).click();
+    await expect(verdictBanner).toHaveClass(/verdict-blocked/);
+    await expect(verdictBanner.locator('.verdict-headline')).toHaveText(
+      'Would not be inserted — the matched “NOT Any” secondary keys block activation.',
+    );
+    const avalonRow = matchRow(page, tab, 'avalon');
+    await expect(avalonRow.locator('.logic-chip')).toHaveText('NOT Any');
+    await expect(avalonRow.locator('.row-state')).toHaveText('Matches (blocks activation)');
+    await expect(avalonRow.locator('.blocks-suffix')).toHaveText('(blocks activation)');
+
+    // Flipping back to AND Any restores the inserted headline and drops the
+    // per-row honesty suffix (it only ever renders under the NOT_* gates).
+    await logicSelect.click();
+    await page.getByRole('option', { name: 'AND Any', exact: true }).click();
+    await expect(verdictBanner).toHaveClass(/verdict-inserted/);
+    await expect(verdictBanner.locator('.verdict-headline')).toHaveText(
+      'Would be inserted into SillyTavern’s context for this sample.',
+    );
+    await expect(avalonRow.locator('.row-state')).toHaveText('Matches');
+    await expect(avalonRow.locator('.blocks-suffix')).toHaveCount(0);
+
+    // The probability roll (Task 08 §2 gap 6): LoreStitch DOES expose a real
+    // UI path — the Activation section's "Probability %" field writes
+    // `extensions.probability` through the entrySliceSignal mutator — so the
+    // probabilistic branch is pinned end-to-end instead of unit-only. At 50
+    // the banner names the roll; back at 100 it is a guaranteed insertion.
+    const probabilityField = tab.getByLabel('Probability %', { exact: true });
+    await probabilityField.fill('50');
+    await expect(verdictBanner).toHaveClass(/verdict-probabilistic/);
+    await expect(verdictBanner.locator('.verdict-headline')).toHaveText(
+      'Fires a probability roll in SillyTavern — inserted 50% of the time.',
+    );
+    await probabilityField.fill('100');
+    await expect(verdictBanner).toHaveClass(/verdict-inserted/);
+    await expect(verdictBanner.locator('.verdict-headline')).toHaveText(
+      'Would be inserted into SillyTavern’s context for this sample.',
+    );
 
     // A malformed regex key flags its chip loudly ...
     await addChipKey(primaryKeyInput, '/(saber/');
