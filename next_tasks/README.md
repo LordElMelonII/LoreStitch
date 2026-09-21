@@ -6,9 +6,10 @@ Completed plans live in [archive/](./archive/).
 
 ## Pending
 
-None — the 2026-09-20 bug-report batch (06–08) is implemented on feature
-branches and archived (see [archive/README.md](./archive/README.md) for the
-landing table; 06/08 await user test + ff-merge as of 2026-09-21).
+None — the 2026-09-20 bug-report batch (06–08) is implemented and ff-merged
+to `develop` (07 on 2026-09-21, 06 + 08 on 2026-09-21 with the user's merge
+go-ahead); see [archive/README.md](./archive/README.md) for the landing
+table.
 
 ## Shared Conventions (apply to every task)
 
