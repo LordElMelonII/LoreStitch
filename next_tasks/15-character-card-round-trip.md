@@ -204,9 +204,10 @@ time. Copy finalized in the P2 phase report.
 ### 3.7 Fixtures — user-provided reference cards
 
 The user supplies the example cards when the task starts (promised
-2026-09-22): a **card PNG** and a **card JSON**, ideally covering both V2
-and V3 between them and carrying non-trivial `extensions` plus unknown
-fields to exercise the never-drop pins. They land in `example_card/` beside
+2026-09-22; **file names agreed**): `example_card/example_card.png` and
+`example_card/example_card.json` — ideally covering both V2 and V3 between
+them and carrying non-trivial `extensions` plus unknown fields to exercise
+the never-drop pins. They land in `example_card/` beside
 the existing reference books and are the e2e/round-trip material, imported
 through the `importLorebook` helper path. Unit specs do **not** depend on
 them — §3.6's codec specs craft minimal PNGs in-test (deterministic, no
