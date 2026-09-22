@@ -170,3 +170,37 @@ checkpoint mock.
 
 **Next:** dispatch P3 (ts-reviewer) — typing/lint sweep over everything touched.
 Gate: `npm run lint` (+ `npm test` if it fixed anything).
+
+## Phase P3 — 2026-09-22 — ts-reviewer agent
+
+**Files** (`c95eb68`, `refactor(types): consolidate card spec fixtures and tidy assertions`,
+3 modified specs + NEW `src/testing/png-fixtures.ts`; zero implementation changes):
+- Fixed lint error (unused `IDAT_B` in `character-card.spec.ts`), removed redundant
+  `as CardError` casts after the `asserts` helper, consolidated the triplicated
+  spec-local PNG fixture builders into `src/testing/png-fixtures.ts` (bare module,
+  `crc32` import — the `projectOf` precedent), one offset-pinning `toEqual` adjusted
+  to `{type, data}` with an explanatory comment.
+- Prettier on touched files only.
+
+**Gates**: `npm run lint` = clean (orchestrator counter-run exit 0);
+`CI=true npm test -- --watch=false` = 1187/1187 green after fixes (orchestrator
+counter-run exit 0); build green; `tsc -p tsconfig.spec.json --noEmit` exit 0
+(specs aren't typechecked by the vitest run — reviewer recommends a
+`typecheck:spec` script as follow-up).
+
+**Review verdicts**: strict typing OK (no `any`, no non-null assertions in
+implementation, `'reason' in` narrowing only on object unions, `typeof !== 'string'`
+for the string-member union); DataView/uint32 math masked + overrun-checked;
+`CARD_FAILURE_COPY` exhaustively enforced by its `Record` type; computeds pure;
+no behavior changes introduced (explicit).
+
+**Flagged, not fixed** (pinned behavior/copy): tooltip wording edge for a
+hand-mangled shell (`pngBytes` without `pngKeyword` shows the `no-image` copy);
+`parsedImportFromCard` reason reuse (`card-json-invalid` for a wrong-typed book —
+copy table renders it identically); `downloadBytes` defensive copy retained
+deliberately; `readFileText` now spec-only (pre-existing, cleanup candidate);
+`png-fixtures.ts` coverage registers 100/75/100/100 — noted for the P4 coverage diff.
+
+**Next:** dispatch P4 (qa-auditor) — `e2e/character-card.spec.ts` over the committed
+fixtures, coverage diff, screenshot baseline posting. Gate: per-project Playwright
+(character-card + round-trip), each command < 8 min.
