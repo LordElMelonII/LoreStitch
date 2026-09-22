@@ -37,6 +37,20 @@ evaluation notes below).
   `new-project-dialog.ts` seeding template entries (character / location /
   faction) with default prompt delimiters and structure through
   `WorkspaceService.createProject`. Visual feature ⇒ checkpoint + screenshots.
+- **UX follow-ups from the 2026-09-22 app review** (branch
+  `feature/2026-09-22-app-review`; surveyed, **none implemented** — each
+  changes a flow or user-facing copy and needs the user's go-ahead first):
+  history restore is destructive with no confirmation (the restore button in
+  `commit-history.html` → `workspace.rollbackTo` silently discards
+  uncommitted changes; route through `ConfirmDialog` naming what is
+  discarded); single-entry delete confirms nothing while batch delete does
+  (row delete icon in `entry-list`); drag-reorder has no keyboard alternative
+  ("move up/down" row-menu leaves through `workspace.moveEntry`); the entry
+  row is `role="button"` wrapping nested interactive controls (a
+  listbox/option restructure would be cleaner but risks e2e selectors).
+  The same review assessed `workspace.rollbackTo`'s direct-save path
+  (non-debounced, outside `mutateProject`) as **sound by design** — no
+  change wanted there.
 
 Urgent bug reports still preempt this queue (intake convention below).
 
