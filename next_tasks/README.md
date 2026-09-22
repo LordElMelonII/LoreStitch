@@ -12,7 +12,6 @@ evaluation notes below).
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
-| 15 | [15-character-card-round-trip.md](./15-character-card-round-trip.md) | Character-card (PNG **and** JSON) import/export: extract the embedded `character_book` for editing, re-embed the edited book into the same card shell byte-preserved — the user's top priority, granted the urgent slot | 🔴 Urgent — **overtakes the queue** (user decision 2026-09-22; checkpoint 15-1 after P1) |
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
 | 09 | [09-export-pre-flight-validation.md](./09-export-pre-flight-validation.md) | Enforce the ROADMAP critical gate "pre-flight schema validation must run before file export" — validate-and-block on the export path (duplicate/non-numeric entry ids are the reachable hole today) | ✅ Ready to dispatch |
 | 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
