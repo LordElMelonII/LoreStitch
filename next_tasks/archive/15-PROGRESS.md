@@ -204,3 +204,69 @@ deliberately; `readFileText` now spec-only (pre-existing, cleanup candidate);
 **Next:** dispatch P4 (qa-auditor) — `e2e/character-card.spec.ts` over the committed
 fixtures, coverage diff, screenshot baseline posting. Gate: per-project Playwright
 (character-card + round-trip), each command < 8 min.
+
+## Phase P4 — 2026-09-22 — qa-auditor agent
+
+**Files** (`186b040`, `test(e2e): character card round-trip`, 7 files, +610/−5):
+- NEW `e2e/character-card.spec.ts` — 5 tests on every project (no skips; mobile
+  projects exercise the bottom-bar Export menu, desktop the topbar).
+- `e2e/helpers.ts` extended (house pattern): fixture paths, `expectSnackbar`,
+  viewport-aware `openExportMenu`, `cardExportRow`, `exportCard`,
+  `importViaProjectsMenu`, active-tab-body-scoped editor helpers,
+  `compareCardPngBytes` (structural chunk-sequence byte comparator),
+  `buildNonCardPng`.
+- `src/testing/png-fixtures.ts` doc comment; mobile-bottom-bar comment/title
+  "five-entry" wording migrated (comment-only, 3 spots); +5 unit tests in
+  `import-export.service.spec.ts` (coverage fix-forward; suite 1187 → 1192).
+
+**Gates**:
+- `character-card` per project: desktop-chrome **5/5** (48.6 s), mobile-chrome **5/5**
+  (49.9 s), mobile-safari **5/5** (1.0 m).
+- `round-trip` (untouched) desktop-chrome: 4 passed, 1 skipped — spot-checked on one
+  project only (three-project sweep would breach the command window; remainder noted).
+- mobile-bottom-bar e2e (bonus, desktop + mobile-chrome): 9 passed, 9 by-design skips.
+- Coverage: globals 96.07/90.66/91.23/97.35 (thresholds green); per-file verdicts —
+  `character-card.ts` 100/100/100/100, `project.model.ts` and `png-fixtures.ts` no
+  drop; `import-export.service.ts` fixed forward to 98.31/96.33/100/98.26 (its quoted
+  P1 baseline was stale after P2's rewrite; residual lines 514/517 are unreachable
+  defensive branches in the private `cardDisplayName` — flagged for core-engine).
+- Pre-handoff checklist: build green, unit 1192/1192 green, coverage green, lint
+  clean, `npm run typecheck:e2e` clean. Orchestrator counter-runs: unit + lint exit 0.
+
+**Fidelity results (the §3.6 pins, on the real fixture, every project)**:
+- PNG export → `compareCardPngBytes` pins signature, IHDR, all 101 IDATs, foreign
+  `deBG` (verbatim hex), IEND and trailing bytes — `diffs === []` on all three
+  projects; both card chunks (`chara`+`ccv3`) re-embed the edited book (70 entries
+  + the UI edit each); export file name = card name.
+- JSON export: `chara_card_v3`/3.0, `data.name` + `data.description` (7,248 chars)
+  verbatim, 18-key `data` set identical, 70 entries, dual `comment`+`name` kept;
+  field fidelity only (never byte-identity).
+- Availability states pinned in the real UI (muted rows + aria-description copy;
+  card-JSON project shows PNG row unavailable / JSON row enabled); failure path
+  snackbar pinned via an in-test crafted non-card PNG.
+
+**Deviations**:
+1. Coverage fix-forward: the P3-recorded `import-export.service.ts` baseline was
+   stale (P2 rewrote the file; 94.11/88.99 pre-existed at P3-end); 5 service tests
+   added — every reachable branch now covered.
+2. "Five-entry" comment migration went one step beyond the spec file (component doc
+   + template comment, comment-only).
+3. Re-import success snack names the picked file (real user flow — the spec saves
+   downloads under their export names); renaming it to the card name would be a
+   copy change (ui-specialist).
+4. Screenshot baseline verified (no recapture); one missing state added
+   (`after/desktop-1280x800-card-png-imported-both-enabled.png`, pinned conditions).
+
+**Next:** task complete pending user manual test + `git merge --ff-only` into
+`develop` (the user's explicit go; never automatic).
+
+## Task 15 — COMPLETE (2026-09-22)
+
+All phases green: P1 `94f9148` · checkpoint 15-1 approved `2d28133` · P2 `8a7e1b6` ·
+P3 `c95eb68` · P4 `186b040` (+ docs `1edf722`, `2518b16`, `aa0776e`, `949a006`,
+`aa9749f`). Known limitations (plan §7): zTXt card chunks unread (explicit error),
+V1 cards rejected (no embedded book to edit), card exports require a card-imported
+project (no fabrication), card-JSON export is field-faithful not byte-identical,
+`cardDisplayName` defensive lines structurally uncovered, round-trip/mobile-bar e2e
+spot-checked on desktop-chrome only. Branch awaits the user's manual test before the
+ff-only merge.
