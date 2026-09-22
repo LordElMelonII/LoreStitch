@@ -70,5 +70,33 @@ violations; `character-card.ts` + `project.model.ts` 100/100/100/100. Round-trip
 9. Checkpoint note (§7.2): every 400 ms save structured-clones the shell (~1.4 MB fixture class);
    archive +33% (~1.92 MB base64); `openCardPng` on the fixture ≈150 ms one-off.
 
-**Next:** checkpoint 15-1 — menu placement (rendered-mock evidence), final copy, §7.2
-inline-vs-separate confirmation; hard stop until the user answers.
+## Checkpoint 15-1 — GATE OPEN (unanswered) — 2026-09-22
+
+- **P1 landed** (`94f9148`) before the gate; branch pushed through `aa0776e`.
+- **Evidence produced and posted** (mock by driving the real app, precedent
+  `__screenshots__/*/[mock-]*.mjs`; script
+  `__screenshots__/15-character-card-round-trip/mock-menu.mjs`, shots under its
+  `checkpoint/` dir — gitignored):
+  - desktop 1280×800 light: no-shell disabled rows; disabled + tooltip
+    "Import a character card first"; enabled-state simulation (disabled attr
+    dropped); mobile 390×844 More → Export submenu with disabled rows.
+  - Placement proposal: new "Character card" section at the END of the Export
+    menu (after "Reference & proofreading"); same menu via More → Export on
+    phones. Mock icons are in-subset stand-ins (`menu_book`/`code`); P2 proposes
+    `image`/`article` + `npm run icons:refresh`.
+  - Implementation discovery for P2: CDK renders overlays through the native
+    Popover top layer — body-level elements cannot stack above an open menu;
+    tooltips on truly-disabled buttons need a wrapper row (both noted in the
+    checkpoint post).
+- **Proposed copy** posted (menu rows, disabled tooltips, import success +
+  per-reason failure snackbars, stale-chunk export failure). Card JSON export
+  is field-faithful, not byte-identical (minified re-serialization + pipeline
+  ids); PNG export preserves every non-card byte.
+- **§7.2 recommendation presented**: inline `cardShell` (P1 measurements:
+  ~1.4 MB structured clone per 400 ms save, archive +33%, `openCardPng`
+  ~150 ms one-off); separate IndexedDB record as fallback.
+- **User answer NOT received** — per the hard-gate rule the pipeline STOPS
+  here; P2 is NOT dispatched. No decision was closed on a recommended default.
+
+**Next:** on the user's explicit answers (placement / copy / storage) → record
+them, then dispatch P2 (ui-specialist).
