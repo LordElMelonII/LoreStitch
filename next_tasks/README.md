@@ -12,8 +12,8 @@ evaluation notes below).
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
-| 09 | [09-export-pre-flight-validation.md](./09-export-pre-flight-validation.md) | Enforce the ROADMAP critical gate "pre-flight schema validation must run before file export" — validate-and-block on the export path (duplicate/non-numeric entry ids are the reachable hole today) | ✅ Ready to dispatch |
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
+| 09 | [09-export-pre-flight-validation.md](./09-export-pre-flight-validation.md) | Enforce the ROADMAP critical gate "pre-flight schema validation must run before file export" — validate-and-block on the export path (duplicate/non-numeric entry ids are the reachable hole today) | ✅ Ready to dispatch |
 | 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
 
 ### Queue (sketched during evaluation; planned when their turn comes)
@@ -51,6 +51,16 @@ Urgent bug reports still preempt this queue (intake convention below).
   the friction/data-loss fixes (09–11) go before the architectural undo stack
   (12) and the two visual features (13–14), which carry design checkpoints and
   screenshot baselines. The queue is reorderable on request.
+- **User-value reprioritization (2026-09-22, same day)**: within the 09–11
+  batch, the execution order was re-ranked by usefulness to users —
+  **10 → 09 → 11** (table above). 10 pays off for every user on every editing
+  session (the ROADMAP's own "excessive friction" finding) and unlocks task
+  12's `Mod+Z`/`Mod+Shift+Z` chords; 09 protects the export path's data
+  integrity (its critical-gate status is an engineering priority — user value
+  concentrates in third-party/hand-edited books with bad ids, and its
+  day-to-day surface is invisible for clean books); 11 guards the narrower
+  two-tabs-open data-loss scenario. 09 remains the only unenforced ROADMAP
+  critical gate and stays ahead of the queue items.
 - **ROADMAP.md structure fix**: the "Single Linear Workspace Undo/Redo" item
   had lost its heading level — its Why/What/Where were nested inside the
   keyboard-navigation bullet list (the undo rationale read as a third "Why"
