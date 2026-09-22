@@ -4,6 +4,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import { ImportExportService } from '../../core/services/import-export.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { crc32, encodeCardPayload } from '../../core/models/character-card';
+import { type CharacterBook } from '../../core/models/lorebook.model';
 import { LayoutService } from '../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
 import { MergeResolverDialog } from '../merge-resolver/merge-resolver-dialog';
@@ -16,32 +18,110 @@ import { ProjectActionsService } from './project-actions.service';
  */
 function stubFilePicker(file: File | null): void {
   const realCreateElement = document.createElement.bind(document);
-  vi.spyOn(document, 'createElement').mockImplementation(
-    ((tag: string, options?: ElementCreationOptions) => {
-      if (tag !== 'input') {
-        return realCreateElement(tag, options);
-      }
-      const listeners: Record<string, (() => void)[]> = {};
-      const input = {
-        type: '',
-        accept: '',
-        files: file ? [file] : [],
-        addEventListener: (type: string, cb: () => void) => {
-          (listeners[type] ??= []).push(cb);
-        },
-        click: () => {
-          for (const cb of listeners[file ? 'change' : 'cancel'] ?? []) {
-            cb();
-          }
-        },
-      };
-      return input as unknown as HTMLInputElement;
-    }) as typeof document.createElement,
-  );
+  vi.spyOn(document, 'createElement').mockImplementation(((
+    tag: string,
+    options?: ElementCreationOptions,
+  ) => {
+    if (tag !== 'input') {
+      return realCreateElement(tag, options);
+    }
+    const listeners: Record<string, (() => void)[]> = {};
+    const input = {
+      type: '',
+      accept: '',
+      files: file ? [file] : [],
+      addEventListener: (type: string, cb: () => void) => {
+        (listeners[type] ??= []).push(cb);
+      },
+      click: () => {
+        for (const cb of listeners[file ? 'change' : 'cancel'] ?? []) {
+          cb();
+        }
+      },
+    };
+    return input as unknown as HTMLInputElement;
+  }) as typeof document.createElement);
 }
 
 function jsonFile(name: string, data: unknown): File {
   return new File([JSON.stringify(data)], name, { type: 'application/json' });
+}
+
+// ---------------------------------------------------------------------------
+// Character-card fixtures (plan 15 §3.6): a minimal card PNG crafted in-test
+// (same recipe as character-card.spec — the spec tree stays binary-free).
+// ---------------------------------------------------------------------------
+
+const CARD_NAME = 'Saber Card';
+const PNG_SIGNATURE = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const out = new Uint8Array(12 + data.length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, data.length, false);
+  for (let i = 0; i < 4; i++) {
+    out[4 + i] = type.charCodeAt(i);
+  }
+  out.set(data, 8);
+  view.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)), false);
+  return out;
+}
+
+function cardPngBytes(cardJson: string): Uint8Array {
+  const payload = encodeCardPayload(cardJson);
+  const textData = new Uint8Array('chara'.length + 1 + payload.length);
+  for (let i = 0; i < 'chara'.length; i++) {
+    textData[i] = 'chara'.charCodeAt(i);
+  }
+  textData['chara'.length] = 0;
+  for (let i = 0; i < payload.length; i++) {
+    textData['chara'.length + 1 + i] = payload.charCodeAt(i);
+  }
+  const parts = [
+    PNG_SIGNATURE,
+    pngChunk('IHDR', new Uint8Array(13)),
+    pngChunk('tEXt', textData),
+    pngChunk('IDAT', Uint8Array.of(1, 2, 3, 4)),
+    pngChunk('IEND', new Uint8Array(0)),
+  ];
+  const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.byteLength;
+  }
+  return out;
+}
+
+function cardBook(): CharacterBook {
+  return {
+    name: 'Fuyuki Card Book',
+    extensions: {},
+    entries: [
+      {
+        keys: ['saber'],
+        content: 'King of Knights.',
+        enabled: true,
+        insertion_order: 0,
+        extensions: {},
+      },
+      { keys: ['rin'], content: 'Tohsaka.', enabled: true, insertion_order: 1, extensions: {} },
+    ],
+  };
+}
+
+function cardJsonText(): string {
+  return JSON.stringify({
+    spec: 'chara_card_v2',
+    spec_version: '2.0',
+    data: { name: CARD_NAME, character_book: cardBook() },
+  });
+}
+
+/** jsdom File for binary payloads (BlobPart wants a concrete ArrayBuffer). */
+function pngFile(name: string, bytes: Uint8Array): File {
+  return new File([bytes.slice().buffer as ArrayBuffer], name, { type: 'image/png' });
 }
 
 describe('ProjectActionsService', () => {
@@ -240,14 +320,19 @@ describe('ProjectActionsService', () => {
     );
   });
 
-  it('shows an unsupported-format error for unrecognized JSON', async () => {
+  it('rejects unrecognized JSON through the card boundary copy (checkpoint 15-1)', async () => {
+    // The lorebook sniff fails and openCardJson refuses the payload — a JSON
+    // object without a data object is `card-without-book` there (not-a-card
+    // is only reachable for non-JSON text, which importFile rejects first) —
+    // so the unrecognized-file error names the card layer via the approved
+    // copy table instead of the old generic unsupported text.
     stubFilePicker(jsonFile('mystery.json', { something: 'else' }));
 
     await actions.importReplaceFromPicker();
 
     expect(workspace.activeProject()).toBeNull();
     expect(snackBarOpen).toHaveBeenCalledWith(
-      expect.stringContaining('Unsupported format'),
+      'This character card has no embedded lorebook to edit.',
       'OK',
       expect.anything(),
     );
@@ -415,12 +500,7 @@ describe('ProjectActionsService', () => {
 
     const project = workspace.activeProject();
     assert(project);
-    expect(exportSpy).toHaveBeenCalledWith(
-      project.activeBook,
-      [0, 2],
-      'Split book',
-      'st_native',
-    );
+    expect(exportSpy).toHaveBeenCalledWith(project.activeBook, [0, 2], 'Split book', 'st_native');
     expect(snackBarOpen).toHaveBeenCalledWith(
       expect.stringContaining('Exported 2 entries as “Split book”'),
       'OK',
@@ -494,5 +574,162 @@ describe('ProjectActionsService', () => {
     expect(nativeSpy).not.toHaveBeenCalled();
     expect(archiveSpy).not.toHaveBeenCalled();
     expect(digestSpy).not.toHaveBeenCalled();
+  });
+
+  it('routes the card exports through the importer over the active project', async () => {
+    const pngSpy = vi
+      .spyOn(importer, 'exportCardPng')
+      .mockReturnValue({ reason: 'stale-card-chunk', message: 'codec refusal' });
+    const jsonSpy = vi
+      .spyOn(importer, 'exportCardJson')
+      .mockReturnValue({ reason: 'no-shell', message: 'shell missing' });
+
+    actions.exportCardPng();
+    expect(pngSpy).not.toHaveBeenCalled(); // no project yet
+
+    stubFilePicker(jsonFile('book.json', { entries: { '0': { uid: 0, key: [], content: 'x' } } }));
+    await actions.importReplaceFromPicker();
+
+    actions.exportCardPng();
+    actions.exportCardJson();
+
+    assert(pngSpy.mock.calls[0]?.[0]);
+    expect(pngSpy.mock.calls[0][0]).toBe(workspace.activeProject());
+    expect(jsonSpy.mock.calls[0]?.[0]).toBe(workspace.activeProject());
+    // Codec refusals snack the approved copy (checkpoint 15-1 table).
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      "The card image's stored data no longer matches this project — re-import the card PNG.",
+      'OK',
+      expect.anything(),
+    );
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      'Import a character card first',
+      'OK',
+      expect.anything(),
+    );
+  });
+
+  it('snacks nothing when a card export succeeds', async () => {
+    stubFilePicker(jsonFile('book.json', { entries: { '0': { uid: 0, key: [], content: 'x' } } }));
+    await actions.importReplaceFromPicker();
+    snackBarOpen.mockClear();
+    vi.spyOn(importer, 'exportCardPng').mockReturnValue(null);
+
+    actions.exportCardPng();
+
+    expect(snackBarOpen).not.toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Character card import (plan 15 §3.3): the bytes path and the card boundary
+  // ---------------------------------------------------------------------------
+
+  it('imports a card PNG into a project equivalent to the plain-book import', async () => {
+    const pngBytes = cardPngBytes(cardJsonText());
+    stubFilePicker(pngFile('card.png', pngBytes));
+
+    await actions.importReplaceFromPicker();
+
+    const project = workspace.activeProject();
+    assert(project);
+    const plain = importer.parseImport(cardBook(), 'Card');
+    assert(plain);
+    // Pipeline equivalence: the embedded book is exactly what importing the
+    // same `character_book` as a bare lorebook produces.
+    expect(project.activeBook).toEqual(plain.book);
+    // The shell reached the project through the startProjectFromBook mutator.
+    expect(project.cardShell).toEqual({
+      spec: 'chara_card_v2',
+      cardJson: cardJsonText(),
+      pngKeyword: 'chara',
+      pngBytes,
+    });
+    // Approved success copy names the card layer.
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      'Imported 2 entries from character card card.png.',
+      'OK',
+      expect.anything(),
+    );
+  });
+
+  it('imports a card JSON with the verbatim shell and the card-title suggestion', async () => {
+    stubFilePicker(new File([cardJsonText()], 'saber.json', { type: 'application/json' }));
+
+    await actions.importReplaceFromPicker();
+
+    const project = workspace.activeProject();
+    assert(project);
+    const plain = importer.parseImport(cardBook(), 'Card');
+    assert(plain);
+    expect(project.activeBook).toEqual(plain.book);
+    expect(project.cardShell).toEqual({
+      spec: 'chara_card_v2',
+      cardJson: cardJsonText(),
+    });
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      'Imported 2 entries from character card saber.json.',
+      'OK',
+      expect.anything(),
+    );
+  });
+
+  it('snacks the approved reason when a picked PNG is not a card image', async () => {
+    stubFilePicker(pngFile('broken.png', Uint8Array.of(0x00, 0x01, 0x02)));
+
+    await actions.importReplaceFromPicker();
+
+    expect(workspace.activeProject()).toBeNull();
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      "This file isn't a valid PNG image.",
+      'OK',
+      expect.anything(),
+    );
+  });
+
+  it('snacks the approved reason when the PNG carries no card chunk', async () => {
+    const barePng = (() => {
+      const parts = [
+        PNG_SIGNATURE,
+        pngChunk('IHDR', new Uint8Array(13)),
+        pngChunk('IDAT', Uint8Array.of(1)),
+        pngChunk('IEND', new Uint8Array(0)),
+      ];
+      const out = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0));
+      let at = 0;
+      for (const part of parts) {
+        out.set(part, at);
+        at += part.byteLength;
+      }
+      return out;
+    })();
+    stubFilePicker(pngFile('plain.png', barePng));
+
+    await actions.importReplaceFromPicker();
+
+    expect(workspace.activeProject()).toBeNull();
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      'Not a character card — no embedded lorebook found in the PNG.',
+      'OK',
+      expect.anything(),
+    );
+  });
+
+  it('snacks the approved reason for a card JSON without an embedded book', async () => {
+    stubFilePicker(
+      new File(
+        [JSON.stringify({ spec: 'chara_card_v2', data: { name: 'Bookless' } })],
+        'bookless.json',
+        { type: 'application/json' },
+      ),
+    );
+
+    await actions.importReplaceFromPicker();
+
+    expect(workspace.activeProject()).toBeNull();
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      'This character card has no embedded lorebook to edit.',
+      'OK',
+      expect.anything(),
+    );
   });
 });

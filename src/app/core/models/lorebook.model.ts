@@ -13,9 +13,10 @@
 // ============================================================================
 
 /**
- * Legacy card metadata kept only so projects imported from character cards in
- * older LoreStitch versions still load. Card import/export is no longer a
- * feature; the field round-trips untouched in `.stproj` archives.
+ * Legacy card metadata: projects imported from character cards by the
+ * pre-incident card feature carry it. The field round-trips untouched in
+ * `.stproj` archives; today's card imports (plan 15) go through the card
+ * boundary (`character-card.ts`) and never populate it.
  */
 export interface TavernCardV2 {
   spec: 'chara_card_v2';
@@ -762,7 +763,9 @@ interface LooseImportJson {
 /**
  * Detects whether a parsed JSON document is a bare `CharacterBook`, a
  * LoreStitch project archive, or a native SillyTavern world-info export.
- * Character cards are intentionally not recognized (card support was removed).
+ * Character cards are deliberately out of scope here: this sniffer stays
+ * lorebook-only, and the import service routes its misses to the card
+ * boundary (`character-card.ts`, plan 15), where card JSON and PNG open.
  */
 export function detectLoreFileFormat(json: unknown): LoreFileFormat | null {
   if (json === null || typeof json !== 'object') {

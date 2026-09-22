@@ -5,6 +5,7 @@ import { WorkspaceService } from '../../../core/services/workspace.service';
 import { ProjectActionsService } from '../project-actions.service';
 import { MobileBottomBar, MobileBarAction, BatchBarAction } from './mobile-bottom-bar';
 import { installMatchMediaStub } from '../../../../testing/match-media-stub';
+import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('MobileBottomBar', () => {
   let workspace: WorkspaceService;
@@ -201,6 +202,57 @@ describe('MobileBottomBar', () => {
     worldInfo.dispatchEvent(new Event('click'));
     barFixture.detectChanges();
     expect(exportStNative).toHaveBeenCalledTimes(1);
+  });
+
+  it('pins the card export rows to the shell availability and approved tooltips', async () => {
+    await workspace.createProject('Fuyuki'); // no card shell — both unavailable
+    await resizeToMobile();
+    await createBar();
+
+    // The same availability rules the topbar rows follow (shared helper).
+    expect(barFixture.componentInstance['cardPngRow']()).toEqual({
+      ready: false,
+      tooltip: 'Import a character card first',
+    });
+    expect(barFixture.componentInstance['cardJsonRow']()).toEqual({
+      ready: false,
+      tooltip: 'Import a character card first',
+    });
+
+    const triggerDebug = barFixture.debugElement.queryAll(By.css('.bar-item'))[2];
+    assert(triggerDebug);
+    triggerDebug.injector.get(MatMenuTrigger).openMenu();
+    barFixture.detectChanges();
+
+    const row = (title: string): HTMLElement => {
+      const found = [
+        ...document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel button'),
+      ].find((button) => button.textContent?.includes(title));
+      assert(found);
+      return found;
+    };
+    const pngRow = row('Character card (PNG)');
+    const jsonRow = row('Character card (JSON)');
+    // Inert-but-hoverable: the muted class, never `disabled` (the approved
+    // tooltip affordance cannot fire on a disabled button). MatMenuItem's own
+    // host binding always writes aria-disabled=false; the copy rides
+    // aria-description instead.
+    expect(pngRow.hasAttribute('disabled')).toBe(false);
+    expect(pngRow.classList.contains('card-export-unavailable')).toBe(true);
+    expect(jsonRow.classList.contains('card-export-unavailable')).toBe(true);
+    expect(pngRow.getAttribute('aria-description')).toBe('Import a character card first');
+    expect(pngRow.getAttribute('aria-disabled')).toBe('false');
+
+    // A JSON-card shell enables the JSON row only.
+    workspace.activeProject.set({
+      ...projectOf([], { id: 'card-project', title: 'Card' }),
+      cardShell: { spec: 'chara_card_v2', cardJson: '{"spec":"chara_card_v2"}' },
+    });
+    barFixture.detectChanges();
+    expect(barFixture.componentInstance['cardJsonRow']()).toEqual({ ready: true, tooltip: '' });
+    expect(barFixture.componentInstance['cardPngRow']().tooltip).toBe(
+      'No card image stored — import a card PNG first',
+    );
   });
 
   it('badges the history item while there are uncommitted changes', async () => {

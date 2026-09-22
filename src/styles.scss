@@ -328,6 +328,21 @@ app-about-dialog .about-tabs .mat-mdc-tab-body-content {
     color: var(--mat-sys-on-surface-variant);
     user-select: none;
   }
+
+  // Unavailable card-export rows (plan 15 checkpoint 15-1): they must look
+  // exactly like Material's disabled menu items — `opacity: 0.38` + default
+  // cursor is the stock `[disabled]` recipe — while staying hoverable, since
+  // tooltips never fire on truly disabled buttons and the approved affordance
+  // is the explanation tooltip. The hover state layer is suppressed to match
+  // the no-highlight behavior of a genuinely disabled item.
+  .mat-mdc-menu-item.card-export-unavailable {
+    opacity: 0.38;
+    cursor: default;
+
+    &:hover {
+      background-color: transparent;
+    }
+  }
 }
 
 // Meta text inside regular menu items (project switcher).

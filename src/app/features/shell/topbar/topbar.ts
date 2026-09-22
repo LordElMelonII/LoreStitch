@@ -15,6 +15,7 @@ import { LayoutService } from '../../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
 import { LinterState } from '../../linter/linter-state';
 import { ProjectActionsService } from '../project-actions.service';
+import { cardExportRowState } from '../project-actions.constants';
 import { TokenMeter } from './token-meter';
 
 /** Top app bar: brand, project actions, export/theme/project menus. */
@@ -125,8 +126,26 @@ export class Topbar {
   // -------------------------------------------------------------------------
   // Export
   // -------------------------------------------------------------------------
-  // The four fixed-format export wrappers live on `ProjectActionsService`
-  // (`actions.exportStNative/exportProjectArchive/exportBook/exportDigest`) —
-  // the mobile bottom bar's Export menu calls the very same methods, so the
-  // logic exists exactly once. This template only wires menu items to them.
+  // The fixed-format export wrappers live on `ProjectActionsService`
+  // (`actions.exportStNative/exportProjectArchive/exportBook/exportDigest`
+  // plus the two card exports) — the mobile bottom bar's Export menu calls
+  // the very same methods, so the logic exists exactly once. This template
+  // only wires menu items to them.
+
+  /**
+   * Card export row state (plan 15 §3.5): the two "Character card" rows are
+   * disabled without a card shell (PNG additionally without stored image
+   * bytes) and carry the approved tooltip explaining why. Derived from the
+   * active project's `cardShell` via signals only; the disabled look is
+   * inert-with-tooltip, because Material tooltips never fire on truly
+   * disabled buttons (checkpoint 15-1 discovery) and the wrapper click-guard
+   * snacks the same copy when a disabled row is still triggered.
+   */
+  protected readonly cardPngRow = computed(() =>
+    cardExportRowState(this.workspace.activeProject(), true),
+  );
+
+  protected readonly cardJsonRow = computed(() =>
+    cardExportRowState(this.workspace.activeProject(), false),
+  );
 }

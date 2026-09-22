@@ -20,8 +20,20 @@ import {
   isProjectWorkspace,
   sanitizeLintPrefs,
   serializeWorkspaceForArchive,
+  type CardShell,
   type ProjectWorkspace,
 } from '../models/project.model';
+import {
+  embedBookIntoCardJson,
+  embedCardPayloads,
+  openCardJson,
+  openCardPng,
+  updatedCardPayloads,
+  type CardError,
+  type CardErrorReason,
+  type OpenedCard,
+} from '../models/character-card';
+import { isJsonObject } from '../models/lorebook.model';
 import { estimateTokens } from './token-estimator';
 
 /** Result of parsing an imported JSON document. */
@@ -30,6 +42,66 @@ export interface ParsedImport {
   book: CharacterBook;
   workspace?: ProjectWorkspace;
   suggestedTitle: string;
+  /**
+   * The character-card container the file was opened from (plan 15 §3.3) —
+   * present only for card imports; plain books and `.stproj` archives never
+   * set it (an archive's shell, if any, rides inside `workspace.cardShell`).
+   */
+  cardShell?: CardShell;
+}
+
+/**
+ * Optional payloads from the import source (plan 15 §3.3): the caller owns
+ * the `File` reads, and a card open needs more than parsed JSON — the card
+ * JSON verbatim (the export swap must keep its key order) or the PNG bytes
+ * (the export shell).
+ */
+export interface ImportSourcePayload {
+  /** Verbatim file text of a text import. */
+  rawText?: string;
+  /** PNG bytes of a card-image import. */
+  pngBytes?: Uint8Array;
+}
+
+/**
+ * Result of the card-aware import entry (plan 15 §3.3). `card-error` carries
+ * the card boundary's refusal so the caller's snackbar can use the approved
+ * per-reason copy; the plain `parseImport` entry folds the same branch into
+ * `null` (its historical "unsupported" outcome).
+ */
+export type CardImportParse =
+  | { readonly status: 'ok'; readonly parsed: ParsedImport }
+  | { readonly status: 'card-error'; readonly error: CardError };
+
+/**
+ * Failure surface of the two card exports (plan 15 §3.5). Codec refusals ride
+ * the card boundary's own reason; the shell preconditions add `no-shell` /
+ * `no-image`. `message` is informational — user-facing copy is keyed by
+ * `reason` (the approved table in `project-actions.constants.ts`).
+ */
+export type CardExportFailureReason = CardErrorReason | 'no-shell' | 'no-image';
+
+export interface CardExportFailure {
+  readonly reason: CardExportFailureReason;
+  readonly message: string;
+}
+
+/**
+ * Card-JSON export availability (plan 15 §3.5): any shell — a card JSON was
+ * the import source or the card PNG carried one. The menu disabled state and
+ * the export methods share this predicate.
+ */
+export function cardJsonExportAvailable(project: ProjectWorkspace | null): boolean {
+  return project?.cardShell !== undefined;
+}
+
+/**
+ * Card-PNG export availability: the shell must remember the original image
+ * bytes and the chunk keyword they came from (JSON-card shells cannot embed).
+ */
+export function cardPngExportAvailable(project: ProjectWorkspace | null): boolean {
+  const shell = project?.cardShell;
+  return shell !== undefined && shell.pngBytes !== undefined && shell.pngKeyword !== undefined;
 }
 
 export interface MarkdownDigestOptions {
@@ -64,7 +136,11 @@ function withSanitizedLintPrefs(workspace: ProjectWorkspace): ProjectWorkspace {
 export class ImportExportService {
   private readonly document = inject(DOCUMENT);
 
-  /** Reads a `File` as text (imports are JSON only). */
+  /**
+   * Reads a `File` as text. Text imports are JSON; card PNGs bypass this —
+   * they take the bytes path (`parseCardImport` with `pngBytes`), since
+   * decoding card bytes as text would corrupt the base64 payload.
+   */
   async readFileText(file: File): Promise<string> {
     return file.text();
   }
@@ -76,10 +152,30 @@ export class ImportExportService {
    * malformed payloads return `null` so the caller shows its
    * unsupported-format error instead of persisting a book that would crash
    * on render.
+   *
+   * Plan 15 §3.3: when the sniff fails all three lorebook shapes, a card
+   * source (raw text or PNG bytes) opens through the card boundary
+   * (`openCardJson` / `openCardPng`) and the extracted book flows through the
+   * exact same import pipeline as a plain book. Failures return `null` like
+   * any unrecognized payload; callers that need the refusal reason (for the
+   * approved per-reason snackbar copy) use `parseCardImport`, which shares
+   * this branch's implementation.
    */
-  parseImport(json: unknown, fallbackTitle = 'Imported Lorebook'): ParsedImport | null {
+  parseImport(
+    json: unknown,
+    fallbackTitle = 'Imported Lorebook',
+    source?: ImportSourcePayload,
+  ): ParsedImport | null {
     const format = detectLoreFileFormat(json);
     if (!format) {
+      if (source?.pngBytes !== undefined) {
+        const card = this.parseCardImport({ pngBytes: source.pngBytes }, fallbackTitle);
+        return card.status === 'ok' ? card.parsed : null;
+      }
+      if (typeof source?.rawText === 'string') {
+        const card = this.parseCardImport({ rawText: source.rawText }, fallbackTitle);
+        return card.status === 'ok' ? card.parsed : null;
+      }
       return null;
     }
 
@@ -137,6 +233,80 @@ export class ImportExportService {
   }
 
   // -------------------------------------------------------------------------
+  // Card imports (plan 15 §3.3)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Card-aware import entry: never throws. PNG bytes open through
+   * `openCardPng`, raw text through `openCardJson` — both return their
+   * refusal reason so the caller's snackbar can use the approved per-reason
+   * copy (checkpoint 15-1) instead of the generic unsupported-format error.
+   */
+  parseCardImport(
+    source: ImportSourcePayload,
+    fallbackTitle = 'Imported Lorebook',
+  ): CardImportParse {
+    const opened = source.pngBytes !== undefined ? openCardPng(source.pngBytes) : undefined;
+    const openedJson =
+      opened === undefined && typeof source.rawText === 'string'
+        ? openCardJson(source.rawText)
+        : undefined;
+    const result = opened ?? openedJson;
+    if (result === undefined) {
+      // No source payload to open — a caller bug, but total by contract.
+      return {
+        status: 'card-error',
+        error: {
+          reason: 'not-a-card',
+          message: 'The import source carries neither card text nor PNG bytes.',
+        },
+      };
+    }
+    if ('reason' in result) {
+      return { status: 'card-error', error: result };
+    }
+    const parsed = this.parsedImportFromCard(result, fallbackTitle);
+    return 'reason' in parsed ? { status: 'card-error', error: parsed } : { status: 'ok', parsed };
+  }
+
+  /**
+   * The card's extracted book through the EXACT plain-book import pipeline
+   * (`isCharacterBook` guard → `normalizeImportedBook` → position
+   * normalization), plus the shell the card exports re-embed into. A
+   * wrong-typed embedded book refuses with `card-json-invalid` (the card
+   * opened, but there is no book to edit — the approved copy table renders it
+   * as invalid card JSON).
+   */
+  private parsedImportFromCard(
+    opened: OpenedCard,
+    fallbackTitle: string,
+  ): ParsedImport | CardError {
+    if (!isCharacterBook(opened.rawBook)) {
+      return {
+        reason: 'card-json-invalid',
+        message: 'The card payload is not valid JSON.',
+      };
+    }
+    const book = normalizeBookPositions(normalizeImportedBook(structuredClone(opened.rawBook)));
+    // Shell assembly is a plain property copy (P1 report): OpenedCard mirrors
+    // the shell field-for-field minus `rawBook`/`warnings`.
+    const { spec, cardJson, pngBytes, pngKeyword, extraCardJson } = opened;
+    const cardShell: CardShell = {
+      spec,
+      cardJson,
+      ...(pngKeyword !== undefined ? { pngKeyword } : {}),
+      ...(pngBytes !== undefined ? { pngBytes } : {}),
+      ...(extraCardJson !== undefined ? { extraCardJson } : {}),
+    };
+    return {
+      format: 'character_book',
+      book,
+      suggestedTitle: cardDisplayName(cardJson) || book.name || fallbackTitle,
+      cardShell,
+    };
+  }
+
+  // -------------------------------------------------------------------------
   // Exports
   // -------------------------------------------------------------------------
 
@@ -181,6 +351,79 @@ export class ImportExportService {
       workspace: serializeWorkspaceForArchive(project),
     };
     this.downloadJson(archive, `${this.fileName(project.title)}.stproj`);
+  }
+
+  /**
+   * "Character card (PNG)" (plan 15 §3.4): re-embeds the edited book into the
+   * shell's original card image — every non-card byte (IDATs, foreign chunks)
+   * stays identical, the updated payloads ride the same chunks the source
+   * had. Refuses without a shell that remembers the image (`no-image` / a
+   * JSON-card shell) or when a chunk would keep a stale book
+   * (`stale-card-chunk`). Returns the failure for the caller's snackbar;
+   * `null` means the download fired.
+   */
+  exportCardPng(project: ProjectWorkspace): CardExportFailure | null {
+    const shell = project.cardShell;
+    if (shell === undefined) {
+      return {
+        reason: 'no-shell',
+        message: 'The project holds no character-card shell.',
+      };
+    }
+    if (shell.pngBytes === undefined || shell.pngKeyword === undefined) {
+      return {
+        reason: 'no-image',
+        message: 'The card shell stores no card image — import a card PNG first.',
+      };
+    }
+    const payloads = updatedCardPayloads(
+      {
+        cardJson: shell.cardJson,
+        pngKeyword: shell.pngKeyword,
+        extraCardJson: shell.extraCardJson,
+      },
+      project.activeBook,
+    );
+    if ('reason' in payloads) {
+      return payloads;
+    }
+    const png = embedCardPayloads(shell.pngBytes, payloads);
+    if ('reason' in png) {
+      return png;
+    }
+    this.downloadBytes(
+      png,
+      `${this.fileName(cardDisplayName(shell.cardJson) ?? project.title)}.png`,
+      'image/png',
+    );
+    return null;
+  }
+
+  /**
+   * "Character card (JSON)" (plan 15 §3.4): swaps the edited book into the
+   * shell's card JSON — every other card field survives verbatim (minified,
+   * field-faithful, never byte-identical). Requires any shell; a JSON-card
+   * shell is enough. Downloaded under the card's own name, falling back to
+   * the project title when the card carries none.
+   */
+  exportCardJson(project: ProjectWorkspace): CardExportFailure | null {
+    const shell = project.cardShell;
+    if (shell === undefined) {
+      return {
+        reason: 'no-shell',
+        message: 'The project holds no character-card shell.',
+      };
+    }
+    const cardJson = embedBookIntoCardJson(shell.cardJson, project.activeBook);
+    if (typeof cardJson !== 'string') {
+      return cardJson;
+    }
+    this.download(
+      cardJson,
+      `${this.fileName(cardDisplayName(shell.cardJson) ?? project.title)}.json`,
+      'application/json',
+    );
+    return null;
   }
 
   /**
@@ -231,7 +474,18 @@ export class ImportExportService {
   }
 
   download(content: string, fileName: string, mime: string): void {
-    const blob = new Blob([content], { type: mime });
+    this.downloadBlob(new Blob([content], { type: mime }), fileName);
+  }
+
+  /** Triggers a browser download for a binary payload (the card PNG export). */
+  private downloadBytes(bytes: Uint8Array, fileName: string, mime: string): void {
+    // Blob wants a concrete ArrayBuffer: copy the exact byte range out of the
+    // (possibly larger) underlying buffer.
+    const copy = bytes.slice().buffer as ArrayBuffer;
+    this.downloadBlob(new Blob([copy], { type: mime }), fileName);
+  }
+
+  private downloadBlob(blob: Blob, fileName: string): void {
     const url = URL.createObjectURL(blob);
     const anchor = this.document.createElement('a');
     anchor.href = url;
@@ -244,4 +498,27 @@ export class ImportExportService {
   private fileName(title: string): string {
     return (title || 'lorestitch').replace(/[^\w\d-]+/g, '-').replace(/-+/g, '-');
   }
+}
+
+/**
+ * The card's display name (`data.name`), or undefined when the payload is
+ * unreadable or carries no non-blank name — used for the suggested project
+ * title at import and the export file name (plan 15 §3.4: the card name, not
+ * the project title, when they differ).
+ */
+function cardDisplayName(cardJson: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cardJson);
+  } catch {
+    return undefined;
+  }
+  if (!isJsonObject(parsed) || !isJsonObject(parsed['data'])) {
+    return undefined;
+  }
+  const name = parsed['data']['name'];
+  if (typeof name !== 'string' || name.trim() === '') {
+    return undefined;
+  }
+  return name;
 }

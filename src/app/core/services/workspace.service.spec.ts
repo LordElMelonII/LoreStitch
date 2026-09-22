@@ -109,6 +109,37 @@ describe('WorkspaceService', () => {
     expect(saved?.title).toBe('Persisted');
   });
 
+  it('carries the card shell from startProjectFromBook into the stored project', async () => {
+    // Plan 15 §3.3: the shell is project birth metadata — the narrow mutator
+    // (never a feature-side direct write) puts it on the record before the
+    // initial save, so card exports find it on the stored project.
+    const book = createEmptyBook('Card Book');
+    book.entries = [createEmptyEntry(0, 0)];
+    const cardShell = {
+      spec: 'chara_card_v2' as const,
+      cardJson: '{"spec":"chara_card_v2"}',
+      pngKeyword: 'chara' as const,
+      pngBytes: Uint8Array.of(0x89, 0x50),
+    };
+
+    await workspace.startProjectFromBook('Saber Card', book, cardShell);
+
+    const project = workspace.activeProject();
+    assert(project);
+    expect(project.cardShell).toEqual(cardShell);
+    await workspace.flushPendingSave();
+    const storage = TestBed.inject(StorageService);
+    const saved = await storage.getProject(project.id);
+    expect(saved?.cardShell).toEqual(cardShell);
+  });
+
+  it('omits the cardShell key for shell-less starts', async () => {
+    await workspace.startProjectFromBook('Bare', createEmptyBook('Bare'));
+    const project = workspace.activeProject();
+    assert(project);
+    expect(Object.hasOwn(project, 'cardShell')).toBe(false);
+  });
+
   it('replaces the working book (merge result)', async () => {
     await workspace.createProject('Fuyuki', 'standalone_lorebook');
     const book = createEmptyBook('Fuyuki');

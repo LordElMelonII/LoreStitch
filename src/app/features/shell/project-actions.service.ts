@@ -8,14 +8,11 @@ import type { ProjectWorkspace } from '../../core/models/project.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { LayoutService } from '../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
-import {
-  type MergeDialogData,
-  type MergeOutcome,
-} from '../merge-resolver/merge-resolver.model';
+import { type MergeDialogData, type MergeOutcome } from '../merge-resolver/merge-resolver.model';
 import { type ExportSelection } from '../merge-resolver/export-selected.model';
 import { type ExportSelectedDialogData } from '../merge-resolver/export-selected-dialog';
 import { type NewProjectResult } from './new-project.model';
-import { IMPORT_ACCEPT, MERGE_ACCEPT } from './project-actions.constants';
+import { CARD_FAILURE_COPY, IMPORT_ACCEPT, MERGE_ACCEPT } from './project-actions.constants';
 
 /**
  * Awaits the result of a responsive pane whichever container opened it: the
@@ -139,21 +136,22 @@ export class ProjectActionsService {
     });
   }
 
+  /**
+   * Reads the picked file and parses it (plan 15 §3.3). Card PNGs take the
+   * bytes path — `JSON.parse` on image bytes is meaningless, and the base64
+   * card payload must never round-trip through a text decode. Text files keep
+   * today's flow: `JSON.parse` → `parseImport`, with the verbatim text riding
+   * along so a card JSON opens at the card boundary when the lorebook sniff
+   * fails all three shapes. Never throws: every failure snacks its approved
+   * copy and returns `null`.
+   */
   private async importFile(file: File, mode: 'replace' | 'merge'): Promise<void> {
-    let parsed: ParsedImport | null;
-    try {
-      parsed = this.importer.parseImport(JSON.parse(await file.text()), file.name);
-    } catch {
-      this.snackBar.open('Could not parse this file as JSON.', 'OK', { duration: 4000 });
-      return;
-    }
+    const parsed =
+      /\.png$/i.test(file.name) || file.type === 'image/png'
+        ? await this.parseCardPngImport(file)
+        : await this.parseTextImport(file);
     if (!parsed) {
-      this.snackBar.open(
-        'Unsupported format — expected a lorebook, SillyTavern world info, or .stproj file.',
-        'OK',
-        { duration: 5000 },
-      );
-      return;
+      return; // Failure feedback already shown.
     }
 
     if (mode === 'merge') {
@@ -167,10 +165,72 @@ export class ProjectActionsService {
       return;
     }
 
-    await this.workspace.startProjectFromBook(parsed.suggestedTitle, parsed.book);
-    this.snackBar.open(`Imported ${parsed.book.entries.length} entries from ${file.name}.`, 'OK', {
-      duration: 3500,
-    });
+    await this.workspace.startProjectFromBook(parsed.suggestedTitle, parsed.book, parsed.cardShell);
+    this.snackBar.open(
+      parsed.cardShell
+        ? `Imported ${parsed.book.entries.length} entries from character card ${file.name}.`
+        : `Imported ${parsed.book.entries.length} entries from ${file.name}.`,
+      'OK',
+      { duration: 3500 },
+    );
+  }
+
+  /** PNG card path: bytes → card boundary; a refusal snacks its approved copy. */
+  private async parseCardPngImport(file: File): Promise<ParsedImport | null> {
+    let bytes: Uint8Array;
+    try {
+      bytes = new Uint8Array(await file.arrayBuffer());
+    } catch {
+      this.snackBar.open('Could not parse this file as JSON.', 'OK', { duration: 4000 });
+      return null;
+    }
+    const card = this.importer.parseCardImport({ pngBytes: bytes }, file.name);
+    if (card.status === 'card-error') {
+      this.snackBar.open(CARD_FAILURE_COPY[card.error.reason], 'OK', { duration: 5000 });
+      return null;
+    }
+    return card.parsed;
+  }
+
+  /**
+   * Today's text flow, extended with the card boundary (plan 15 §3.3): a
+   * sniff-failed payload that is a card opens through `parseCardImport`; one
+   * that is neither reports the card reason (checkpoint 15-1 copy) so every
+   * unrecognized text file says what it was expected to be.
+   */
+  private async parseTextImport(file: File): Promise<ParsedImport | null> {
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      this.snackBar.open('Could not parse this file as JSON.', 'OK', { duration: 4000 });
+      return null;
+    }
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      this.snackBar.open('Could not parse this file as JSON.', 'OK', { duration: 4000 });
+      return null;
+    }
+    const parsed = this.importer.parseImport(json, file.name, { rawText: text });
+    if (parsed) {
+      return parsed;
+    }
+    // The lorebook sniff failed and the card boundary refused the payload:
+    // recover the card reason for the approved copy (the open re-runs only on
+    // this failure path).
+    const card = this.importer.parseCardImport({ rawText: text }, file.name);
+    if (card.status === 'card-error') {
+      this.snackBar.open(CARD_FAILURE_COPY[card.error.reason], 'OK', { duration: 5000 });
+      return null;
+    }
+    this.snackBar.open(
+      'Unsupported format — expected a lorebook, SillyTavern world info, or .stproj file.',
+      'OK',
+      { duration: 5000 },
+    );
+    return null;
   }
 
   private async openMergeDialog(parsed: ParsedImport, fileName: string): Promise<void> {
@@ -280,10 +340,11 @@ export class ProjectActionsService {
   // -------------------------------------------------------------------------
 
   /**
-   * "World Info JSON": SillyTavern-native format, imported through
-   * SillyTavern's World Info panel. One implementation home for every
-   * trigger — the topbar's Export menu and the mobile bottom bar's Export
-   * menu both call these wrappers over the active project.
+   * The fixed-format export wrappers live here (the topbar's Export menu and
+   * the mobile bottom bar's Export menu both call them, and the two card
+   * exports with them) — the logic exists exactly once; the menus only wire
+   * items to these methods. Card failures snack the approved copy table
+   * (`project-actions.constants.ts`).
    */
   exportStNative(): void {
     const project = this.workspace.activeProject();
@@ -313,6 +374,36 @@ export class ProjectActionsService {
     const project = this.workspace.activeProject();
     if (project) {
       this.importer.exportMarkdownDigest(project.activeBook, project.title);
+    }
+  }
+
+  /**
+   * "Character card (PNG)": re-embeds the edited book into the original card
+   * image (plan 15 §3.4). Unavailable shells refuse here — the same approved
+   * copy the disabled menu row's tooltip carries — so a keyboard or touch
+   * trigger still explains itself instead of erroring (plan 15 §3.5: no
+   * card fabrication, no dialog).
+   */
+  exportCardPng(): void {
+    const project = this.workspace.activeProject();
+    if (!project) {
+      return;
+    }
+    const failure = this.importer.exportCardPng(project);
+    if (failure) {
+      this.snackBar.open(CARD_FAILURE_COPY[failure.reason], 'OK', { duration: 5000 });
+    }
+  }
+
+  /** "Character card (JSON)": swaps the edited book into the card JSON. */
+  exportCardJson(): void {
+    const project = this.workspace.activeProject();
+    if (!project) {
+      return;
+    }
+    const failure = this.importer.exportCardJson(project);
+    if (failure) {
+      this.snackBar.open(CARD_FAILURE_COPY[failure.reason], 'OK', { duration: 5000 });
     }
   }
 

@@ -245,6 +245,41 @@
             <span class="menu-desc">All entries as readable text</span>
           </span>
         </button>
+
+        <!-- Character card section (checkpoint 15-1): same rows, order and
+             disabled affordance as the topbar's export menu — unavailable rows
+             stay enabled-but-inert (.card-export-unavailable) so the approved
+             tooltip can fire (MatMenuItem always writes aria-disabled=false,
+             so the copy also rides aria-description); the wrapper's guard
+             snacks the same copy. -->
+        <mat-divider></mat-divider>
+        <div class="menu-section">Character card</div>
+        <button
+          mat-menu-item
+          (click)="actions.exportCardPng()"
+          [class.card-export-unavailable]="!cardPngRow().ready"
+          [attr.aria-description]="cardPngRow().tooltip || null"
+          [matTooltip]="cardPngRow().tooltip"
+        >
+          <mat-icon>image</mat-icon>
+          <span class="menu-text">
+            <span class="menu-title">Character card (PNG)</span>
+            <span class="menu-desc">Re-embed the edited lorebook into the original image</span>
+          </span>
+        </button>
+        <button
+          mat-menu-item
+          (click)="actions.exportCardJson()"
+          [class.card-export-unavailable]="!cardJsonRow().ready"
+          [attr.aria-description]="cardJsonRow().tooltip || null"
+          [matTooltip]="cardJsonRow().tooltip"
+        >
+          <mat-icon>article</mat-icon>
+          <span class="menu-text">
+            <span class="menu-title">Character card (JSON)</span>
+            <span class="menu-desc">Swap the edited lorebook into the original card JSON</span>
+          </span>
+        </button>
       </mat-menu>
     }
   }

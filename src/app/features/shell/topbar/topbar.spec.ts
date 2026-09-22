@@ -206,6 +206,105 @@ describe('Topbar', () => {
     expect(digestSpy).toHaveBeenCalledTimes(1);
   });
 
+  // ---------------------------------------------------------------------------
+  // Character card section (plan 15 §3.5, checkpoint 15-1): availability truth
+  // table, the inert-but-hoverable disabled rows and their approved tooltips.
+  // ---------------------------------------------------------------------------
+
+  /** Opens the export menu and returns the DOM row carrying `title`. */
+  async function openExportMenuAndFind(title: string): Promise<HTMLElement> {
+    const triggerDebug = fixture.debugElement.query(By.css('[aria-label="Export menu"]'));
+    assert(triggerDebug);
+    triggerDebug.injector.get(MatMenuTrigger).openMenu();
+    fixture.detectChanges();
+    const row = [
+      ...document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel button'),
+    ].find((button) => button.textContent?.includes(title));
+    assert(row);
+    return row;
+  }
+
+  it('derives the card export rows from the shell truth table', async () => {
+    await createTopbar();
+    fixture.detectChanges();
+    const rows = () => [
+      fixture.componentInstance['cardPngRow'](),
+      fixture.componentInstance['cardJsonRow'](),
+    ];
+
+    // No project: both unavailable (the menu itself is project-gated).
+    expect(rows()).toEqual([
+      { ready: false, tooltip: 'Import a character card first' },
+      { ready: false, tooltip: 'Import a character card first' },
+    ]);
+
+    // JSON-card shell: JSON export ready, PNG still unavailable with its own
+    // reason (no image stored).
+    workspace.activeProject.set({
+      ...projectOf([], { id: 'card-project', title: 'Card' }),
+      cardShell: { spec: 'chara_card_v2', cardJson: '{"spec":"chara_card_v2"}' },
+    });
+    fixture.detectChanges();
+    expect(rows()).toEqual([
+      { ready: false, tooltip: 'No card image stored — import a card PNG first' },
+      { ready: true, tooltip: '' },
+    ]);
+
+    // PNG shell: both ready, no tooltips.
+    workspace.activeProject.set({
+      ...projectOf([], { id: 'card-project' }),
+      cardShell: {
+        spec: 'chara_card_v2',
+        cardJson: '{"spec":"chara_card_v2"}',
+        pngKeyword: 'chara',
+        pngBytes: Uint8Array.of(0x89, 0x50),
+      },
+    });
+    fixture.detectChanges();
+    expect(rows()).toEqual([
+      { ready: true, tooltip: '' },
+      { ready: true, tooltip: '' },
+    ]);
+  });
+
+  it('renders the card rows inert-but-hoverable with the approved tooltips', async () => {
+    await workspace.createProject('Fuyuki'); // no card shell — both unavailable
+    await createTopbar();
+    fixture.detectChanges();
+
+    const pngRow = await openExportMenuAndFind('Character card (PNG)');
+    const jsonRow = await openExportMenuAndFind('Character card (JSON)');
+    // NOT truly disabled: the approved tooltip affordance requires hoverable
+    // rows (Material tooltips never fire on disabled buttons).
+    expect(pngRow.hasAttribute('disabled')).toBe(false);
+    expect(jsonRow.hasAttribute('disabled')).toBe(false);
+    // MatMenuItem's own host binding always writes aria-disabled=false, so the
+    // unavailable state surfaces through the tooltip directive (visually) and
+    // aria-description (the approved copy) for assistive tech.
+    expect(pngRow.getAttribute('aria-disabled')).toBe('false');
+    expect(pngRow.getAttribute('aria-description')).toBe('Import a character card first');
+    expect(jsonRow.getAttribute('aria-description')).toBe('Import a character card first');
+    // The muted look comes from the shared class, not a bespoke treatment.
+    expect(pngRow.classList.contains('card-export-unavailable')).toBe(true);
+    expect(jsonRow.classList.contains('card-export-unavailable')).toBe(true);
+
+    // The section sits at the menu END, after the proofreading items.
+    const titles = [...document.querySelectorAll('.mat-mdc-menu-panel .menu-title')].map(
+      (el) => el.textContent ?? '',
+    );
+    expect(titles.indexOf('Proofread digest (Markdown)')).toBeLessThan(
+      titles.indexOf('Character card (PNG)'),
+    );
+    expect(titles[titles.length - 1]).toBe('Character card (JSON)');
+    // The wrapper stays wired: an unavailable row still routes its click (the
+    // refusal + copy is the wrapper's own contract, pinned in the service spec).
+    const actions = TestBed.inject(ProjectActionsService);
+    const pngSpy = vi.spyOn(actions, 'exportCardPng').mockImplementation(() => undefined);
+    pngRow.dispatchEvent(new Event('click'));
+    fixture.detectChanges();
+    expect(pngSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('opens search & replace seeded with the active entry', async () => {
     await workspace.createProject('Fuyuki');
     await createTopbar();
@@ -454,10 +553,11 @@ describe('TokenMeter', () => {
     // the footprint and flags the overshoot (the removed dedicated rendering
     // tests used to hold this branch coverage).
     workspace.activeProject.set(
-      projectOf(
-        [constantEntry(0, 'a'.repeat(40)), constantEntry(1, 'b'.repeat(40))],
-        { id: 'meter-project', title: 'Meter', tokenBudget: 15 },
-      ),
+      projectOf([constantEntry(0, 'a'.repeat(40)), constantEntry(1, 'b'.repeat(40))], {
+        id: 'meter-project',
+        title: 'Meter',
+        tokenBudget: 15,
+      }),
     );
     const fixture = TestBed.createComponent(TokenMeter);
     await fixture.whenStable();

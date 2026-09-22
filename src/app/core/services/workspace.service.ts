@@ -6,7 +6,7 @@ import {
   createEmptyEntry,
   entryTitle,
 } from '../models/lorebook.model';
-import type { LintPrefs, ProjectWorkspace } from '../models/project.model';
+import type { CardShell, LintPrefs, ProjectWorkspace } from '../models/project.model';
 import { randomUuid } from './sha256';
 import { LAST_PROJECT_KEY, StorageService } from './storage.service';
 import { VcsService } from './vcs.service';
@@ -152,8 +152,21 @@ export class WorkspaceService {
     await this.storage.setState(LAST_PROJECT_KEY, null);
   }
 
-  /** Replaces the working book and resets VCS state (used by "new from import"). */
-  async startProjectFromBook(title: string, book: CharacterBook): Promise<void> {
+  /**
+   * Replaces the working book and resets VCS state (used by "new from import").
+   *
+   * `cardShell` (plan 15 §3.3) is the project's birth metadata: a card import
+   * passes the shell it opened so the initial commit save already carries it —
+   * one write, and card exports find the container on the stored record. Shell
+   * writes ride this narrow mutator (never a direct `activeProject.set` from
+   * features); any later shell update goes through the same private
+   * `mutateProject` chokepoint the other workspace mutations use.
+   */
+  async startProjectFromBook(
+    title: string,
+    book: CharacterBook,
+    cardShell?: CardShell,
+  ): Promise<void> {
     const now = Date.now();
     const project: ProjectWorkspace = {
       id: randomUuid(),
@@ -164,6 +177,7 @@ export class WorkspaceService {
       activeBook: book,
       headCommitId: null,
       commits: [],
+      ...(cardShell !== undefined ? { cardShell } : {}),
     };
     const committed = await this.vcs.createCommit(
       project,

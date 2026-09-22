@@ -1,14 +1,19 @@
 import { TestBed } from '@angular/core/testing';
-import { ImportExportService } from './import-export.service';
+import {
+  ImportExportService,
+  cardJsonExportAvailable,
+  cardPngExportAvailable,
+} from './import-export.service';
 import {
   CharacterBook,
   CharacterBookEntry,
   ST_POSITION,
   characterBookToStNative,
   createEmptyBook,
+  toSpecCompliantBook,
 } from '../models/lorebook.model';
 import { LORESTITCH_ARCHIVE_VERSION, ProjectWorkspace } from '../models/project.model';
-import { base64EncodeBytes } from '../models/character-card';
+import { base64EncodeBytes, crc32, encodeCardPayload, openCardPng } from '../models/character-card';
 import { estimateTokens } from './token-estimator';
 // Real SillyTavern world-info exports used as import fixtures.
 import fuyukiCard from '../../../../example_card/Fate Stay Night - Fuyuki Lorebook(1).json';
@@ -127,9 +132,7 @@ describe('ImportExportService', () => {
       headCommitId: null,
       commits: [],
     };
-    expect(
-      service.parseImport({ format: 'lorestitch-project', version: 2, workspace }),
-    ).toBeNull();
+    expect(service.parseImport({ format: 'lorestitch-project', version: 2, workspace })).toBeNull();
   });
 
   it('accepts a .stproj archive with a missing version field', () => {
@@ -255,9 +258,7 @@ describe('ImportExportService', () => {
       activeBook: { entries: [] },
       headCommitId: null,
     };
-    expect(
-      service.parseImport({ format: 'lorestitch-project', version: 1, workspace }),
-    ).toBeNull();
+    expect(service.parseImport({ format: 'lorestitch-project', version: 1, workspace })).toBeNull();
   });
 
   it('falls back to the provided title for untitled .stproj workspaces', () => {
@@ -350,6 +351,122 @@ function makeProject(title: string): ProjectWorkspace {
     headCommitId: null,
     commits: [],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Character-card fixtures (plan 15 §3.6): minimal PNGs crafted in-test with
+// the same recipe as character-card.spec — the spec tree stays binary-free —
+// plus a card JSON wrapping a book, so import equivalence and export
+// preservation pin against deterministic bytes.
+// ---------------------------------------------------------------------------
+
+const CARD_NAME = 'Saber Card';
+const PNG_SIGNATURE = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+
+/** One complete PNG chunk: `[len, type, data, crc]` with a valid CRC. */
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const out = new Uint8Array(12 + data.length);
+  const view = new DataView(out.buffer);
+  view.setUint32(0, data.length, false);
+  for (let i = 0; i < 4; i++) {
+    out[4 + i] = type.charCodeAt(i);
+  }
+  out.set(data, 8);
+  view.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)), false);
+  return out;
+}
+
+function concatBytes(...parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.byteLength;
+  }
+  return out;
+}
+
+const IHDR_CHUNK = (): Uint8Array => pngChunk('IHDR', new Uint8Array(13));
+const IDAT_CHUNK = (): Uint8Array => pngChunk('IDAT', Uint8Array.of(1, 2, 3, 4));
+const FOREIGN_CHUNK = (): Uint8Array => pngChunk('deBG', Uint8Array.of(0xde, 0xad, 0xbe, 0xef));
+const IEND_CHUNK = (): Uint8Array => pngChunk('IEND', new Uint8Array(0));
+
+/** tEXt data: keyword + NUL + base64 of the card JSON text. */
+function cardTextData(keyword: string, cardJson: string): Uint8Array {
+  const payload = encodeCardPayload(cardJson);
+  const data = new Uint8Array(keyword.length + 1 + payload.length);
+  for (let i = 0; i < keyword.length; i++) {
+    data[i] = keyword.charCodeAt(i);
+  }
+  data[keyword.length] = 0;
+  for (let i = 0; i < payload.length; i++) {
+    data[keyword.length + 1 + i] = payload.charCodeAt(i);
+  }
+  return data;
+}
+
+function cardPngBytes(cardJson: string, options: { dualChunk?: boolean } = {}): Uint8Array {
+  const parts: Uint8Array[] = [PNG_SIGNATURE, IHDR_CHUNK()];
+  // Dual-chunk cards (the real fixture profile) carry an independent V3 card
+  // beside the V2 one — the service must re-embed both or refuse.
+  if (options.dualChunk) {
+    parts.push(pngChunk('tEXt', cardTextData('ccv3', dualCardJson())));
+  }
+  parts.push(pngChunk('tEXt', cardTextData('chara', cardJson)));
+  parts.push(IDAT_CHUNK(), FOREIGN_CHUNK(), IEND_CHUNK());
+  return concatBytes(...parts);
+}
+
+function cardBook(): CharacterBook {
+  return {
+    name: 'Fuyuki Card Book',
+    extensions: {},
+    entries: [makeEntry(0, { content: 'Original grail lore' }), makeEntry(1)],
+  };
+}
+
+function cardJsonText(book: CharacterBook = cardBook()): string {
+  return JSON.stringify({
+    spec: 'chara_card_v2',
+    spec_version: '2.0',
+    creator: 'Fixture', // unknown card field — the never-drop pin at card level
+    data: { name: CARD_NAME, description: 'Card description', character_book: book },
+  });
+}
+
+function dualCardJson(): string {
+  return JSON.stringify({
+    spec: 'chara_card_v3',
+    spec_version: '3.0',
+    data: { name: `${CARD_NAME} V3`, character_book: cardBook() },
+  });
+}
+
+/** Spec-local chunk walk for byte-identity assertions (data slices included). */
+interface SpecChunk {
+  readonly type: string;
+  readonly data: Uint8Array;
+}
+
+function walkChunks(bytes: Uint8Array): SpecChunk[] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const chunks: SpecChunk[] = [];
+  let position = 8;
+  while (position + 12 <= bytes.byteLength) {
+    const length = view.getUint32(position, false);
+    chunks.push({
+      type: String.fromCharCode(
+        view.getUint8(position + 4),
+        view.getUint8(position + 5),
+        view.getUint8(position + 6),
+        view.getUint8(position + 7),
+      ),
+      data: bytes.slice(position + 8, position + 8 + length),
+    });
+    position += 12 + length;
+  }
+  return chunks;
 }
 
 describe('ImportExportService exports', () => {
@@ -730,7 +847,9 @@ describe('ImportExportService exports', () => {
     expect(entries).toHaveLength(2);
     // Selection is by id, book order is preserved, display indexes renumbered.
     expect(entries.map((entry) => entry['id'])).toEqual([0, 2]);
-    expect(entries.map((entry) => (entry['extensions'] as Record<string, unknown>)['display_index'])).toEqual([0, 1]);
+    expect(
+      entries.map((entry) => (entry['extensions'] as Record<string, unknown>)['display_index']),
+    ).toEqual([0, 1]);
 
     service.exportSelectedBook(book, [2, 0], 'Subset', 'st_native');
     const asNative = downloads[1];
@@ -849,5 +968,326 @@ describe('ImportExportService exports', () => {
       workspace: { ...makeProject('Bad Shell'), cardShell: { spec: 'chara_card_v1' } },
     };
     expect(service.parseImport(archive)).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // Card exports (plan 15 §3.4–3.5): the SERVICE layer — file names, download
+  // payloads, non-card byte preservation and refusal reasons (the codec itself
+  // is pinned in character-card.spec).
+  // -------------------------------------------------------------------------
+
+  it('re-embeds the unedited book into the identical PNG (every byte preserved)', async () => {
+    // The shell stores the card JSON as the export already wrote it — the
+    // spec-clean conversion inside `data.character_book` — so an unedited
+    // book re-embeds the exact same payload and every byte survives.
+    const book = cardBook();
+    const embeddableCardJson = JSON.stringify({
+      spec: 'chara_card_v2',
+      spec_version: '2.0',
+      creator: 'Fixture',
+      data: {
+        name: CARD_NAME,
+        description: 'Card description',
+        character_book: toSpecCompliantBook(book),
+      },
+    });
+    const pngBytes = cardPngBytes(embeddableCardJson);
+    const opened = openCardPng(pngBytes);
+    assert(!('reason' in opened));
+    const project: ProjectWorkspace = {
+      ...makeProject('Card Carrier'),
+      activeBook: book, // the book as imported — nothing edited yet
+      cardShell: {
+        spec: opened.spec,
+        cardJson: opened.cardJson,
+        pngKeyword: opened.pngKeyword,
+        pngBytes,
+      },
+    };
+
+    const failure = service.exportCardPng(project);
+
+    expect(failure).toBeNull();
+    expect(downloads).toHaveLength(1);
+    const capture = downloads[0];
+    assert(capture);
+    // The card's own name names the file — not the project title.
+    expect(capture.fileName).toBe('Saber-Card.png');
+    expect(capture.blob.type).toBe('image/png');
+    // An unedited book re-embeds the same payload into a rebuilt, identical
+    // chunk: the download is byte-identical to the stored shell image.
+    const exported = new Uint8Array(await capture.blob.arrayBuffer());
+    expect([...exported]).toEqual([...pngBytes]);
+  });
+
+  it('preserves every non-card chunk byte-for-byte when the book was edited', async () => {
+    const pngBytes = cardPngBytes(cardJsonText());
+    const book = cardBook();
+    const first = book.entries[0];
+    assert(first);
+    first.content = 'EDITED grail lore - new bytes'; // ASCII: the payload decodes byte-exact
+    const project: ProjectWorkspace = {
+      ...makeProject('Card Carrier'),
+      activeBook: book,
+      cardShell: {
+        spec: 'chara_card_v2',
+        cardJson: cardJsonText(),
+        pngKeyword: 'chara',
+        pngBytes,
+      },
+    };
+
+    const failure = service.exportCardPng(project);
+    expect(failure).toBeNull();
+    const capture = downloads[0];
+    assert(capture);
+    expect(capture.fileName).toBe('Saber-Card.png');
+
+    const exported = new Uint8Array(await capture.blob.arrayBuffer());
+    const originalChunks = walkChunks(pngBytes);
+    const exportedChunks = walkChunks(exported);
+    // Same chunk layout, same order...
+    expect(exportedChunks.map((chunk) => chunk.type)).toEqual(
+      originalChunks.map((chunk) => chunk.type),
+    );
+    // ...every non-card chunk (IHDR, IDATs, the foreign deBG, IEND) byte-identical...
+    const originalCardIndex = originalChunks.findIndex((chunk) => chunk.type === 'tEXt');
+    assert(originalCardIndex >= 0);
+    expect(exportedChunks.filter((_, i) => i !== originalCardIndex)).toEqual(
+      originalChunks.filter((_, i) => i !== originalCardIndex),
+    );
+    // ...and the one rewritten card chunk carries the edited book.
+    const cardChunk = exportedChunks[originalCardIndex];
+    assert(cardChunk);
+    const payload = new TextDecoder().decode(cardChunk.data.subarray('chara'.length + 1));
+    const decoded = JSON.parse(atob(payload)) as { data: { character_book: CharacterBook } };
+    expect(decoded.data.character_book.entries[0]?.content).toBe('EDITED grail lore - new bytes');
+  });
+
+  it('refuses the PNG export for shell-less and JSON-card projects', async () => {
+    const shellLess = makeProject('No Card');
+    expect(service.exportCardPng(shellLess)).toEqual({
+      reason: 'no-shell',
+      message: 'The project holds no character-card shell.',
+    });
+    const jsonCard: ProjectWorkspace = {
+      ...makeProject('Json Card'),
+      cardShell: { spec: 'chara_card_v3', cardJson: cardJsonText() },
+    };
+    expect(service.exportCardPng(jsonCard)).toEqual({
+      reason: 'no-image',
+      message: 'The card shell stores no card image — import a card PNG first.',
+    });
+    // Neither refusal downloads anything.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(downloads).toHaveLength(0);
+  });
+
+  it('refuses the PNG export when a remembered card chunk would keep a stale book', async () => {
+    // A dual-chunk source whose extra payload was dropped (e.g. a corrupt
+    // chunk beside a valid one at import): re-embedding only the preferred
+    // chunk would leave the other holding the book as of import.
+    const pngBytes = cardPngBytes(cardJsonText(), { dualChunk: true });
+    const opened = openCardPng(pngBytes);
+    assert(!('reason' in opened));
+    const project: ProjectWorkspace = {
+      ...makeProject('Stale Carrier'),
+      activeBook: cardBook(),
+      // The extra payload is deliberately omitted from the shell.
+      cardShell: {
+        spec: opened.spec,
+        cardJson: opened.cardJson,
+        pngKeyword: opened.pngKeyword,
+        pngBytes,
+      },
+    };
+
+    const failure = service.exportCardPng(project);
+
+    assert(failure);
+    expect(failure.reason).toBe('stale-card-chunk');
+    expect(downloads).toHaveLength(0);
+  });
+
+  it('swaps the edited book into the card JSON and keeps every other field', async () => {
+    const project: ProjectWorkspace = {
+      ...makeProject('Json Card'),
+      activeBook: cardBook(),
+      cardShell: {
+        spec: 'chara_card_v2',
+        cardJson: cardJsonText(),
+      },
+    };
+
+    const failure = service.exportCardJson(project);
+
+    expect(failure).toBeNull();
+    const capture = downloads[0];
+    assert(capture);
+    // Card name again, not the project title.
+    expect(capture.fileName).toBe('Saber-Card.json');
+    const exported = await payloadOf(capture);
+    // The swapped book is the same spec-clean conversion the Character Book
+    // JSON export uses — one path, not a new one.
+    expect(exported['data']).toEqual({
+      name: CARD_NAME,
+      description: 'Card description',
+      character_book: toSpecCompliantBook(cardBook()),
+    });
+    // Unknown card fields survive the swap verbatim.
+    expect(exported['spec']).toBe('chara_card_v2');
+    expect(exported['creator']).toBe('Fixture');
+  });
+
+  it('falls back to the project title for name-less cards', () => {
+    const project: ProjectWorkspace = {
+      ...makeProject('Fallback Name'),
+      cardShell: {
+        spec: 'chara_card_v2',
+        cardJson: JSON.stringify({ spec: 'chara_card_v2', data: { character_book: cardBook() } }),
+        pngKeyword: 'chara',
+        pngBytes: cardPngBytes(
+          JSON.stringify({ spec: 'chara_card_v2', data: { character_book: cardBook() } }),
+        ),
+      },
+    };
+
+    expect(service.exportCardJson(project)).toBeNull();
+    const capture = downloads[0];
+    assert(capture);
+    expect(capture.fileName).toBe('Fallback-Name.json');
+  });
+
+  it('refuses the JSON card export without a shell', async () => {
+    expect(service.exportCardJson(makeProject('No Card'))).toEqual({
+      reason: 'no-shell',
+      message: 'The project holds no character-card shell.',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(downloads).toHaveLength(0);
+  });
+
+  it('derives card export availability from the shell truth table', () => {
+    const pngShell = cardPngBytes(cardJsonText());
+    const pngProject: ProjectWorkspace = {
+      ...makeProject('Png'),
+      cardShell: {
+        spec: 'chara_card_v2',
+        cardJson: cardJsonText(),
+        pngKeyword: 'chara',
+        pngBytes: pngShell,
+      },
+    };
+    const jsonProject: ProjectWorkspace = {
+      ...makeProject('Json'),
+      cardShell: { spec: 'chara_card_v2', cardJson: cardJsonText() },
+    };
+
+    // No project / no shell: both rows unavailable (the menu disables them).
+    expect(cardJsonExportAvailable(null)).toBe(false);
+    expect(cardPngExportAvailable(null)).toBe(false);
+    expect(cardJsonExportAvailable(makeProject('Bare'))).toBe(false);
+    expect(cardPngExportAvailable(makeProject('Bare'))).toBe(false);
+    // JSON-card shell: JSON export works, PNG stays disabled.
+    expect(cardJsonExportAvailable(jsonProject)).toBe(true);
+    expect(cardPngExportAvailable(jsonProject)).toBe(false);
+    // PNG shell: both exports available.
+    expect(cardJsonExportAvailable(pngProject)).toBe(true);
+    expect(cardPngExportAvailable(pngProject)).toBe(true);
+  });
+});
+
+describe('ImportExportService card imports', () => {
+  let service: ImportExportService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({});
+    service = TestBed.inject(ImportExportService);
+  });
+
+  it('imports a card JSON through the same book pipeline as a plain-book import', () => {
+    const cardJson = cardJsonText();
+    const card = service.parseCardImport({ rawText: cardJson }, 'Fallback');
+    assert(card.status === 'ok');
+    const plain = service.parseImport(cardBook(), 'Fallback');
+
+    assert(plain);
+    // Pipeline equivalence: the embedded book normalizes EXACTLY like the
+    // same `character_book` imported as a bare lorebook.
+    expect(card.parsed.book).toEqual(plain.book);
+    // The card boundary is marked additively; plain books never set it.
+    expect(card.parsed.cardShell).toEqual({ spec: 'chara_card_v2', cardJson });
+    expect(plain.cardShell).toBeUndefined();
+    // The card's data.name suggests the project title.
+    expect(card.parsed.suggestedTitle).toBe(CARD_NAME);
+    expect(card.parsed.format).toBe('character_book');
+  });
+
+  it('opens card JSON through the parseImport sniff-fallback branch too', () => {
+    const cardJson = cardJsonText();
+    const singleCall = service.parseImport(JSON.parse(cardJson), 'Fallback', { rawText: cardJson });
+    const direct = service.parseCardImport({ rawText: cardJson }, 'Fallback');
+    assert(direct.status === 'ok');
+    expect(singleCall).toEqual(direct.parsed);
+  });
+
+  it('imports a card PNG with the shell remembering the exact source bytes', () => {
+    const pngBytes = cardPngBytes(cardJsonText());
+    const card = service.parseCardImport({ pngBytes: pngBytes }, 'Fallback');
+    assert(card.status === 'ok');
+
+    const plain = service.parseImport(cardBook(), 'Fallback');
+    assert(plain);
+    expect(card.parsed.book).toEqual(plain.book);
+    const shell = card.parsed.cardShell;
+    assert(shell);
+    expect(shell.spec).toBe('chara_card_v2');
+    expect(shell.cardJson).toBe(cardJsonText());
+    expect(shell.pngKeyword).toBe('chara');
+    assert(shell.pngBytes);
+    expect([...shell.pngBytes]).toEqual([...pngBytes]);
+  });
+
+  it('remembers both card payloads of a dual-chunk source', () => {
+    const pngBytes = cardPngBytes(cardJsonText(), { dualChunk: true });
+    const card = service.parseCardImport({ pngBytes: pngBytes }, 'Fallback');
+    assert(card.status === 'ok');
+    // ccv3 is the preferred keyword; the chara payload rides as the extra.
+    expect(card.parsed.cardShell?.pngKeyword).toBe('ccv3');
+    expect(card.parsed.cardShell?.extraCardJson).toEqual({ chara: cardJsonText() });
+  });
+
+  it('reports the approved card reasons for unreadable payloads', () => {
+    // Valid PNG without a card chunk.
+    const barePng = concatBytes(PNG_SIGNATURE, IHDR_CHUNK(), IDAT_CHUNK(), IEND_CHUNK());
+    const noChunk = service.parseCardImport({ pngBytes: barePng }, 'F');
+    assert(noChunk.status === 'card-error');
+    expect(noChunk.error.reason).toBe('no-card-chunk');
+
+    // PNG signature mismatch.
+    const notPng = service.parseCardImport({ pngBytes: Uint8Array.of(1, 2, 3) }, 'F');
+    assert(notPng.status === 'card-error');
+    expect(notPng.error.reason).toBe('not-a-png');
+
+    // A card JSON without an embedded book.
+    const bookless = service.parseCardImport(
+      { rawText: JSON.stringify({ spec: 'chara_card_v2', data: { name: 'X' } }) },
+      'Fallback',
+    );
+    assert(bookless.status === 'card-error');
+    expect(bookless.error.reason).toBe('card-without-book');
+
+    // A card whose embedded book is not a valid lorebook still refused.
+    const badBook = service.parseCardImport(
+      {
+        rawText: JSON.stringify({
+          spec: 'chara_card_v2',
+          data: { name: 'X', character_book: { entries: [{ keys: 'a', content: 'x' }] } },
+        }),
+      },
+      'Fallback',
+    );
+    assert(badBook.status === 'card-error');
+    expect(badBook.error.reason).toBe('card-json-invalid');
   });
 });

@@ -7,6 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ProjectActionsService } from '../project-actions.service';
+import { cardExportRowState } from '../project-actions.constants';
 
 /**
  * Quick actions the bar routes through the shell (`App.runBarAction`).
@@ -130,6 +131,20 @@ export class MobileBottomBar {
    * drawer or dialog (the always-docked contract; see the class doc). */
   protected readonly visible = computed(
     () => this.layout.isMobile() && this.workspace.activeProject() !== null,
+  );
+
+  /**
+   * Card export row state (plan 15 §3.5) for the export menu's "Character
+   * card" section — the same approved availability rules the topbar's rows
+   * follow (shared `cardExportRowState`): unavailable without a card shell
+   * (PNG additionally without stored image bytes), with the approved tooltip.
+   */
+  protected readonly cardPngRow = computed(() =>
+    cardExportRowState(this.workspace.activeProject(), true),
+  );
+
+  protected readonly cardJsonRow = computed(() =>
+    cardExportRowState(this.workspace.activeProject(), false),
   );
 
   /** Whether the strip is scrim-veiled and inert beneath an open drawer. */

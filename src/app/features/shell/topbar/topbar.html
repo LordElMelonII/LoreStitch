@@ -181,6 +181,44 @@
         <span class="menu-desc">All entries as readable text</span>
       </span>
     </button>
+
+    <!-- Character card section (checkpoint 15-1): last in the menu, after the
+         Reference & proofreading items. Unavailable rows stay ENABLED buttons
+         (muted via .card-export-unavailable) because Material tooltips never
+         fire on truly disabled buttons — the tooltip carries the approved
+         explanation. MatMenuItem's own host binding always writes
+         attr.aria-disabled=false, so the unavailable state surfaces through
+         the muted class and aria-description (the approved copy) instead of
+         aria-disabled. The wrapper's guard snacks the same copy if the row is
+         still triggered. -->
+    <mat-divider></mat-divider>
+    <div class="menu-section">Character card</div>
+    <button
+      mat-menu-item
+      (click)="actions.exportCardPng()"
+      [class.card-export-unavailable]="!cardPngRow().ready"
+      [attr.aria-description]="cardPngRow().tooltip || null"
+      [matTooltip]="cardPngRow().tooltip"
+    >
+      <mat-icon>image</mat-icon>
+      <span class="menu-text">
+        <span class="menu-title">Character card (PNG)</span>
+        <span class="menu-desc">Re-embed the edited lorebook into the original image</span>
+      </span>
+    </button>
+    <button
+      mat-menu-item
+      (click)="actions.exportCardJson()"
+      [class.card-export-unavailable]="!cardJsonRow().ready"
+      [attr.aria-description]="cardJsonRow().tooltip || null"
+      [matTooltip]="cardJsonRow().tooltip"
+    >
+      <mat-icon>article</mat-icon>
+      <span class="menu-text">
+        <span class="menu-title">Character card (JSON)</span>
+        <span class="menu-desc">Swap the edited lorebook into the original card JSON</span>
+      </span>
+    </button>
   </mat-menu>
 
   <mat-menu #moreMenu="matMenu">
@@ -199,11 +237,7 @@
       <mat-icon>merge_type</mat-icon>
       <span>Merge lorebook…</span>
     </button>
-    <button
-      mat-menu-item
-      [matMenuTriggerFor]="exportMenu"
-      appTouchSafeNestedMenuTrigger
-    >
+    <button mat-menu-item [matMenuTriggerFor]="exportMenu" appTouchSafeNestedMenuTrigger>
       <mat-icon>file_download</mat-icon>
       <span>Export</span>
     </button>
