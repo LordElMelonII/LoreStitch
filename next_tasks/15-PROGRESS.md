@@ -95,8 +95,22 @@ violations; `character-card.ts` + `project.model.ts` 100/100/100/100. Round-trip
 - **§7.2 recommendation presented**: inline `cardShell` (P1 measurements:
   ~1.4 MB structured clone per 400 ms save, archive +33%, `openCardPng`
   ~150 ms one-off); separate IndexedDB record as fallback.
-- **User answer NOT received** — per the hard-gate rule the pipeline STOPS
-  here; P2 is NOT dispatched. No decision was closed on a recommended default.
+## Checkpoint 15-1 — APPROVED — 2026-09-22
 
-**Next:** on the user's explicit answers (placement / copy / storage) → record
-them, then dispatch P2 (ui-specialist).
+- **User answer**: *"Just checked the Screenshots. I approve."* — closes the
+  checkpoint against the posted evidence:
+  1. **Menu placement**: approved as mocked — new "Character card" section at
+     the end of the Export menu (after "Reference & proofreading"); same menu
+     via More → Export on phones.
+  2. **Copy**: approved as proposed (titles/descriptions, disabled tooltips,
+     import success + per-reason failure snackbars; see the posted table).
+  3. **§7.2 storage**: inline `cardShell` on the project record — the
+     checkpoint's presented recommendation (P1-measured acceptable) and the
+     plan header's pre-recorded direction ("start with (a), measure, move to
+     (b) only if saves visibly regress"). Separate-record remains the fallback.
+- Evidence + copy + storage notes in the previous section (mock script
+  `__screenshots__/15-character-card-round-trip/mock-menu.mjs`).
+
+**Next:** dispatch P2 (ui-specialist) — `.png` accept path, card branches in
+`parseImport`, two export flavors with approved availability rules + copy.
+Gate: `npm test` + `npm run build`.
