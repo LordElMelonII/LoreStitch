@@ -114,3 +114,59 @@ violations; `character-card.ts` + `project.model.ts` 100/100/100/100. Round-trip
 **Next:** dispatch P2 (ui-specialist) — `.png` accept path, card branches in
 `parseImport`, two export flavors with approved availability rules + copy.
 Gate: `npm test` + `npm run build`.
+
+## Phase P2 — 2026-09-22 — ui-specialist agent
+
+**Files** (`8a7e1b6`, `feat(export): character card import/export wiring`, 16 files,
++1506/−89): import wiring (IMPORT_ACCEPT + `.png` bytes path, `parseImport` card branch,
+additive `parseCardImport` sibling, `ParsedImport.cardShell?`), shell via
+`startProjectFromBook(title, book, cardShell?)` mutator, two export methods
+(`exportCardPng`/`exportCardJson` returning `CardExportFailure | null`) + wrappers,
+approved copy table `CARD_FAILURE_COPY` + `cardExportRowState` (single home for row
+availability + tooltip), topbar + mobile-bottom-bar "Character card" sections,
+`.card-export-unavailable` muted-row style (global styles, no `::ng-deep`), stale
+card doc comments in `lorebook.model.ts` corrected, `image`/`article` ligatures added
+via `npm run icons:refresh` (woff2 regenerated and staged with the commit), 25 new
+unit tests (1187 total).
+
+**Gates**: `CI=true npm test -- --watch=false` = 1187/1187 green, thresholds enforced
+(subagent ~52 s; orchestrator counter-run exit 0); `npm run build` = green (13.5 s;
+orchestrator counter-run exit 0). Round-trip/fidelity specs green without edits; one
+pinned unit test migrated ('unsupported-format' → card copy — grepped, no e2e pins the
+old text).
+
+**Decisions/deviations**:
+1. `parseImport` return type couldn't widen without breaking ~40 spec call sites —
+   reason-carrying path is the additive `parseCardImport(source): CardImportParse`;
+   `parseImport` gains an optional third `source` param and folds card failures into
+   `null` (historical contract).
+2. Unrecognized JSON now reports card-layer copy (`card-without-book`) instead of the
+   generic unsupported-format text; one pinned unit test migrated accordingly.
+3. Card section duplicated into the mobile bottom bar's export menu (house rule:
+   duplicate markup, never logic — both menus share `cardExportRowState`).
+4. Unavailable rows stay ENABLED buttons, muted via `.card-export-unavailable`
+   (Material's stock `[disabled]` recipe) — Material tooltips never fire on truly
+   disabled buttons, and MatMenuItem's host binding unconditionally writes
+   `aria-disabled=false`; the unavailable state surfaces through the muted class +
+   `aria-description` (approved copy) + a wrapper click-guard that snacks the same
+   copy. Checkpoint look preserved; aria trade-off documented in the template.
+5. Export contract: the four existing exports return void + snack internally; card
+   exports return `CardExportFailure | null` and the wrappers snack — importer
+   computes, feature layer snacks (task 09 can adopt off `reason` without re-signing).
+6. No success snackbar on card exports (matches the four fixed-format wrappers) —
+   open question flagged; cheap to add if the user wants one.
+7. `startProjectFromBook` carries the shell at project birth (one initial-commit
+   write) rather than a second `adoptCardShell` save; later shell updates must go
+   through `mutateProject`.
+
+**Visual baseline**: `__screenshots__/15-character-card-round-trip/{before,after}/`
+(pinned conditions: light theme, Fate-seeded project via welcome screen, settled
+rendering, dev 4321; 1280×800 + 1024×768 + 390×844; capture script `p2-capture.mjs`).
+After-set includes real-implementation menu shots, real CDK tooltip inside the
+Popover top layer, and the real enabled state from importing `example_card.json`
+end-to-end (project titled from card `data.name`; JSON row enabled, PNG row muted).
+Orchestrator spot-verified the enabled-state and tooltip shots against the approved
+checkpoint mock.
+
+**Next:** dispatch P3 (ts-reviewer) — typing/lint sweep over everything touched.
+Gate: `npm run lint` (+ `npm test` if it fixed anything).
