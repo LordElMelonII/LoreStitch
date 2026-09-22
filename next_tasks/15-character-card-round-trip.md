@@ -12,6 +12,9 @@
 > `ui-specialist` (import flow, export surface, copy) → `ts-reviewer` →
 > `qa-auditor`
 > **Status**: 🔴 Urgent — overtakes the queue (tasks 10, 09, 11 resume after)
+> **Dispatch precondition**: the user supplies the reference card PNG + JSON
+> (§3.7) at task start — promised 2026-09-22, not yet provided. Planning,
+> review, and the in-test codec specs need nothing; P4 (e2e) blocks on them.
 
 ---
 
@@ -102,10 +105,15 @@ Rules:
   import pipeline (`isCharacterBook` → `normalizeImportedBook`,
   `lorebook.model.ts:821,891`) — no parallel book path, so vendor-key
   preservation is inherited, not reimplemented.
-- **Export book shape**: cards embed the V2-spec `character_book` shape, so
-  the export converts via `toSpecCompliantBook` (`lorebook.model.ts:517`) —
-  the same conversion the Character Book JSON export already uses. One
-  conversion path, not a new one.
+- **Export book shape**: cards embed the `character_book` shape; the export
+  converts via `toSpecCompliantBook` (`lorebook.model.ts:517`) — the same
+  conversion the Character Book JSON export already uses, one path, not a
+  new one. **V3 caveat**: the CCv3 book schema has deltas beyond the V2
+  shape (string entry `id`, `name` in place of `comment`, per-entry
+  `use_regex`) — P1 verifies the exact deltas against the user-provided
+  V3 fixture, and if V3 needs its own book mapping, it lives inside
+  `character-card.ts` at the card boundary; the vendor card/book objects
+  themselves are never normalized to fit.
 - **V1 cards** (`name`/`description`/… without `spec` and without
   `data.character_book`): rejected with a clear message — there is no embedded
   book to edit (§7.2).
@@ -133,10 +141,15 @@ export interface CardShell {
   JSON-card export from a shell-less project fabricates a minimal V2 card
   (`data.name` from the project title) — a shell-less *JSON card* export needs
   no image and stays available.
-- `.stproj` archives are JSON: `pngBytes` base64-encodes on archive export and
-  decodes on import (~+33% size for the image only). Archive version
+- `.stproj` archives are JSON: `pngBytes` must not ride the serializer
+  verbatim (`JSON.stringify` renders a `Uint8Array` as a keyed object, not
+  data) — the archive writer needs an explicit base64 transform on export
+  and decode on import (~+33% size for the image only). Archive version
   `LORESTITCH_ARCHIVE_VERSION` already tolerates additive fields via
   `isProjectWorkspace`.
+- VCS is unaffected by the shell: commit hashing covers the book only
+  (`hashBook`/`serializeBook`), so importing a card or holding a shell never
+  dirties history — no commit or dirty-tracking changes in this task.
 - Old projects never regress: `cardShell` is optional everywhere; every
   existing spec passes untouched.
 
@@ -188,13 +201,18 @@ time. Copy finalized in the P2 phase report.
 | E2E — new `e2e/character-card.spec.ts` | fixture card PNG (§3.7): import → edit an entry → export card PNG → re-import → edit visible; byte-compare the exported PNG against the fixture shell for all non-`chara` bytes; card-JSON import via the same helper path; PNG export disabled without a shell |
 | Existing suites | round-trip/fidelity specs green **without edits** (card work is additive); all shell/menu e2e still pass with the two new export entries |
 
-### 3.7 Fixtures
+### 3.7 Fixtures — user-provided reference cards
 
-`example_card/` gains a minimal **card PNG** (e.g. 64×64 transparent PNG with
-a `chara` tEXt chunk carrying a small V2 card with a 3-entry book) and a
-**card JSON** (same card as JSON) — generated once by a checked-in script
-(`scripts/make-card-fixture.mjs`, pure Node, no deps) so both files are
-reproducible. e2e imports them through the `importLorebook` helper path.
+The user supplies the example cards when the task starts (promised
+2026-09-22): a **card PNG** and a **card JSON**, ideally covering both V2
+and V3 between them and carrying non-trivial `extensions` plus unknown
+fields to exercise the never-drop pins. They land in `example_card/` beside
+the existing reference books and are the e2e/round-trip material, imported
+through the `importLorebook` helper path. Unit specs do **not** depend on
+them — §3.6's codec specs craft minimal PNGs in-test (deterministic, no
+binary needed in the spec tree). If a real fixture encodes a shape the
+codec rejects, the fixture wins and the codec is wrong — the same stance as
+task 09 §7.1.
 
 ## 4. Implementation Plan
 
@@ -204,7 +222,7 @@ reproducible. e2e imports them through the `importLorebook` helper path.
 | **Checkpoint 15-1** (user) | — | shell-storage decision (store vs. re-import-per-export), PNG-export availability rule, menu placement evidence, copy |
 | **P2 — Wiring** (ui-specialist) | `import-export.service.ts`, `project-actions.service.ts`, `project-actions.constants.ts`, export menu templates, snackbar copy | §3.3 + §3.4 + §3.5 |
 | **P3 — Review** (ts-reviewer) | all touched | `DataView` byte-reading rigor, result-union exhaustiveness, `Uint8Array` immutability, lint |
-| **P4 — E2E & evidence** (qa-auditor) | `e2e/character-card.spec.ts`, `example_card/` fixtures + generator script, screenshots | §3.6 + §3.7 + baseline |
+| **P4 — E2E & evidence** (qa-auditor) | `e2e/character-card.spec.ts`, `example_card/` fixtures (user-provided, §3.7), screenshots | §3.6 + §3.7 + baseline |
 
 Commits: `feat(core): character-card model and PNG codec`, `feat(export):
 character card import/export wiring`, `feat(shell): card export surface`,
@@ -237,17 +255,27 @@ JSON keys) and re-proven by e2e re-import.
    typically 0.4–1.5 MB). Alternative — re-import the card at export time —
    kills the one-click promise. Checkpoint 15-1 decides; recommendation is
    store (data-loss prevention beats archive size).
-2. **V1 cards without a book**: rejected at import with a clear message. An
+2. **IndexedDB write amplification**: every debounced `scheduleSave` put
+   serializes the whole `ProjectWorkspace` record — with the shell embedded,
+   a ~1 MB image is structured-cloned on every 400 ms save window even when
+   only entry text changed. Options at checkpoint 15-1: (a) accept it
+   (single-user local app; MBs are cheap), (b) keep shells in a separate
+   IndexedDB record keyed by project id, written once at import and read at
+   export — costs a `StorageService` surface change. Recommendation: start
+   with (a), measure, move to (b) only if saves visibly regress.
+3. **V1 cards without a book**: rejected at import with a clear message. An
    "edit a V1 card's description fields" feature is out of scope (LoreStitch
    edits books, not characters) but could be a follow-up task.
-3. **Non-conformant PNGs**: zTXt-compressed card chunks (rare) are not read;
+4. **Non-conformant PNGs**: zTXt-compressed card chunks (rare) are not read;
    the import error names the limitation rather than silently ignoring the
    chunk. Animated PNG (APNG) is unaffected — the codec only rewrites chunk
    boundaries around tEXt.
-4. **Multiple `chara` chunks**: malformed cards exist; first chunk wins, the
+5. **Multiple `chara` chunks**: malformed cards exist; first chunk wins, the
    error/warning surfaces it, and export replaces that same chunk position.
-5. **Task 09 interplay**: pre-flight export validation does not exist yet; the
+6. **Task 09 interplay**: pre-flight export validation does not exist yet; the
    card export methods land with the `ExportResult` contract shape so 09's
    wiring can adopt them without re-signing (§3.4).
-6. **Fixture binary in repo**: a ~1KB PNG fixture is acceptable; the generator
-   script keeps it reproducible and auditable.
+7. **Fixture size**: the user-provided card PNG (typically 0.4–1.5 MB) joins
+   the `example_card/` reference set — acceptable by precedent (the Fate
+   Stay Night book is comparable). Unit specs stay binary-free (in-test
+   crafted PNGs).
