@@ -13,7 +13,14 @@ import {
   toSpecCompliantBook,
 } from '../models/lorebook.model';
 import { LORESTITCH_ARCHIVE_VERSION, ProjectWorkspace } from '../models/project.model';
-import { base64EncodeBytes, crc32, encodeCardPayload, openCardPng } from '../models/character-card';
+import { base64EncodeBytes, encodeCardPayload, openCardPng } from '../models/character-card';
+import {
+  PNG_SIGNATURE,
+  concatBytes,
+  pngChunk,
+  textChunkData,
+  walkSpecPng,
+} from '../../../testing/png-fixtures';
 import { estimateTokens } from './token-estimator';
 // Real SillyTavern world-info exports used as import fixtures.
 import fuyukiCard from '../../../../example_card/Fate Stay Night - Fuyuki Lorebook(1).json';
@@ -355,66 +362,27 @@ function makeProject(title: string): ProjectWorkspace {
 
 // ---------------------------------------------------------------------------
 // Character-card fixtures (plan 15 §3.6): minimal PNGs crafted in-test with
-// the same recipe as character-card.spec — the spec tree stays binary-free —
-// plus a card JSON wrapping a book, so import equivalence and export
-// preservation pin against deterministic bytes.
+// the shared builders in `src/testing/png-fixtures.ts` — the spec tree stays
+// binary-free — plus a card JSON wrapping a book, so import equivalence and
+// export preservation pin against deterministic bytes.
 // ---------------------------------------------------------------------------
 
 const CARD_NAME = 'Saber Card';
-const PNG_SIGNATURE = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
-
-/** One complete PNG chunk: `[len, type, data, crc]` with a valid CRC. */
-function pngChunk(type: string, data: Uint8Array): Uint8Array {
-  const out = new Uint8Array(12 + data.length);
-  const view = new DataView(out.buffer);
-  view.setUint32(0, data.length, false);
-  for (let i = 0; i < 4; i++) {
-    out[4 + i] = type.charCodeAt(i);
-  }
-  out.set(data, 8);
-  view.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)), false);
-  return out;
-}
-
-function concatBytes(...parts: Uint8Array[]): Uint8Array {
-  const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const part of parts) {
-    out.set(part, at);
-    at += part.byteLength;
-  }
-  return out;
-}
-
-const IHDR_CHUNK = (): Uint8Array => pngChunk('IHDR', new Uint8Array(13));
-const IDAT_CHUNK = (): Uint8Array => pngChunk('IDAT', Uint8Array.of(1, 2, 3, 4));
-const FOREIGN_CHUNK = (): Uint8Array => pngChunk('deBG', Uint8Array.of(0xde, 0xad, 0xbe, 0xef));
-const IEND_CHUNK = (): Uint8Array => pngChunk('IEND', new Uint8Array(0));
-
-/** tEXt data: keyword + NUL + base64 of the card JSON text. */
-function cardTextData(keyword: string, cardJson: string): Uint8Array {
-  const payload = encodeCardPayload(cardJson);
-  const data = new Uint8Array(keyword.length + 1 + payload.length);
-  for (let i = 0; i < keyword.length; i++) {
-    data[i] = keyword.charCodeAt(i);
-  }
-  data[keyword.length] = 0;
-  for (let i = 0; i < payload.length; i++) {
-    data[keyword.length + 1 + i] = payload.charCodeAt(i);
-  }
-  return data;
-}
 
 function cardPngBytes(cardJson: string, options: { dualChunk?: boolean } = {}): Uint8Array {
-  const parts: Uint8Array[] = [PNG_SIGNATURE, IHDR_CHUNK()];
-  // Dual-chunk cards (the real fixture profile) carry an independent V3 card
-  // beside the V2 one — the service must re-embed both or refuse.
-  if (options.dualChunk) {
-    parts.push(pngChunk('tEXt', cardTextData('ccv3', dualCardJson())));
-  }
-  parts.push(pngChunk('tEXt', cardTextData('chara', cardJson)));
-  parts.push(IDAT_CHUNK(), FOREIGN_CHUNK(), IEND_CHUNK());
+  const parts: Uint8Array[] = [
+    PNG_SIGNATURE,
+    pngChunk('IHDR', new Uint8Array(13)),
+    // Dual-chunk cards (the real fixture profile) carry an independent V3 card
+    // beside the V2 one — the service must re-embed both or refuse.
+    ...(options.dualChunk
+      ? [pngChunk('tEXt', textChunkData('ccv3', encodeCardPayload(dualCardJson())))]
+      : []),
+    pngChunk('tEXt', textChunkData('chara', encodeCardPayload(cardJson))),
+    pngChunk('IDAT', Uint8Array.of(1, 2, 3, 4)),
+    pngChunk('deBG', Uint8Array.of(0xde, 0xad, 0xbe, 0xef)),
+    pngChunk('IEND', new Uint8Array(0)),
+  ];
   return concatBytes(...parts);
 }
 
@@ -441,32 +409,6 @@ function dualCardJson(): string {
     spec_version: '3.0',
     data: { name: `${CARD_NAME} V3`, character_book: cardBook() },
   });
-}
-
-/** Spec-local chunk walk for byte-identity assertions (data slices included). */
-interface SpecChunk {
-  readonly type: string;
-  readonly data: Uint8Array;
-}
-
-function walkChunks(bytes: Uint8Array): SpecChunk[] {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const chunks: SpecChunk[] = [];
-  let position = 8;
-  while (position + 12 <= bytes.byteLength) {
-    const length = view.getUint32(position, false);
-    chunks.push({
-      type: String.fromCharCode(
-        view.getUint8(position + 4),
-        view.getUint8(position + 5),
-        view.getUint8(position + 6),
-        view.getUint8(position + 7),
-      ),
-      data: bytes.slice(position + 8, position + 8 + length),
-    });
-    position += 12 + length;
-  }
-  return chunks;
 }
 
 describe('ImportExportService exports', () => {
@@ -1044,8 +986,8 @@ describe('ImportExportService exports', () => {
     expect(capture.fileName).toBe('Saber-Card.png');
 
     const exported = new Uint8Array(await capture.blob.arrayBuffer());
-    const originalChunks = walkChunks(pngBytes);
-    const exportedChunks = walkChunks(exported);
+    const originalChunks = walkSpecPng(pngBytes);
+    const exportedChunks = walkSpecPng(exported);
     // Same chunk layout, same order...
     expect(exportedChunks.map((chunk) => chunk.type)).toEqual(
       originalChunks.map((chunk) => chunk.type),
@@ -1053,8 +995,16 @@ describe('ImportExportService exports', () => {
     // ...every non-card chunk (IHDR, IDATs, the foreign deBG, IEND) byte-identical...
     const originalCardIndex = originalChunks.findIndex((chunk) => chunk.type === 'tEXt');
     assert(originalCardIndex >= 0);
-    expect(exportedChunks.filter((_, i) => i !== originalCardIndex)).toEqual(
-      originalChunks.filter((_, i) => i !== originalCardIndex),
+    // Type + data byte-for-byte (offsets are not pinned: the rewritten card
+    // chunk may change length, shifting every later chunkStart).
+    expect(
+      exportedChunks
+        .filter((_, i) => i !== originalCardIndex)
+        .map(({ type, data }) => ({ type, data })),
+    ).toEqual(
+      originalChunks
+        .filter((_, i) => i !== originalCardIndex)
+        .map(({ type, data }) => ({ type, data })),
     );
     // ...and the one rewritten card chunk carries the edited book.
     const cardChunk = exportedChunks[originalCardIndex];
@@ -1259,7 +1209,12 @@ describe('ImportExportService card imports', () => {
 
   it('reports the approved card reasons for unreadable payloads', () => {
     // Valid PNG without a card chunk.
-    const barePng = concatBytes(PNG_SIGNATURE, IHDR_CHUNK(), IDAT_CHUNK(), IEND_CHUNK());
+    const barePng = concatBytes(
+      PNG_SIGNATURE,
+      pngChunk('IHDR', new Uint8Array(13)),
+      pngChunk('IDAT', Uint8Array.of(1, 2, 3, 4)),
+      pngChunk('IEND', new Uint8Array(0)),
+    );
     const noChunk = service.parseCardImport({ pngBytes: barePng }, 'F');
     assert(noChunk.status === 'card-error');
     expect(noChunk.error.reason).toBe('no-card-chunk');

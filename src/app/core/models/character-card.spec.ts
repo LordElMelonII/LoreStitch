@@ -13,37 +13,21 @@ import {
   type CardError,
 } from './character-card';
 import { ST_POSITION, type CharacterBookEntry } from './lorebook.model';
+import {
+  PNG_SIGNATURE,
+  concatBytes,
+  corruptCrcOf,
+  pngChunk,
+  textChunkData,
+  walkSpecPng,
+} from '../../../testing/png-fixtures';
 
 // ============================================================================
 // In-test PNG crafting (plan 15 §3.6: no binary assets — every fixture is a
-// minimal hand-built PNG whose bytes this spec fully controls).
+// minimal hand-built PNG whose bytes this spec fully controls). The shared
+// chunk/concat/text/walk machinery lives in `src/testing/png-fixtures.ts`;
+// only the card-specific shapes (iTXt/zTXt payloads, trailing bytes) stay here.
 // ============================================================================
-
-/** One complete PNG chunk: `[len, type, data, crc]` with a valid CRC. */
-function chunkOf(type: string, data: Uint8Array): Uint8Array {
-  const out = new Uint8Array(12 + data.length);
-  const view = new DataView(out.buffer);
-  view.setUint32(0, data.length, false);
-  for (let i = 0; i < 4; i++) {
-    view.setUint8(4 + i, type.charCodeAt(i));
-  }
-  out.set(data, 8);
-  view.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)), false);
-  return out;
-}
-
-/** tEXt data: keyword bytes + NUL + Latin-1 payload. */
-function textData(keyword: string, payloadText: string): Uint8Array {
-  const out = new Uint8Array(keyword.length + 1 + payloadText.length);
-  for (let i = 0; i < keyword.length; i++) {
-    out[i] = keyword.charCodeAt(i);
-  }
-  out[keyword.length] = 0;
-  for (let i = 0; i < payloadText.length; i++) {
-    out[keyword.length + 1 + i] = payloadText.charCodeAt(i);
-  }
-  return out;
-}
 
 /** iTXt data: keyword NUL compression-flag compression-method lang NUL translated NUL text. */
 function iTXtData(keyword: string, payloadText: string, compressionFlag: number): Uint8Array {
@@ -84,24 +68,12 @@ function misShapedITXtData(keyword: string, junk: string): Uint8Array {
 
 /** zTXt data: keyword NUL compression-method + fake zlib stream bytes. */
 function zTXtData(keyword: string): Uint8Array {
-  return textData(keyword, '\x78\x9c\x63\x00\x01'); // 0x78 0x9c zlib header + junk
+  return textChunkData(keyword, '\x78\x9c\x63\x00\x01'); // 0x78 0x9c zlib header + junk
 }
 
-/** Concatenates byte arrays. */
-function concat(...parts: Uint8Array[]): Uint8Array {
-  const total = parts.reduce((n, p) => n + p.length, 0);
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const part of parts) {
-    out.set(part, at);
-    at += part.length;
-  }
-  return out;
-}
-
-/** A full PNG: signature + chunks. */
+/** Concatenates a full PNG: signature + chunks. */
 function png(...chunks: Uint8Array[]): Uint8Array {
-  return concat(Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a), ...chunks);
+  return concatBytes(PNG_SIGNATURE, ...chunks);
 }
 
 /** Minimal (never decoded) IHDR data: 1x1, 8-bit RGBA. */
@@ -115,48 +87,11 @@ function ihdrData(): Uint8Array {
   return data;
 }
 
-const IHDR = (): Uint8Array => chunkOf('IHDR', ihdrData());
-const IDAT_A = (): Uint8Array => chunkOf('IDAT', Uint8Array.of(1, 2, 3, 4));
-const IDAT_B = (): Uint8Array => chunkOf('IDAT', Uint8Array.of(5, 6, 7, 8, 9));
-const DE_BG = (): Uint8Array => chunkOf('deBG', Uint8Array.of(0xde, 0xad, 0xbe, 0xef));
-const IEND = (): Uint8Array => chunkOf('IEND', new Uint8Array(0));
+const IHDR = (): Uint8Array => pngChunk('IHDR', ihdrData());
+const IDAT_A = (): Uint8Array => pngChunk('IDAT', Uint8Array.of(1, 2, 3, 4));
+const DE_BG = (): Uint8Array => pngChunk('deBG', Uint8Array.of(0xde, 0xad, 0xbe, 0xef));
+const IEND = (): Uint8Array => pngChunk('IEND', new Uint8Array(0));
 const TRAILING = Uint8Array.of(0xaa, 0xbb, 0xcc); // bytes after IEND
-
-interface SpecChunk {
-  readonly type: string;
-  readonly data: Uint8Array;
-  readonly chunkStart: number;
-}
-
-/** Spec-local chunk walk (offsets included) for byte-identity assertions. */
-function walkSpec(bytes: Uint8Array): SpecChunk[] {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const chunks: SpecChunk[] = [];
-  let position = 8;
-  while (position + 12 <= bytes.byteLength) {
-    const length = view.getUint32(position, false);
-    let type = '';
-    for (let i = 0; i < 4; i++) {
-      type += String.fromCharCode(view.getUint8(position + 4 + i));
-    }
-    chunks.push({ type, data: bytes.slice(position + 8, position + 8 + length), chunkStart: position });
-    if (type === 'IEND') {
-      break;
-    }
-    position += 12 + length;
-  }
-  return chunks;
-}
-
-/** Flips one byte inside a chunk's CRC so the checksum breaks. */
-function corruptCrcOf(bytes: Uint8Array, chunk: SpecChunk): Uint8Array {
-  const corrupted = bytes.slice();
-  const view = new DataView(corrupted.buffer);
-  const dataLength = view.getUint32(chunk.chunkStart, false);
-  const crcLast = chunk.chunkStart + 12 + dataLength - 1;
-  corrupted[crcLast] = (corrupted[crcLast] ?? 0) ^ 0xff;
-  return corrupted;
-}
 
 // ============================================================================
 // Card JSON fixtures
@@ -188,7 +123,12 @@ function v3CardJson(entries: CharacterBookEntry[]): string {
 }
 
 function cardPng(cardText: string): Uint8Array {
-  return png(IHDR(), chunkOf('tEXt', textData('chara', encodeCardPayload(cardText))), IDAT_A(), IEND());
+  return png(
+    IHDR(),
+    pngChunk('tEXt', textChunkData('chara', encodeCardPayload(cardText))),
+    IDAT_A(),
+    IEND(),
+  );
 }
 
 function expectCardError(result: unknown, reason: string): asserts result is CardError {
@@ -224,7 +164,9 @@ describe('character-card', () => {
     });
 
     it('base64DecodeBytes is forgiving on whitespace and missing padding', () => {
-      expect(new TextDecoder().decode(base64DecodeBytes('Q U\tJ\nD') ?? new Uint8Array())).toBe('ABC');
+      expect(new TextDecoder().decode(base64DecodeBytes('Q U\tJ\nD') ?? new Uint8Array())).toBe(
+        'ABC',
+      );
       expect(new TextDecoder().decode(base64DecodeBytes('QUI') ?? new Uint8Array())).toBe('AB');
     });
 
@@ -287,9 +229,9 @@ describe('character-card', () => {
       const v3 = v3CardJson([{ ...ENTRY, content: 'v3 content' }]);
       const bytes = png(
         IHDR(),
-        chunkOf('tEXt', textData('chara', encodeCardPayload(v2))),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(v2))),
         IDAT_A(),
-        chunkOf('tEXt', textData('ccv3', encodeCardPayload(v3))),
+        pngChunk('tEXt', textChunkData('ccv3', encodeCardPayload(v3))),
         IEND(),
       );
       const opened = openCardPng(bytes);
@@ -305,7 +247,13 @@ describe('character-card', () => {
       const booklessSpec = JSON.stringify({
         data: { name: 'Specless', character_book: { name: 'B', extensions: {}, entries: [] } },
       });
-      const opened = openCardPng(png(IHDR(), chunkOf('tEXt', textData('ccv3', encodeCardPayload(booklessSpec))), IEND()));
+      const opened = openCardPng(
+        png(
+          IHDR(),
+          pngChunk('tEXt', textChunkData('ccv3', encodeCardPayload(booklessSpec))),
+          IEND(),
+        ),
+      );
       assert(!('reason' in opened));
       expect(opened.spec).toBe('chara_card_v3');
     });
@@ -315,8 +263,8 @@ describe('character-card', () => {
       const second = v2CardJson([{ ...ENTRY, content: 'second' }]);
       const bytes = png(
         IHDR(),
-        chunkOf('tEXt', textData('chara', encodeCardPayload(first))),
-        chunkOf('tEXt', textData('chara', encodeCardPayload(second))),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(first))),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(second))),
         IEND(),
       );
       const opened = openCardPng(bytes);
@@ -333,7 +281,7 @@ describe('character-card', () => {
 
     it('a card chunk failing its CRC is bad-chunk-crc', () => {
       const bytes = cardPng(v2CardJson([ENTRY]));
-      const cardChunk = walkSpec(bytes)[1];
+      const cardChunk = walkSpecPng(bytes)[1];
       assert(cardChunk);
       const opened = openCardPng(corruptCrcOf(bytes, cardChunk));
       expectCardError(opened, 'bad-chunk-crc');
@@ -342,7 +290,11 @@ describe('character-card', () => {
 
     it('tolerates an uncompressed iTXt card chunk', () => {
       const cardText = v2CardJson([ENTRY]);
-      const bytes = png(IHDR(), chunkOf('iTXt', iTXtData('chara', encodeCardPayload(cardText), 0)), IEND());
+      const bytes = png(
+        IHDR(),
+        pngChunk('iTXt', iTXtData('chara', encodeCardPayload(cardText), 0)),
+        IEND(),
+      );
       const opened = openCardPng(bytes);
       assert(!('reason' in opened));
       expect(opened.cardJson).toBe(cardText);
@@ -350,18 +302,26 @@ describe('character-card', () => {
     });
 
     it('a compressed iTXt card chunk alone names the limitation', () => {
-      const bytes = png(IHDR(), chunkOf('iTXt', iTXtData('chara', encodeCardPayload(v2CardJson([ENTRY])), 1)), IEND());
+      const bytes = png(
+        IHDR(),
+        pngChunk('iTXt', iTXtData('chara', encodeCardPayload(v2CardJson([ENTRY])), 1)),
+        IEND(),
+      );
       expectCardError(openCardPng(bytes), 'compressed-card-chunk');
     });
 
     it('a mis-shaped uncompressed iTXt card chunk is unreadable, never skipped silently', () => {
       // flag = 0 but the language/translated NUL separators are missing.
-      const bytes = png(IHDR(), chunkOf('iTXt', misShapedITXtData('chara', 'no-nuls-here')), IEND());
+      const bytes = png(
+        IHDR(),
+        pngChunk('iTXt', misShapedITXtData('chara', 'no-nuls-here')),
+        IEND(),
+      );
       expectCardError(openCardPng(bytes), 'compressed-card-chunk');
     });
 
     it('a zTXt card chunk alone names the zTXt limitation', () => {
-      const bytes = png(IHDR(), chunkOf('zTXt', zTXtData('chara')), IEND());
+      const bytes = png(IHDR(), pngChunk('zTXt', zTXtData('chara')), IEND());
       expectCardError(openCardPng(bytes), 'compressed-card-chunk');
     });
 
@@ -369,8 +329,8 @@ describe('character-card', () => {
       const v3 = v3CardJson([ENTRY]);
       const bytes = png(
         IHDR(),
-        chunkOf('zTXt', zTXtData('chara')),
-        chunkOf('tEXt', textData('ccv3', encodeCardPayload(v3))),
+        pngChunk('zTXt', zTXtData('chara')),
+        pngChunk('tEXt', textChunkData('ccv3', encodeCardPayload(v3))),
         IEND(),
       );
       const opened = openCardPng(bytes);
@@ -387,8 +347,8 @@ describe('character-card', () => {
       const v2 = v2CardJson([ENTRY]);
       const bytes = png(
         IHDR(),
-        chunkOf('tEXt', textData('ccv3', '!!!not base64!!!')),
-        chunkOf('tEXt', textData('chara', encodeCardPayload(v2))),
+        pngChunk('tEXt', textChunkData('ccv3', '!!!not base64!!!')),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(v2))),
         IEND(),
       );
       const opened = openCardPng(bytes);
@@ -400,17 +360,18 @@ describe('character-card', () => {
     });
 
     it('corrupt preferred with no readable fallback returns the preferred error', () => {
-      const bytes = png(IHDR(), chunkOf('tEXt', textData('ccv3', '!!!')), IEND());
-      expectCardError(openCardPng(bytes), 'bad-base64');
-      expect((openCardPng(bytes) as CardError).keyword).toBe('ccv3');
+      const bytes = png(IHDR(), pngChunk('tEXt', textChunkData('ccv3', '!!!')), IEND());
+      const error = openCardPng(bytes);
+      expectCardError(error, 'bad-base64');
+      expect(error.keyword).toBe('ccv3');
     });
 
     it('both card chunks unreadable returns the preferred spec error', () => {
       const notJson = encodeCardPayload('not json at all');
       const bytes = png(
         IHDR(),
-        chunkOf('tEXt', textData('ccv3', '!!!')),
-        chunkOf('tEXt', textData('chara', notJson)),
+        pngChunk('tEXt', textChunkData('ccv3', '!!!')),
+        pngChunk('tEXt', textChunkData('chara', notJson)),
         IEND(),
       );
       expectCardError(openCardPng(bytes), 'bad-base64');
@@ -419,16 +380,20 @@ describe('character-card', () => {
     it('a non-base64 Latin-1 payload byte is respected and rejected, not munged', () => {
       // 0xC3 0xA9 (é in UTF-8) inside the base64 text is invalid base64 — the
       // tEXt Latin-1 boundary keeps the bytes as-is and the decoder refuses.
-      const bytes = png(IHDR(), chunkOf('tEXt', textData('chara', '\xc3\xa9bad')), IEND());
+      const bytes = png(IHDR(), pngChunk('tEXt', textChunkData('chara', '\xc3\xa9bad')), IEND());
       expectCardError(openCardPng(bytes), 'bad-base64');
     });
 
     it('a card payload that is not JSON is card-json-invalid', () => {
-      const bytes = png(IHDR(), chunkOf('tEXt', textData('chara', encodeCardPayload('plain text'))), IEND());
+      const bytes = png(
+        IHDR(),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload('plain text'))),
+        IEND(),
+      );
       expectCardError(openCardPng(bytes), 'card-json-invalid');
       // A payload whose decode flushes exactly on a 4096-code-unit boundary.
       const boundary = encodeCardPayload('a'.repeat(4096));
-      const boundaryBytes = png(IHDR(), chunkOf('tEXt', textData('chara', boundary)), IEND());
+      const boundaryBytes = png(IHDR(), pngChunk('tEXt', textChunkData('chara', boundary)), IEND());
       expectCardError(openCardPng(boundaryBytes), 'card-json-invalid');
     });
 
@@ -445,7 +410,14 @@ describe('character-card', () => {
         [0x22, 0xf0],
       ];
       for (const shape of shapes) {
-        const bytes = png(IHDR(), chunkOf('tEXt', textData('chara', base64EncodeBytes(Uint8Array.from(shape, (b) => b)))), IEND());
+        const bytes = png(
+          IHDR(),
+          pngChunk(
+            'tEXt',
+            textChunkData('chara', base64EncodeBytes(Uint8Array.from(shape, (b) => b))),
+          ),
+          IEND(),
+        );
         expectCardError(openCardPng(bytes), 'card-json-invalid');
       }
     });
@@ -464,7 +436,11 @@ describe('character-card', () => {
     });
 
     it('a PNG cut mid-chunk after the card chunk opens with a truncation warning', () => {
-      const full = png(IHDR(), chunkOf('tEXt', textData('chara', encodeCardPayload(v2CardJson([ENTRY])))), IEND());
+      const full = png(
+        IHDR(),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(v2CardJson([ENTRY])))),
+        IEND(),
+      );
       const truncated = full.slice(0, full.length - 12); // IEND cut off
       const opened = openCardPng(truncated);
       assert(!('reason' in opened));
@@ -483,7 +459,7 @@ describe('character-card', () => {
     it('a PNG whose final chunk header is complete but data is cut is no-card-chunk', () => {
       // Signature + [len=100]["IDAT"] + 4 junk bytes: the header reads fine,
       // the data does not exist — the walk ends truncated, nothing throws.
-      const bytes = concat(
+      const bytes = concatBytes(
         Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a),
         Uint8Array.of(0, 0, 0, 100),
         Uint8Array.from('IDAT', (c) => c.charCodeAt(0)),
@@ -493,7 +469,14 @@ describe('character-card', () => {
     });
 
     it('a tEXt chunk without a keyword NUL is opaque (never a card chunk)', () => {
-      const bytes = png(IHDR(), chunkOf('tEXt', Uint8Array.from('justtext', (c) => c.charCodeAt(0))), IEND());
+      const bytes = png(
+        IHDR(),
+        pngChunk(
+          'tEXt',
+          Uint8Array.from('justtext', (c) => c.charCodeAt(0)),
+        ),
+        IEND(),
+      );
       expectCardError(openCardPng(bytes), 'no-card-chunk');
     });
 
@@ -501,8 +484,8 @@ describe('character-card', () => {
       const cardText = v2CardJson([ENTRY]);
       const bytes = png(
         IHDR(),
-        chunkOf('tEXt', textData('comment', 'hello\x00world')),
-        chunkOf('tEXt', textData('chara', encodeCardPayload(cardText))),
+        pngChunk('tEXt', textChunkData('comment', 'hello\x00world')),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(cardText))),
         IEND(),
       );
       const opened = openCardPng(bytes);
@@ -534,9 +517,14 @@ describe('character-card', () => {
     });
 
     it('a book-less V2/V3 card is card-without-book', () => {
-      expectCardError(openCardJson(JSON.stringify({ spec: 'chara_card_v2', data: { name: 'N' } })), 'card-without-book');
       expectCardError(
-        openCardJson(JSON.stringify({ spec: 'chara_card_v3', data: { name: 'N', character_book: null } })),
+        openCardJson(JSON.stringify({ spec: 'chara_card_v2', data: { name: 'N' } })),
+        'card-without-book',
+      );
+      expectCardError(
+        openCardJson(
+          JSON.stringify({ spec: 'chara_card_v3', data: { name: 'N', character_book: null } }),
+        ),
         'card-without-book',
       );
     });
@@ -557,7 +545,11 @@ describe('character-card', () => {
       const text = JSON.stringify({
         zzz_unknown_top: { keep: true },
         spec: 'chara_card_v3',
-        data: { name: 'N', character_book: { extensions: {}, entries: [] }, aaa_vendor_extra: [1, 2, 3] },
+        data: {
+          name: 'N',
+          character_book: { extensions: {}, entries: [] },
+          aaa_vendor_extra: [1, 2, 3],
+        },
       });
       const opened = openCardJson(text);
       assert(!('reason' in opened));
@@ -572,7 +564,11 @@ describe('character-card', () => {
     it('swaps only data.character_book, keeping unknown fields and key order', () => {
       const text = JSON.stringify({
         spec: 'chara_card_v2',
-        data: { name: 'N', character_book: { extensions: {}, entries: [] }, vendor_extra: { a: 1 } },
+        data: {
+          name: 'N',
+          character_book: { extensions: {}, entries: [] },
+          vendor_extra: { a: 1 },
+        },
       });
       const updatedBook: Parameters<typeof embedBookIntoCardJson>[1] = {
         name: 'Edited',
@@ -591,7 +587,12 @@ describe('character-card', () => {
       expect(book['name']).toBe('Edited');
       // The swapped book carries the toSpecCompliantBook conversion fields.
       expect(book['entries']).toEqual([
-        { ...ENTRY, content: 'edited', position: 'before_char', extensions: { position: ST_POSITION.before } },
+        {
+          ...ENTRY,
+          content: 'edited',
+          position: 'before_char',
+          extensions: { position: ST_POSITION.before },
+        },
       ]);
     });
 
@@ -603,10 +604,9 @@ describe('character-card', () => {
       };
       const embedded = embedBookIntoCardJson(text, book);
       assert(typeof embedded === 'string');
-      const entry = (
-        (JSON.parse(embedded) as { data: { character_book: { entries: Record<string, unknown>[] } } }).data
-          .character_book.entries[0] ?? {}
-      ) as Record<string, unknown>;
+      const entry = ((
+        JSON.parse(embedded) as { data: { character_book: { entries: Record<string, unknown>[] } } }
+      ).data.character_book.entries[0] ?? {}) as Record<string, unknown>;
       // Spec position collapses; the true ST position mirrors in extensions.
       expect(entry['position']).toBe('after_char');
       expect(entry['extensions']).toEqual({ position: ST_POSITION.atDepth, vendor: true });
@@ -623,9 +623,8 @@ describe('character-card', () => {
       });
       assert(typeof embedded === 'string');
       const entries = (
-        (JSON.parse(embedded) as { data: { character_book: { entries: Record<string, unknown>[] } } }).data
-          .character_book.entries
-      ).map((entry) => 'id' in entry);
+        JSON.parse(embedded) as { data: { character_book: { entries: Record<string, unknown>[] } } }
+      ).data.character_book.entries.map((entry) => 'id' in entry);
       expect(entries).toEqual([false, true]);
     });
 
@@ -654,7 +653,9 @@ describe('character-card', () => {
         book,
       );
       assert(!('reason' in payloads));
-      const fresh = JSON.parse(payloads['ccv3'] ?? '') as { data: { character_book: { entries: { content: string }[] } } };
+      const fresh = JSON.parse(payloads['ccv3'] ?? '') as {
+        data: { character_book: { entries: { content: string }[] } };
+      };
       expect(fresh.data.character_book.entries[0]?.content).toBe('fresh');
       expect(payloads['chara']).toBeTypeOf('string');
       expect(JSON.parse(payloads['chara'] ?? '')).toMatchObject({ spec: 'chara_card_v2' });
@@ -680,19 +681,28 @@ describe('character-card', () => {
 
   describe('embedCardPayloads', () => {
     it('refuses non-PNG bytes', () => {
-      expectCardError(embedCardPayloads(Uint8Array.of(1, 2, 3), { chara: v2CardJson([ENTRY]) }), 'not-a-png');
+      expectCardError(
+        embedCardPayloads(Uint8Array.of(1, 2, 3), { chara: v2CardJson([ENTRY]) }),
+        'not-a-png',
+      );
     });
 
     it('replaces in place — longer payload, every other chunk byte-identical', () => {
       const cardText = v2CardJson([ENTRY]);
-      const bytes = png(IHDR(), chunkOf('tEXt', textData('chara', encodeCardPayload(cardText))), IDAT_A(), DE_BG(), IEND());
+      const bytes = png(
+        IHDR(),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(cardText))),
+        IDAT_A(),
+        DE_BG(),
+        IEND(),
+      );
       const longer = v2CardJson([{ ...ENTRY, content: 'x'.repeat(500) }]);
       const embedded = embedCardPayloads(bytes, { chara: longer });
       assert(!('reason' in embedded));
       expect(embedded.byteLength).toBeGreaterThan(bytes.byteLength);
       // Only chunk index 1 (the card chunk) may differ; all others byte-equal.
-      const before = walkSpec(bytes);
-      const after = walkSpec(embedded);
+      const before = walkSpecPng(bytes);
+      const after = walkSpecPng(embedded);
       expect(after.length).toBe(before.length);
       for (let i = 0; i < before.length; i++) {
         const original = before[i];
@@ -704,7 +714,9 @@ describe('character-card', () => {
           const view = new DataView(embedded.buffer, embedded.byteOffset, embedded.byteLength);
           const length = view.getUint32(now.chunkStart, false);
           expect(length).toBe(now.data.length);
-          expect(view.getUint32(now.chunkStart + 8 + length, false)).toBe(crc32(embedded.subarray(now.chunkStart + 4, now.chunkStart + 8 + length)));
+          expect(view.getUint32(now.chunkStart + 8 + length, false)).toBe(
+            crc32(embedded.subarray(now.chunkStart + 4, now.chunkStart + 8 + length)),
+          );
         } else {
           expect(now.type).toBe(original.type);
           expect([...now.data]).toEqual([...original.data]);
@@ -718,13 +730,20 @@ describe('character-card', () => {
 
     it('replaces in place — shorter payload shifts the tail byte-identically', () => {
       const long = v2CardJson([{ ...ENTRY, content: 'x'.repeat(500) }]);
-      const bytes = png(IHDR(), chunkOf('tEXt', textData('chara', encodeCardPayload(long))), IDAT_A(), DE_BG(), IEND(), TRAILING);
+      const bytes = png(
+        IHDR(),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(long))),
+        IDAT_A(),
+        DE_BG(),
+        IEND(),
+        TRAILING,
+      );
       const short = v2CardJson([{ ...ENTRY, content: 'y'.repeat(50) }]);
       const embedded = embedCardPayloads(bytes, { chara: short });
       assert(!('reason' in embedded));
       expect(embedded.byteLength).toBeLessThan(bytes.byteLength);
-      const before = walkSpec(bytes);
-      const after = walkSpec(embedded);
+      const before = walkSpecPng(bytes);
+      const after = walkSpecPng(embedded);
       expect(after.length).toBe(before.length);
       for (let i = 0; i < before.length; i++) {
         const original = before[i];
@@ -743,7 +762,13 @@ describe('character-card', () => {
 
     it('embedding the exact original payload reproduces the PNG byte-for-byte', () => {
       const cardText = v2CardJson([ENTRY]);
-      const bytes = png(IHDR(), chunkOf('tEXt', textData('chara', encodeCardPayload(cardText))), IDAT_A(), IEND(), TRAILING);
+      const bytes = png(
+        IHDR(),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(cardText))),
+        IDAT_A(),
+        IEND(),
+        TRAILING,
+      );
       const embedded = embedCardPayloads(bytes, { chara: cardText });
       assert(!('reason' in embedded));
       expect([...embedded]).toEqual([...bytes]);
@@ -753,14 +778,14 @@ describe('character-card', () => {
       const bytes = png(IHDR(), IDAT_A(), IEND(), TRAILING);
       const embedded = embedCardPayloads(bytes, { chara: v2CardJson([ENTRY]) });
       assert(!('reason' in embedded));
-      const after = walkSpec(embedded);
+      const after = walkSpecPng(embedded);
       expect(after.map((c) => c.type)).toEqual(['IHDR', 'IDAT', 'tEXt', 'IEND']);
       // The insert sits directly before IEND; all other bytes are untouched.
-      expect([...after[2]?.data ?? new Uint8Array()]).toEqual([
-        ...textData('chara', encodeCardPayload(v2CardJson([ENTRY]))),
+      expect([...(after[2]?.data ?? new Uint8Array())]).toEqual([
+        ...textChunkData('chara', encodeCardPayload(v2CardJson([ENTRY]))),
       ]);
-      expect([...after[0]?.data ?? new Uint8Array()]).toEqual([...ihdrData()]);
-      expect([...after[1]?.data ?? new Uint8Array()]).toEqual([...(IDAT_A().slice(8, -4))]);
+      expect([...(after[0]?.data ?? new Uint8Array())]).toEqual([...ihdrData()]);
+      expect([...(after[1]?.data ?? new Uint8Array())]).toEqual([...IDAT_A().slice(8, -4)]);
       expect([...embedded.slice((after[3]?.chunkStart ?? 0) + 12)]).toEqual([...TRAILING]);
     });
 
@@ -771,7 +796,7 @@ describe('character-card', () => {
         chara: v2CardJson([ENTRY]),
       });
       assert(!('reason' in embedded));
-      expect(walkSpec(embedded).map((c) => c.type)).toEqual(['IHDR', 'tEXt', 'tEXt', 'IEND']);
+      expect(walkSpecPng(embedded).map((c) => c.type)).toEqual(['IHDR', 'tEXt', 'tEXt', 'IEND']);
       const reopened = openCardPng(embedded);
       assert(!('reason' in reopened));
       expect(reopened.pngKeyword).toBe('ccv3');
@@ -803,7 +828,7 @@ describe('character-card', () => {
       const bytes = cardPng(v2CardJson([ENTRY]));
       const error = embedCardPayloads(bytes, { ccv3: v3CardJson([ENTRY]) });
       expectCardError(error, 'stale-card-chunk');
-      expect((error as CardError).keyword).toBe('chara');
+      expect(error.keyword).toBe('chara');
     });
 
     it('inserting into a truncated PNG (no IEND) is no-iend-chunk', () => {
@@ -815,8 +840,14 @@ describe('character-card', () => {
     it('replacing (without insert) still works on a truncated shell', () => {
       const cardText = v2CardJson([ENTRY]);
       // Cut off exactly the IEND chunk: the card chunk stays fully intact.
-      const bytes = png(IHDR(), chunkOf('tEXt', textData('chara', encodeCardPayload(cardText))), IEND()).slice(0, -12);
-      const embedded = embedCardPayloads(bytes, { chara: v2CardJson([{ ...ENTRY, content: 'new' }]) });
+      const bytes = png(
+        IHDR(),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(cardText))),
+        IEND(),
+      ).slice(0, -12);
+      const embedded = embedCardPayloads(bytes, {
+        chara: v2CardJson([{ ...ENTRY, content: 'new' }]),
+      });
       assert(!('reason' in embedded));
       const reopened = openCardPng(embedded);
       assert(!('reason' in reopened));
@@ -831,7 +862,12 @@ describe('character-card', () => {
           content: 'x'.repeat(200_000) + '日本語のロアブック'.repeat(40_000) + '😀'.repeat(5_000),
         },
       ]);
-      const bytes = png(IHDR(), chunkOf('tEXt', textData('chara', encodeCardPayload(oversized))), IDAT_A(), IEND());
+      const bytes = png(
+        IHDR(),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(oversized))),
+        IDAT_A(),
+        IEND(),
+      );
       assert(bytes.byteLength > 400_000);
       const embedded = embedCardPayloads(bytes, { chara: oversized });
       assert(!('reason' in embedded));
@@ -839,9 +875,10 @@ describe('character-card', () => {
       assert(!('reason' in reopened));
       expect(reopened.cardJson).toBe(oversized);
       const entries = (
-        (JSON.parse(reopened.cardJson) as { data: { character_book: { entries: { content: string }[] } } }).data
-          .character_book.entries
-      );
+        JSON.parse(reopened.cardJson) as {
+          data: { character_book: { entries: { content: string }[] } };
+        }
+      ).data.character_book.entries;
       expect(entries[0]?.content).toBe(
         'x'.repeat(200_000) + '日本語のロアブック'.repeat(40_000) + '😀'.repeat(5_000),
       );
@@ -852,9 +889,9 @@ describe('character-card', () => {
       const v3 = v3CardJson([{ ...ENTRY, content: 'old v3' }]);
       const bytes = png(
         IHDR(),
-        chunkOf('tEXt', textData('chara', encodeCardPayload(v2))),
+        pngChunk('tEXt', textChunkData('chara', encodeCardPayload(v2))),
         IDAT_A(),
-        chunkOf('tEXt', textData('ccv3', encodeCardPayload(v3))),
+        pngChunk('tEXt', textChunkData('ccv3', encodeCardPayload(v3))),
         DE_BG(),
         IEND(),
         TRAILING,
@@ -873,8 +910,8 @@ describe('character-card', () => {
       const embedded = embedCardPayloads(bytes, payloads);
       assert(!('reason' in embedded));
 
-      const before = walkSpec(bytes);
-      const after = walkSpec(embedded);
+      const before = walkSpecPng(bytes);
+      const after = walkSpecPng(embedded);
       expect(after.length).toBe(before.length);
       for (let i = 0; i < before.length; i++) {
         const original = before[i];
@@ -886,13 +923,17 @@ describe('character-card', () => {
           expect([...now.data]).toEqual([...original.data]); // IHDR, IDAT, deBG, IEND
         }
       }
-      expect([...embedded.slice((after[after.length - 1]?.chunkStart ?? 0) + 12)]).toEqual([...TRAILING]);
+      expect([...embedded.slice((after[after.length - 1]?.chunkStart ?? 0) + 12)]).toEqual([
+        ...TRAILING,
+      ]);
 
       const reopened = openCardPng(embedded);
       assert(!('reason' in reopened));
       expect(reopened.cardJson).toBe(payloads['ccv3']);
       expect(reopened.extraCardJson).toEqual({ chara: payloads['chara'] });
-      const fresh = JSON.parse(reopened.cardJson) as { data: { character_book: { entries: { content: string }[] } } };
+      const fresh = JSON.parse(reopened.cardJson) as {
+        data: { character_book: { entries: { content: string }[] } };
+      };
       expect(fresh.data.character_book.entries[0]?.content).toBe('edited everywhere');
     });
   });

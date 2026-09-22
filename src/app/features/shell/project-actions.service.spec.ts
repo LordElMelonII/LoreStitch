@@ -4,8 +4,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import { ImportExportService } from '../../core/services/import-export.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
-import { crc32, encodeCardPayload } from '../../core/models/character-card';
+import { encodeCardPayload } from '../../core/models/character-card';
 import { type CharacterBook } from '../../core/models/lorebook.model';
+import { PNG_SIGNATURE, concatBytes, pngChunk, textChunkData } from '../../../testing/png-fixtures';
 import { LayoutService } from '../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
 import { MergeResolverDialog } from '../merge-resolver/merge-resolver-dialog';
@@ -53,45 +54,16 @@ function jsonFile(name: string, data: unknown): File {
 // ---------------------------------------------------------------------------
 
 const CARD_NAME = 'Saber Card';
-const PNG_SIGNATURE = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
 
-function pngChunk(type: string, data: Uint8Array): Uint8Array {
-  const out = new Uint8Array(12 + data.length);
-  const view = new DataView(out.buffer);
-  view.setUint32(0, data.length, false);
-  for (let i = 0; i < 4; i++) {
-    out[4 + i] = type.charCodeAt(i);
-  }
-  out.set(data, 8);
-  view.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)), false);
-  return out;
-}
-
+/** A single-chunk card PNG (the shared builders from `src/testing/png-fixtures.ts`). */
 function cardPngBytes(cardJson: string): Uint8Array {
-  const payload = encodeCardPayload(cardJson);
-  const textData = new Uint8Array('chara'.length + 1 + payload.length);
-  for (let i = 0; i < 'chara'.length; i++) {
-    textData[i] = 'chara'.charCodeAt(i);
-  }
-  textData['chara'.length] = 0;
-  for (let i = 0; i < payload.length; i++) {
-    textData['chara'.length + 1 + i] = payload.charCodeAt(i);
-  }
-  const parts = [
+  return concatBytes(
     PNG_SIGNATURE,
     pngChunk('IHDR', new Uint8Array(13)),
-    pngChunk('tEXt', textData),
+    pngChunk('tEXt', textChunkData('chara', encodeCardPayload(cardJson))),
     pngChunk('IDAT', Uint8Array.of(1, 2, 3, 4)),
     pngChunk('IEND', new Uint8Array(0)),
-  ];
-  const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const part of parts) {
-    out.set(part, at);
-    at += part.byteLength;
-  }
-  return out;
+  );
 }
 
 function cardBook(): CharacterBook {
@@ -687,21 +659,12 @@ describe('ProjectActionsService', () => {
   });
 
   it('snacks the approved reason when the PNG carries no card chunk', async () => {
-    const barePng = (() => {
-      const parts = [
-        PNG_SIGNATURE,
-        pngChunk('IHDR', new Uint8Array(13)),
-        pngChunk('IDAT', Uint8Array.of(1)),
-        pngChunk('IEND', new Uint8Array(0)),
-      ];
-      const out = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0));
-      let at = 0;
-      for (const part of parts) {
-        out.set(part, at);
-        at += part.byteLength;
-      }
-      return out;
-    })();
+    const barePng = concatBytes(
+      PNG_SIGNATURE,
+      pngChunk('IHDR', new Uint8Array(13)),
+      pngChunk('IDAT', Uint8Array.of(1)),
+      pngChunk('IEND', new Uint8Array(0)),
+    );
     stubFilePicker(pngFile('plain.png', barePng));
 
     await actions.importReplaceFromPicker();
