@@ -2,6 +2,8 @@
 
 LoreStitch is an Angular editor and version control manager for SillyTavern lorebooks and World Info cards.
 
+Directory map: `src/app/core` (models + services, UI-framework-free) · `src/app/features` (per-feature components) · `src/app/shared` (cross-feature components/services) · `src/testing` (shared unit fixtures) · `e2e/` (Playwright specs + `helpers.ts`) · `next_tasks/` (planning + archive) — each directory ships its own README.
+
 ## Operating Principles
 
 - **Route Before Acting**: Inspect your assigned task and read the corresponding persona guide in `.zcode/agents/` before modifying code.
@@ -10,7 +12,7 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
   - No `::ng-deep` or legacy CSS overrides.
   - Angular 22 reactivity: use Signals (`signal()`, `computed()`, `input()`, `output()`) over RxJS state.
   - Dual-container panes (dialog on tablet/desktop, bottom sheet on phones) open only through `ResponsiveOverlayService.openResponsive` (`src/app/shared/services/responsive-overlay.service.ts`); viewport branching never appears at call sites.
-- **Module Naming**: injectable classes get the `.service.ts` suffix + `@Service()` decorator; pure framework-free analysis code lands as bare-name modules with no decorator, even under `core/services/` (`sha256.ts`, `token-estimator.ts`, `linter.ts` precedent).
+- **Module Naming**: injectable classes get the `.service.ts` suffix + `@Service()` decorator; pure framework-free analysis code lands as bare-name modules with no decorator, even under `core/services/` (`sha256.ts`, `token-estimator.ts`, `linter.ts` precedent). App-domain model types (`ProjectWorkspace`, `ProjectCommit`, `LintPrefs`) live in `core/models/project.model.ts`; `lorebook.model.ts` is the SillyTavern vendor contract only — new app-side model code goes to the former, never the vendor file.
 - **Workspace Mutations Go Through Service Mutators**: components write project/workspace state only via narrow typed public mutators on `WorkspaceService` (they route through the private `mutateProject` chokepoint → immutable replace → debounced IndexedDB save); never `activeProject.set` from features — a direct write skips persistence.
 - **Pipeline Order**: implementation agents first (`core-engine` → `ui-specialist`), then `ts-reviewer` (typing/lint review) **before** `qa-auditor`; `qa-auditor`'s pre-handoff checklist is the final verification gate.
 - **Gate Failures Fix Forward**: a red gate means the responsible subagent fixes and re-runs its own phase; the pipeline never advances on a red gate. After two consecutive failed fix attempts, stop and escalate to the user with the failing output.
@@ -31,6 +33,7 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 
 ## Standard Verification Commands
 
+- Dev server: `npm start`
 - Build check: `npm run build`
 - Unit test suite: `npm test`
 - Code coverage: `ng test --coverage`
@@ -39,6 +42,9 @@ LoreStitch is an Angular editor and version control manager for SillyTavern lore
 - Linting: `npm run lint`
 
 ## Environment & Session Notes
+
+- Node `^22.22.3`, `^24.15.0`, or `>=26.0.0` (Angular 22 requirement).
+- Angular 22 runs this app zoneless and OnPush is the framework default (`@angular/core` `ChangeDetectionStrategy` docs: "OnPush is enabled by default"; `Default` is a deprecated alias of `Eager`) — never add explicit `changeDetection: OnPush` annotations; wanting the old check-always behavior would mean `Eager`.
 
 - One-shot unit run: `CI=true npm test -- --watch=false` (plain `npm test` may watch); add `--coverage` for the coverage run.
 - Dev-server ports: `npm start` serves on **4321** (pinned in `angular.json` → `projects.lore-stitch.architect.serve.options.port`); Playwright boots its own dev server on **4301** (`playwright.config.ts` `webServer`). Neither uses Angular's default 4200.
