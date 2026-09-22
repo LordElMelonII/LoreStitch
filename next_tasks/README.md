@@ -1,15 +1,60 @@
 # Next Tasks — Planning
 
-Planning documents for the remaining MEDIUM PRIORITY items in `ROADMAP.md`
-(plus urgent fixes routed here). **Planning only — no implementation.**
+Planning documents for the remaining `ROADMAP.md` backlog (the LOW PRIORITY
+items + quality-gate gaps routed here, since the MEDIUM batch closed with tasks
+01–08; plus urgent fixes). **Planning only — no implementation.**
 Completed plans live in [archive/](./archive/).
 
 ## Pending
 
-None — the 2026-09-20 bug-report batch (06–08) is implemented and ff-merged
-to `develop` (07 on 2026-09-21, 06 + 08 on 2026-09-21 with the user's merge
-go-ahead); see [archive/README.md](./archive/README.md) for the landing
-table.
+Grounded at `develop` @ `ddc9f04` (2026-09-22 roadmap evaluation; see the
+evaluation notes below).
+
+| # | Plan | Scope | Status |
+|---|------|-------|--------|
+| 09 | [09-export-pre-flight-validation.md](./09-export-pre-flight-validation.md) | Enforce the ROADMAP critical gate "pre-flight schema validation must run before file export" — validate-and-block on the export path (duplicate/non-numeric entry ids are the reachable hole today) | ✅ Ready to dispatch |
+| 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
+| 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
+
+### Queue (sketched during evaluation; planned when their turn comes)
+
+- **12 — Single Linear Workspace Undo/Redo**: one workspace-global stack for
+  macro actions (add, delete, bulk update); micro text edits stay on native
+  `<textarea>` undo. Design direction from the evaluation: record at the
+  `mutateProject` chokepoint as entry-level before/after diffs (never
+  whole-book clones); commits and rollbacks are **barriers that clear the
+  stack** (per-entry stacks desyncing from global VCS commits is the
+  roadmap's stated failure mode); `updateEntry` stays unrecorded (it is the
+  per-keystroke path). Wants task 10 first for the `Mod+Z`/`Mod+Shift+Z`
+  chords.
+- **13 — Pinned Reference Drawer**: collapsible right-hand inspector pinning
+  any entry read-only while editing the primary one. Not a third
+  `mat-sidenav` (the container hosts one end drawer and history holds it) —
+  an in-editor rail under `entry-editor/` + shell affordance, phone behavior
+  through the dual-container pattern. Visual feature ⇒ design-evidence
+  checkpoint + screenshot baseline.
+- **14 — Starter Presets & Templates**: preset picker in
+  `new-project-dialog.ts` seeding template entries (character / location /
+  faction) with default prompt delimiters and structure through
+  `WorkspaceService.createProject`. Visual feature ⇒ checkpoint + screenshots.
+
+Urgent bug reports still preempt this queue (intake convention below).
+
+## Evaluation notes (2026-09-22)
+
+- **Quality gates**: format compatibility and automated round-trip verification
+  are mechanically enforced (`toSpecCompliantBook`, the import guards,
+  `e2e/round-trip.spec.ts` + `src/app/core/models/lorebook.roundtrip.spec.ts`
+  over the `example_card/` reference books). The **pre-flight export
+  validation** bullet was the one unenforced gate — routed as task 09.
+- **Recommended order** differs from the ROADMAP listing: gate enforcement and
+  the friction/data-loss fixes (09–11) go before the architectural undo stack
+  (12) and the two visual features (13–14), which carry design checkpoints and
+  screenshot baselines. The queue is reorderable on request.
+- **ROADMAP.md structure fix**: the "Single Linear Workspace Undo/Redo" item
+  had lost its heading level — its Why/What/Where were nested inside the
+  keyboard-navigation bullet list (the undo rationale read as a third "Why"
+  for shortcuts). Restored as its own item in `ROADMAP.md`.
 
 ## Shared Conventions (apply to every task)
 
