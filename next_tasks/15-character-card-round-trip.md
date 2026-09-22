@@ -41,17 +41,17 @@ Card = PNG (`tEXt` chunk `chara`, base64 V2 JSON, or `ccv3`, base64 V3 JSON)
 `data.character_book`). Both are first-class in this task; PNG is the hard
 part, JSON is wiring.
 
-## 2. Gap analysis (develop @ `8d85720` + review branch)
+## 2. Gap analysis (grounded develop @ `8d85720` + review branch; re-grounded @ `e9b2ca1` 2026-09-22 — rows below refreshed; project-actions service/constants live in `features/shell/`; no card code exists in src/; fixtures present: `example_card.png` 1.44 MB, `example_card.json` 266 KB)
 
 Import is JSON-and-book-only by construction; the card layer does not exist:
 
 | Surface | Today | Evidence |
 |---|---|---|
-| File reading | `readFileText` — *"imports are JSON only"*; `JSON.parse(await file.text())` | `import-export.service.ts:63-66`, `project-actions.service.ts:145` |
-| Import detection | `parseImport` sniffs exactly `character_book` / `stproj` / `sillytavern_native`; a card JSON falls into no branch (its `data.character_book` is invisible) | `import-export.service.ts:76-133` |
-| File picker | `IMPORT_ACCEPT = '.json,.stproj,application/json'` — `.png` unreachable | `project-actions.constants.ts:2` |
+| File reading | `readFileText` — *"imports are JSON only"*; `JSON.parse(await file.text())` at the call site | `import-export.service.ts:65-68`, `features/shell/project-actions.service.ts:145` |
+| Import detection | `parseImport` sniffs exactly `character_book` / `stproj` / `sillytavern_native` via `detectLoreFileFormat` (`lorebook.model.ts:767-792`; its doc there still states "Character cards are intentionally not recognized (card support was removed)" — corrected when the wiring lands); a card JSON falls into no branch (its `data.character_book` is invisible) | `import-export.service.ts:78-132` |
+| File picker | `IMPORT_ACCEPT = '.json,.stproj,application/json'` — `.png` unreachable | `features/shell/project-actions.constants.ts:2-3` |
 | PNG handling | zero occurrences of `tEXt` / `chara` / `ccv3` / base64 card decoding anywhere in `src/` (2026-09-22 app-review audit) | — |
-| Model hint | `targetType: 'tavern_card_v2'` exists as an enum value but nothing parses or produces a card | `lorebook.model.ts:168` |
+| Model hint | legacy card residue survives the model split: `ProjectWorkspace.targetType: 'tavern_card_v2'` + `rawCardData?` and a legacy `TavernCardV2` interface exist, but nothing parses or produces a card; doc comments at `lorebook.model.ts:16-18` say card support was removed | `project.model.ts:59,61`, `lorebook.model.ts:20-40` |
 | Fixtures | `example_card/` holds JSON books only; no card PNG or card JSON fixture | — |
 
 Round-trip suites stay green today because they never see a card — the hole is
@@ -96,7 +96,7 @@ export function embedBookInPng(pngBytes: Uint8Array, cardJson: string, keyword: 
 `CardError` is a discriminated result (`reason: 'not-a-png' | 'no-card-chunk' |
 'bad-chunk-crc' | 'card-without-book' | …` with a humanized message) — never a
 throw on the import path (import-failure snackbar precedent,
-`project-actions.service.ts:152-157`).
+`project-actions.service.ts:150-156` (features/shell).
 
 Rules:
 
@@ -110,10 +110,10 @@ Rules:
   order (`JSON.parse` → `JSON.stringify` preserves insertion order).
 - **Book conversion**: the extracted raw book goes through the existing
   import pipeline (`isCharacterBook` → `normalizeImportedBook`,
-  `lorebook.model.ts:821,891`) — no parallel book path, so vendor-key
+  `lorebook.model.ts:695,730`) — no parallel book path, so vendor-key
   preservation is inherited, not reimplemented.
 - **Export book shape**: cards embed the `character_book` shape; the export
-  converts via `toSpecCompliantBook` (`lorebook.model.ts:517`) — the same
+  converts via `toSpecCompliantBook` (`lorebook.model.ts:395`) — the same
   conversion the Character Book JSON export already uses, one path, not a
   new one. **V3 caveat**: the CCv3 book schema has deltas beyond the V2
   shape (string entry `id`, `name` in place of `comment`, per-entry
@@ -158,8 +158,8 @@ export interface CardShell {
   verbatim (`JSON.stringify` renders a `Uint8Array` as a keyed object, not
   data) — the archive writer needs an explicit base64 transform on export
   and decode on import (~+33% size for the image only). Archive version
-  `LORESTITCH_ARCHIVE_VERSION` already tolerates additive fields via
-  `isProjectWorkspace`.
+  `LORESTITCH_ARCHIVE_VERSION = 1` (`project.model.ts:35`) already tolerates
+  additive fields via `isProjectWorkspace` (`project.model.ts:174-186`).
 - VCS is unaffected by the shell: commit hashing covers the book only
   (`hashBook`/`serializeBook`), so importing a card or holding a shell never
   dirties history — no commit or dirty-tracking changes in this task.
