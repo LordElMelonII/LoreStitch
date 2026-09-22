@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
@@ -17,7 +17,6 @@ import { EntryUpdatesService } from '../entry-updates.service';
  */
 @Component({
   selector: 'app-entry-strategy-toggle',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatButtonToggleModule, MatTooltipModule],
   templateUrl: './entry-strategy-toggle.html',
   styleUrl: './entry-strategy-toggle.scss',

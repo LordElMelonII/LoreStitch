@@ -1,6 +1,5 @@
 import { ENTER, COMMA } from '@angular/cdk/keycodes';
 import {
-  ChangeDetectionStrategy,
   Component,
   ElementRef,
   afterRenderEffect,
@@ -56,7 +55,6 @@ interface KeyChipState {
  */
 @Component({
   selector: 'app-entry-keys',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatChipsModule,
     MatFormFieldModule,

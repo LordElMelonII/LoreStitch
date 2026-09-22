@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { FormField, form, min } from '@angular/forms/signals';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -27,7 +27,6 @@ interface EntryRecursionTimingModel {
  */
 @Component({
   selector: 'app-entry-recursion-timing',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormField, MatChipsModule, MatFormFieldModule, MatInputModule, MatTooltipModule],
   templateUrl: './entry-recursion-timing.html',
   styleUrl: './entry-recursion-timing.scss',

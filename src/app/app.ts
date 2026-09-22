@@ -1,5 +1,4 @@
 import {
-  ChangeDetectionStrategy,
   Component,
   DOCUMENT,
   ElementRef,
@@ -29,7 +28,6 @@ import { ProjectActionsService } from './features/shell/project-actions.service'
 /** Studio shell: top bar, entry sidenav, tabbed editor, commit history drawer. */
 @Component({
   selector: 'app-root',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatSidenavModule,
     Topbar,

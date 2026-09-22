@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { FormField, form, max, min } from '@angular/forms/signals';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -36,7 +36,6 @@ interface EntryActivationModel {
  */
 @Component({
   selector: 'app-entry-activation',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormField, MatChipsModule, MatFormFieldModule, MatInputModule, MatTooltipModule],
   templateUrl: './entry-activation.html',
   styleUrl: './entry-activation.scss',

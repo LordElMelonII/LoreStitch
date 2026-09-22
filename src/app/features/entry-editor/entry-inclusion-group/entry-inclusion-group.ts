@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
+import { Component, inject, input } from '@angular/core';
 import { FormField, form, max, min } from '@angular/forms/signals';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -28,7 +28,6 @@ interface EntryInclusionGroupModel {
  */
 @Component({
   selector: 'app-entry-inclusion-group',
-  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormField,
     MatChipsModule,
