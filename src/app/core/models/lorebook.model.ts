@@ -135,25 +135,6 @@ export const WI_POSITION_OPTIONS: readonly {
 ];
 
 // ============================================================================
-// LoreStitch version-control model
-// ============================================================================
-
-// The LoreStitch project/VCS model (ProjectWorkspace, ProjectCommit, LintPrefs
-// and their archive guards/sanitizers) lives in `project.model.ts`. These
-// re-exports keep the historical import path working for consumers that
-// predate the split (features, src/testing and the model spec); core modules
-// import the new home directly. All cross-module references between the two
-// files are hoisted function declarations, so the module cycle these
-// re-exports create is safe in both evaluation orders.
-export {
-  LORESTITCH_ARCHIVE_VERSION,
-  isLintRuleId,
-  isProjectWorkspace,
-  sanitizeLintPrefs,
-} from './project.model';
-export type { LintPrefs, ProjectCommit, ProjectWorkspace } from './project.model';
-
-// ============================================================================
 // Native SillyTavern world-info format (mirrors example_card/world-info.js)
 // ============================================================================
 

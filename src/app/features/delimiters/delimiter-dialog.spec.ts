@@ -2,16 +2,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
+import { CharacterBookEntry } from '../../core/models/lorebook.model';
 import { estimateTokens, formatTokenCount } from '../../core/services/token-estimator';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { DelimiterDialog } from './delimiter-dialog';
-import { projectOf } from '../../../testing/project-fixtures';
-
-/** Builds an entry with sensible defaults for delimiter tests. */
-function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
-  return { ...createEmptyEntry(id), ...overrides };
-}
+import { entryWith as entry, projectOf } from '../../../testing/project-fixtures';
 
 describe('DelimiterDialog', () => {
   let workspace: WorkspaceService;

@@ -1,4 +1,4 @@
-import { Component, computed, inject, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatBadgeModule } from '@angular/material/badge';
@@ -20,6 +20,7 @@ import { TokenMeter } from './token-meter';
 /** Top app bar: brand, project actions, export/theme/project menus. */
 @Component({
   selector: 'app-topbar',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatBadgeModule,
     MatButtonModule,

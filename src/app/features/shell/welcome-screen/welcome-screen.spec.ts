@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { ProjectWorkspace, createEmptyBook, createEmptyEntry } from '../../../core/models/lorebook.model';
+import { createEmptyBook, createEmptyEntry } from '../../../core/models/lorebook.model';
+import { ProjectWorkspace } from '../../../core/models/project.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { ProjectActionsService } from '../project-actions.service';
 import { WelcomeScreen } from './welcome-screen';

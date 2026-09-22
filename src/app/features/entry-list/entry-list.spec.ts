@@ -11,12 +11,7 @@ import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { installMatchMediaStub } from '../../../testing/match-media-stub';
 import { EntryList } from './entry-list';
 import { BatchOperationsDialog } from './batch-operations-dialog';
-import { projectOf } from '../../../testing/project-fixtures';
-
-/** Builds an entry with sensible defaults for list tests. */
-function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
-  return { ...createEmptyEntry(id), ...overrides };
-}
+import { entryWith as entry, projectOf } from '../../../testing/project-fixtures';
 
 /** Seeds a list workspace; most tests use the default project id. */
 function seededProject(entries: CharacterBookEntry[], id = 'test-project') {

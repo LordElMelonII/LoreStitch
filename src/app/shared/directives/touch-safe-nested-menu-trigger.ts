@@ -1,8 +1,8 @@
 import {
   DOCUMENT,
+  DestroyRef,
   Directive,
   ElementRef,
-  OnDestroy,
   inject,
 } from '@angular/core';
 import { isFakeTouchstartFromScreenReader } from '@angular/cdk/a11y';
@@ -63,7 +63,7 @@ export const EMULATED_HOVER_WINDOW_MS = 800;
 @Directive({
   selector: '[appTouchSafeNestedMenuTrigger]',
 })
-export class TouchSafeNestedMenuTrigger implements OnDestroy {
+export class TouchSafeNestedMenuTrigger {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly document = inject(DOCUMENT);
 
@@ -151,14 +151,14 @@ export class TouchSafeNestedMenuTrigger implements OnDestroy {
       () => this.document.removeEventListener('mouseenter', onTouchHost, true),
       () => this.document.removeEventListener('click', onClickCapture, true),
     );
-  }
 
-  ngOnDestroy(): void {
-    if (this.disarmTimeout !== null) {
-      clearTimeout(this.disarmTimeout);
-    }
-    for (const dispose of this.teardown) {
-      dispose();
-    }
+    inject(DestroyRef).onDestroy(() => {
+      if (this.disarmTimeout !== null) {
+        clearTimeout(this.disarmTimeout);
+      }
+      for (const dispose of this.teardown) {
+        dispose();
+      }
+    });
   }
 }

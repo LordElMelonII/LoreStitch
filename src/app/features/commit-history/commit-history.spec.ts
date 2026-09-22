@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ProjectWorkspace, createEmptyBook } from '../../core/models/lorebook.model';
+import { createEmptyBook } from '../../core/models/lorebook.model';
+import { ProjectWorkspace } from '../../core/models/project.model';
 import { ImportExportService } from '../../core/services/import-export.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { CommitHistory } from './commit-history';

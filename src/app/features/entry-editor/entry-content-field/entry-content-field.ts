@@ -1,4 +1,4 @@
-import { Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -31,6 +31,7 @@ interface EntryContentModel {
  */
 @Component({
   selector: 'app-entry-content-field',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormField,
     MatButtonModule,

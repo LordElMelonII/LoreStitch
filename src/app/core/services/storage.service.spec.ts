@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { ProjectWorkspace, createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
+import { createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
+import { ProjectWorkspace } from '../models/project.model';
 import { SAVE_DEBOUNCE_MS, StorageService } from './storage.service';
 
 interface Deferred<T> {

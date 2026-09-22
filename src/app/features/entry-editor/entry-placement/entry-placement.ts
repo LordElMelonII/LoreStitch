@@ -1,4 +1,4 @@
-import { Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { FormField, form, min } from '@angular/forms/signals';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -28,6 +28,7 @@ interface EntryPlacementModel {
  */
 @Component({
   selector: 'app-entry-placement',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormField, MatFormFieldModule, MatInputModule, MatSelectModule, MatTooltipModule],
   templateUrl: './entry-placement.html',
   styleUrl: './entry-placement.scss',

@@ -11,12 +11,7 @@ import {
 } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { BatchOperationsDialog } from './batch-operations-dialog';
-import { projectOf } from '../../../testing/project-fixtures';
-
-/** Builds an entry with sensible defaults for batch tests. */
-function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
-  return { ...createEmptyEntry(id), ...overrides };
-}
+import { entryWith as entry, projectOf } from '../../../testing/project-fixtures';
 
 /** Entry carrying author tags in the LoreStitch extension namespace. */
 function tagged(id: number, tags: string[]): CharacterBookEntry {

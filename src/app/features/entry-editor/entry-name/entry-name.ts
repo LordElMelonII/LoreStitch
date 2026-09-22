@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { FormField, form } from '@angular/forms/signals';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -17,6 +17,7 @@ interface EntryNameModel {
  */
 @Component({
   selector: 'app-entry-name',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormField, MatFormFieldModule, MatInputModule],
   templateUrl: './entry-name.html',
   styleUrl: './entry-name.scss',

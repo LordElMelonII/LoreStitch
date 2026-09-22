@@ -11,7 +11,7 @@ import { type ConfirmDialogData } from './confirm-dialog.model';
   imports: [MatButtonModule, MatDialogModule, MatIconModule],
   template: `
     <h2 mat-dialog-title class="title">
-      <mat-icon [class.danger]="data.danger">{{ data.danger ? 'warning' : 'help' }}</mat-icon>
+      <mat-icon aria-hidden="true" [class.danger]="data.danger">{{ icon }}</mat-icon>
       {{ data.title }}
     </h2>
     <mat-dialog-content>
@@ -53,4 +53,9 @@ import { type ConfirmDialogData } from './confirm-dialog.model';
 export class ConfirmDialog {
   protected readonly data = inject<ConfirmDialogData>(MAT_DIALOG_DATA);
   protected readonly ref = inject(MatDialogRef<ConfirmDialog, boolean>);
+
+  /** Title icon ligature (interpolated names land via the subsetter's DYNAMIC_ICONS). */
+  protected get icon(): string {
+    return this.data.danger ? 'warning' : 'help';
+  }
 }

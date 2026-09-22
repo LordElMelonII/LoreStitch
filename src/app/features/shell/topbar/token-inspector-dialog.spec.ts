@@ -1,17 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialogRef } from '@angular/material/dialog';
-import {
-  CharacterBookEntry,
-  createEmptyEntry,
-} from '../../../core/models/lorebook.model';
+import { CharacterBookEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { TokenInspectorDialog } from './token-inspector-dialog';
-import { projectOf } from '../../../../testing/project-fixtures';
-
-/** Builds an entry with sensible defaults for inspector tests. */
-function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
-  return { ...createEmptyEntry(id), ...overrides };
-}
+import { entryWith as entry, projectOf } from '../../../../testing/project-fixtures';
 
 /**
  * An enabled constant entry whose estimate is exact: the estimator assumes

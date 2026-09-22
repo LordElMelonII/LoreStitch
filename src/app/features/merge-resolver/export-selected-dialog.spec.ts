@@ -11,12 +11,7 @@ import {
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { type ExportSelection } from './export-selected.model';
 import { ExportSelectedDialog, type ExportSelectedDialogData } from './export-selected-dialog';
-import { projectOf } from '../../../testing/project-fixtures';
-
-/** Builds an entry with sensible defaults for export tests. */
-function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
-  return { ...createEmptyEntry(id), ...overrides };
-}
+import { entryWith as entry, projectOf } from '../../../testing/project-fixtures';
 
 /** Seeds the export workspace the way the dialog opens in production. */
 function seededProject(entries: CharacterBookEntry[]) {

@@ -1,4 +1,4 @@
-import { Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -39,6 +39,7 @@ interface TriggerStripModel {
  */
 @Component({
   selector: 'app-entry-options-accordion',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormField,
     MatButtonModule,

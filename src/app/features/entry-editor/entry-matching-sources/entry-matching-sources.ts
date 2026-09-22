@@ -1,4 +1,4 @@
-import { Component, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
@@ -15,6 +15,7 @@ import { MATCH_SOURCE_OPTIONS } from './entry-matching-sources.constants';
  */
 @Component({
   selector: 'app-entry-matching-sources',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatChipsModule, MatFormFieldModule, MatSelectModule, MatTooltipModule],
   templateUrl: './entry-matching-sources.html',
   styleUrl: './entry-matching-sources.scss',

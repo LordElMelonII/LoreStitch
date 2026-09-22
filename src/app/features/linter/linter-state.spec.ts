@@ -1,14 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { MatChipSelectionChange } from '@angular/material/chips';
-import { CharacterBookEntry, LintPrefs, createEmptyEntry } from '../../core/models/lorebook.model';
+import { CharacterBookEntry } from '../../core/models/lorebook.model';
+import { LintPrefs } from '../../core/models/project.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { LinterState } from './linter-state';
-import { projectOf, severityFixture } from '../../../testing/project-fixtures';
-
-/** Builds an entry with sensible defaults for linter tests. */
-function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
-  return { ...createEmptyEntry(id), ...overrides };
-}
+import { entryWith as entry, projectOf, severityFixture } from '../../../testing/project-fixtures';
 
 /** A user-initiated chip selection change, as the pane's mute chips emit. */
 function chipChange(selected: boolean, isUserInput = true): MatChipSelectionChange {

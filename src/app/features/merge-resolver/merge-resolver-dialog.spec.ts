@@ -3,20 +3,11 @@ import { By } from '@angular/platform-browser';
 import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSelect } from '@angular/material/select';
-import {
-  CharacterBook,
-  CharacterBookEntry,
-  createEmptyEntry,
-} from '../../core/models/lorebook.model';
+import { CharacterBook, type CharacterBookEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { type MergeDialogData, type MergeOutcome } from './merge-resolver.model';
 import { MergeResolverDialog } from './merge-resolver-dialog';
-import { projectOf } from '../../../testing/project-fixtures';
-
-/** Builds an entry with sensible defaults for merge tests. */
-function entry(id: number, overrides: Partial<CharacterBookEntry> = {}): CharacterBookEntry {
-  return { ...createEmptyEntry(id), ...overrides };
-}
+import { entryWith as entry, projectOf } from '../../../testing/project-fixtures';
 
 /** Seeds the merge workspace the way the dialog opens in production. */
 function seededProject(entries: CharacterBookEntry[]) {

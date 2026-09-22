@@ -1,10 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import {
-  CharacterBook,
-  ProjectWorkspace,
-  createEmptyBook,
-  createEmptyEntry,
-} from '../models/lorebook.model';
+import { CharacterBook, createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
+import { ProjectWorkspace } from '../models/project.model';
 import { VcsService } from './vcs.service';
 
 function makeProject(): ProjectWorkspace {

@@ -3,12 +3,11 @@ import { ImportExportService } from './import-export.service';
 import {
   CharacterBook,
   CharacterBookEntry,
-  LORESTITCH_ARCHIVE_VERSION,
-  ProjectWorkspace,
   ST_POSITION,
   characterBookToStNative,
   createEmptyBook,
 } from '../models/lorebook.model';
+import { LORESTITCH_ARCHIVE_VERSION, ProjectWorkspace } from '../models/project.model';
 import { estimateTokens } from './token-estimator';
 // Real SillyTavern world-info exports used as import fixtures.
 import fuyukiCard from '../../../../example_card/Fate Stay Night - Fuyuki Lorebook(1).json';

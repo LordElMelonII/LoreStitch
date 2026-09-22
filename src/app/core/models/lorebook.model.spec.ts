@@ -16,17 +16,15 @@ import {
   extractSubBook,
   withEntryTags,
   isCharacterBook,
-  isLintRuleId,
-  isProjectWorkspace,
   isSillyTavernWorldInfo,
   normalizeBookPositions,
   normalizeImportedBook,
-  sanitizeLintPrefs,
   stNativeToCharacterBook,
   stNumberToPosition,
   toSpecCompliantBook,
   triggerStatePatch,
 } from './lorebook.model';
+import { isLintRuleId, isProjectWorkspace, sanitizeLintPrefs } from './project.model';
 
 /** Representative native entry carrying every field world-info.js defines. */
 function nativeEntry(overrides: Record<string, unknown> = {}) {
