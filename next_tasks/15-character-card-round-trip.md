@@ -119,7 +119,13 @@ Rules:
   book to edit (§7.2).
 - **iTXt/zTXt**: import tolerates an uncompressed iTXt carrying `chara`
   (robustness against non-conformant writers); zTXt (zlib) is out of scope.
-  Export always writes tEXt with the keyword the card was imported from.
+  Export always writes tEXt.
+- **Dual-chunk cards** (real fixtures carry both): when `chara` and `ccv3`
+  coexist, import prefers `ccv3` (newest spec); export re-embeds the updated
+  book into **every** card-carrying chunk the source had — V2 shape for
+  `chara`, V3 shape for `ccv3` (the mapping is part of P1's V3 delta work) —
+  so no chunk is left holding a stale book. Foreign chunks (e.g. the
+  fixture's `deBG`) are opaque to the codec and preserved byte-for-byte.
 
 ### 3.2 Card shell storage — `core/models/project.model.ts`
 
@@ -214,6 +220,17 @@ them — §3.6's codec specs craft minimal PNGs in-test (deterministic, no
 binary needed in the spec tree). If a real fixture encodes a shape the
 codec rejects, the fixture wins and the codec is wrong — the same stance as
 task 09 §7.1.
+
+**Verified fixture profile (2026-09-22, files supplied)**:
+`example_card.png` (1.4 MB) = valid PNG with `IHDR · tEXt(chara, V2) ·
+tEXt(ccv3, V3) · 90×IDAT · deBG · IEND`, both card chunks carrying the same
+70-entry book — dual-chunk rule (§3.1) is exercised for real, and `deBG` is
+the foreign-chunk never-drop pin. `example_card.json` = `chara_card_v3`
+3.0, 70 entries whose first entry carries both `comment` and `name` and no
+`id` — id-less entries flow through the existing `normalizeImportedBook`
+id assignment like any id-less book, and the `name`/`comment` dual field is
+preserved as vendor data, never collapsed. Both spec versions are therefore
+covered, exceeding the "ideally both" ask.
 
 ## 4. Implementation Plan
 
