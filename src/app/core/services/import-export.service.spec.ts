@@ -1145,6 +1145,57 @@ describe('ImportExportService exports', () => {
     expect(cardJsonExportAvailable(pngProject)).toBe(true);
     expect(cardPngExportAvailable(pngProject)).toBe(true);
   });
+
+  it('names the PNG export after the project when the card carries no name', () => {
+    const namelessCardJson = JSON.stringify({
+      spec: 'chara_card_v2',
+      spec_version: '2.0',
+      data: { character_book: toSpecCompliantBook(cardBook()) },
+    });
+    const project: ProjectWorkspace = {
+      ...makeProject('Fallback Name'),
+      activeBook: cardBook(),
+      cardShell: {
+        spec: 'chara_card_v2',
+        cardJson: namelessCardJson,
+        pngKeyword: 'chara',
+        pngBytes: cardPngBytes(namelessCardJson),
+      },
+    };
+
+    expect(service.exportCardPng(project)).toBeNull();
+    const capture = downloads[0];
+    assert(capture);
+    expect(capture.fileName).toBe('Fallback-Name.png');
+  });
+
+  it('refuses the card exports when the stored card JSON is unreadable', async () => {
+    // A shell whose cardJson no longer parses (e.g. hand-edited storage):
+    // both export flavors refuse with the approved reason, nothing downloads.
+    const brokenCardJson = '{ not json';
+    const pngProject: ProjectWorkspace = {
+      ...makeProject('Broken Shell'),
+      cardShell: {
+        spec: 'chara_card_v2',
+        cardJson: brokenCardJson,
+        pngKeyword: 'chara',
+        pngBytes: cardPngBytes(cardJsonText()),
+      },
+    };
+    const jsonProject: ProjectWorkspace = {
+      ...makeProject('Broken Shell'),
+      cardShell: { spec: 'chara_card_v2', cardJson: brokenCardJson },
+    };
+
+    const pngFailure = service.exportCardPng(pngProject);
+    assert(pngFailure);
+    expect(pngFailure.reason).toBe('card-json-invalid');
+    const jsonFailure = service.exportCardJson(jsonProject);
+    assert(jsonFailure);
+    expect(jsonFailure.reason).toBe('card-json-invalid');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(downloads).toHaveLength(0);
+  });
 });
 
 describe('ImportExportService card imports', () => {
@@ -1244,5 +1295,52 @@ describe('ImportExportService card imports', () => {
     );
     assert(badBook.status === 'card-error');
     expect(badBook.error.reason).toBe('card-json-invalid');
+  });
+
+  it('opens card PNG bytes through the parseImport sniff-fallback branch too', () => {
+    const pngBytes = cardPngBytes(cardJsonText());
+    const viaParseImport = service.parseImport({ unrelated: true }, 'Fallback', { pngBytes });
+    const direct = service.parseCardImport({ pngBytes }, 'Fallback');
+    assert(direct.status === 'ok');
+    expect(viaParseImport).toEqual(direct.parsed);
+  });
+
+  it('refuses a card source carrying neither card text nor PNG bytes', () => {
+    // Defensive branch: a caller bug must surface as a total card-error, not
+    // a throw (import paths never throw).
+    const result = service.parseCardImport({}, 'Fallback');
+    assert(result.status === 'card-error');
+    expect(result.error.reason).toBe('not-a-card');
+  });
+
+  it('derives the import title from card name, then book name, then the fallback', () => {
+    // Card without data.name: the embedded book's own name suggests the title.
+    const fromBook = service.parseCardImport(
+      {
+        rawText: JSON.stringify({
+          spec: 'chara_card_v2',
+          spec_version: '2.0',
+          data: { character_book: cardBook() },
+        }),
+      },
+      'Fb',
+    );
+    assert(fromBook.status === 'ok');
+    expect(fromBook.parsed.suggestedTitle).toBe('Fuyuki Card Book');
+
+    // Neither the card nor the book carries a name: the fallback title wins.
+    const namelessBook: CharacterBook = { ...cardBook(), name: undefined };
+    const fromFallback = service.parseCardImport(
+      {
+        rawText: JSON.stringify({
+          spec: 'chara_card_v2',
+          spec_version: '2.0',
+          data: { character_book: namelessBook },
+        }),
+      },
+      'Fb',
+    );
+    assert(fromFallback.status === 'ok');
+    expect(fromFallback.parsed.suggestedTitle).toBe('Fb');
   });
 });

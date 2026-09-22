@@ -167,7 +167,7 @@ describe('MobileBottomBar', () => {
     expect(emitted).toEqual(['new-entry', 'search-replace', 'batch', 'history']);
   });
 
-  it('opens the five-entry export menu above the bar and routes it through the actions service', async () => {
+  it('opens the export menu above the bar and routes it through the actions service', async () => {
     await workspace.createProject('Fuyuki');
     await resizeToMobile();
     await createBar();

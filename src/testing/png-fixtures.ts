@@ -6,7 +6,9 @@
  * `import-export.service.spec.ts`, `project-actions.service.spec.ts`); like
  * `projectOf` above, they now exist exactly once here.
  *
- * Importable only from specs (`tsconfig.spec.json` includes `src/testing`).
+ * Importable from unit specs (`tsconfig.spec.json` includes `src/testing`)
+ * and from the Playwright e2e suite (task 15 P4: `e2e/helpers.ts` builds on
+ * `walkSpecPng`/`pngChunk` for the card PNG byte-fidelity assertions).
  */
 import { crc32 } from '../app/core/models/character-card';
 

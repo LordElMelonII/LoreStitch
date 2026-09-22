@@ -13,7 +13,7 @@ import { cardExportRowState } from '../project-actions.constants';
  * Quick actions the bar routes through the shell (`App.runBarAction`).
  *
  * `export` is deliberately absent: the bar's Export item is a menu trigger
- * over the shared five-entry export menu (see the template), whose entries
+ * over the shared export menu (see the template), whose entries
  * call `ProjectActionsService` directly — nothing is routed through the
  * shell for it, so a union member would only ever be a dead switch case.
  */
