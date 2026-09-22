@@ -12,6 +12,7 @@ evaluation notes below).
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
+| 15 | [15-character-card-round-trip.md](./15-character-card-round-trip.md) | Character-card (PNG **and** JSON) import/export: extract the embedded `character_book` for editing, re-embed the edited book into the same card shell byte-preserved — the user's top priority, granted the urgent slot | 🔴 Urgent — **overtakes the queue** (user decision 2026-09-22; checkpoint 15-1 after P1) |
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
 | 09 | [09-export-pre-flight-validation.md](./09-export-pre-flight-validation.md) | Enforce the ROADMAP critical gate "pre-flight schema validation must run before file export" — validate-and-block on the export path (duplicate/non-numeric entry ids are the reachable hole today) | ✅ Ready to dispatch |
 | 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
@@ -33,10 +34,11 @@ evaluation notes below).
   an in-editor rail under `entry-editor/` + shell affordance, phone behavior
   through the dual-container pattern. Visual feature ⇒ design-evidence
   checkpoint + screenshot baseline.
-- **14 — Starter Presets & Templates**: preset picker in
-  `new-project-dialog.ts` seeding template entries (character / location /
-  faction) with default prompt delimiters and structure through
-  `WorkspaceService.createProject`. Visual feature ⇒ checkpoint + screenshots.
+- ~~**14 — Starter Presets & Templates**~~ — **declassified 2026-09-22**
+  (user decision; the character-card round-trip took the slot as the next
+  high-impact item). The idea may return later; no plan file was written,
+  the ROADMAP sketch is struck through, and the number stays retired —
+  re-proposals take the next free number.
 - **UX follow-ups from the 2026-09-22 app review** (branch
   `feature/2026-09-22-app-review`; surveyed, **none implemented** — each
   changes a flow or user-facing copy and needs the user's go-ahead first):
