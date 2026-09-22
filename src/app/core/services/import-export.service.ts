@@ -16,8 +16,10 @@ import {
 } from '../models/lorebook.model';
 import {
   LORESTITCH_ARCHIVE_VERSION,
+  deserializeWorkspaceFromArchive,
   isProjectWorkspace,
   sanitizeLintPrefs,
+  serializeWorkspaceForArchive,
   type ProjectWorkspace,
 } from '../models/project.model';
 import { estimateTokens } from './token-estimator';
@@ -110,7 +112,10 @@ export class ImportExportService {
           // metadata: sanitized resiliently at import — malformed parts are
           // dropped, never an archive rejection; an absent field passes the
           // workspace through verbatim (see withSanitizedLintPrefs).
-          workspace: withSanitizedLintPrefs(workspace),
+          // The card shell's `pngBytesBase64` (plan 15 §3.2) is decoded back
+          // into `pngBytes` the same way — absent shells pass through
+          // untouched, so old archives load byte-for-byte as before.
+          workspace: withSanitizedLintPrefs(deserializeWorkspaceFromArchive(workspace)),
           book: workspace.activeBook,
           suggestedTitle: workspace.title || fallbackTitle,
         };
@@ -169,7 +174,11 @@ export class ImportExportService {
       format: 'lorestitch-project' as const,
       version: LORESTITCH_ARCHIVE_VERSION,
       exportedAt: new Date().toISOString(),
-      workspace: structuredClone(project),
+      // The card shell's PNG bytes (plan 15 §3.2) cannot ride JSON.stringify
+      // (a Uint8Array serializes as a keyed object) — the transform
+      // re-encodes them as explicit base64 (`pngBytesBase64`); a workspace
+      // without a shell serializes identically to before.
+      workspace: serializeWorkspaceForArchive(project),
     };
     this.downloadJson(archive, `${this.fileName(project.title)}.stproj`);
   }

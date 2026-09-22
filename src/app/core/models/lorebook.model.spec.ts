@@ -24,7 +24,17 @@ import {
   toSpecCompliantBook,
   triggerStatePatch,
 } from './lorebook.model';
-import { isLintRuleId, isProjectWorkspace, sanitizeLintPrefs } from './project.model';
+import {
+  isCardShell,
+  isLintRuleId,
+  isProjectWorkspace,
+  sanitizeLintPrefs,
+  deserializeWorkspaceFromArchive,
+  serializeWorkspaceForArchive,
+  type CardShell,
+  type ProjectWorkspace,
+} from './project.model';
+import { base64EncodeBytes } from './character-card';
 
 /** Representative native entry carrying every field world-info.js defines. */
 function nativeEntry(overrides: Record<string, unknown> = {}) {
@@ -650,6 +660,119 @@ describe('lorebook model', () => {
           mutedRules: ['duplicate-key'],
         });
       });
+    });
+  });
+
+  describe('card shell (plan 15 §3.2)', () => {
+    const SHELL_BYTES = Uint8Array.of(1, 2, 3, 250, 251, 252, 253, 254, 255);
+    const PNG_SHELL = {
+      spec: 'chara_card_v2',
+      cardJson: '{"spec":"chara_card_v2","data":{"character_book":{"entries":[]}}}',
+      pngKeyword: 'chara',
+      pngBytes: SHELL_BYTES,
+    };
+    const workspaceWith = (cardShell: unknown): unknown => ({
+      id: 'p1',
+      title: 'Card Project',
+      createdAt: 1,
+      updatedAt: 2,
+      activeBook: { entries: [] },
+      headCommitId: null,
+      commits: [],
+      cardShell,
+    });
+
+    it('isProjectWorkspace accepts workspaces with and without a cardShell', () => {
+      expect(isProjectWorkspace(workspaceWith(PNG_SHELL))).toBe(true);
+      // A JSON-card source shell: no bytes, no keyword.
+      expect(isProjectWorkspace(workspaceWith({ spec: 'chara_card_v3', cardJson: '{}' }))).toBe(true);
+      const { cardShell: _omitted, ...withoutShell } = workspaceWith(undefined) as Record<string, unknown>;
+      expect(isProjectWorkspace(withoutShell)).toBe(true);
+    });
+
+    it('isProjectWorkspace rejects a malformed cardShell (shape-checked when present)', () => {
+      expect(isProjectWorkspace(workspaceWith({ spec: 'chara_card_v1' }))).toBe(false);
+      expect(isProjectWorkspace(workspaceWith({ spec: 'chara_card_v2', cardJson: 42 }))).toBe(false);
+      expect(isProjectWorkspace(workspaceWith('garbage'))).toBe(false);
+    });
+
+    it('isCardShell accepts the runtime PNG shell and the minimal JSON shell', () => {
+      expect(isCardShell(PNG_SHELL)).toBe(true);
+      expect(isCardShell({ spec: 'chara_card_v3', cardJson: '{}' })).toBe(true);
+      expect(
+        isCardShell({ spec: 'chara_card_v3', cardJson: '{}', extraCardJson: { chara: '{}' } }),
+      ).toBe(true);
+    });
+
+    it('isCardShell rejects malformed shapes', () => {
+      expect(isCardShell('garbage')).toBe(false);
+      expect(isCardShell({ cardJson: '{}' })).toBe(false); // spec missing
+      expect(isCardShell({ spec: 'chara_card_v1', cardJson: '{}' })).toBe(false);
+      expect(isCardShell({ spec: 'chara_card_v2' })).toBe(false); // cardJson missing
+      expect(isCardShell({ spec: 'chara_card_v2', cardJson: 42 })).toBe(false);
+      expect(isCardShell({ spec: 'chara_card_v2', cardJson: '{}', pngKeyword: 'ccv2' })).toBe(false);
+      expect(isCardShell({ spec: 'chara_card_v2', cardJson: '{}', pngBytes: { keyed: true } })).toBe(false);
+      expect(isCardShell({ spec: 'chara_card_v2', cardJson: '{}', extraCardJson: 'x' })).toBe(false);
+      expect(isCardShell({ spec: 'chara_card_v2', cardJson: '{}', extraCardJson: { ccv2: '{}' } })).toBe(false);
+      expect(isCardShell({ spec: 'chara_card_v2', cardJson: '{}', extraCardJson: { chara: 42 } })).toBe(false);
+    });
+
+    it('serializeWorkspaceForArchive re-encodes pngBytes as base64 and keeps unknown keys', () => {
+      const shell = { ...PNG_SHELL, future_field: { keep: true } } as unknown as CardShell;
+      const serialized = serializeWorkspaceForArchive(workspaceWith(shell) as unknown as ProjectWorkspace);
+      const cardShell = serialized['cardShell'] as Record<string, unknown>;
+      expect(cardShell['pngBytesBase64']).toBe(base64EncodeBytes(SHELL_BYTES));
+      expect(Object.hasOwn(cardShell, 'pngBytes')).toBe(false);
+      expect(cardShell['future_field']).toEqual({ keep: true });
+      expect(cardShell['pngKeyword']).toBe('chara');
+    });
+
+    it('serializeWorkspaceForArchive leaves shell-less and JSON-card workspaces untouched', () => {
+      const { cardShell: _omitted, ...shellless } = workspaceWith(undefined) as Record<string, unknown>;
+      const out = serializeWorkspaceForArchive(shellless as unknown as ProjectWorkspace);
+      expect(out).toEqual(shellless);
+      expect(Object.hasOwn(out, 'cardShell')).toBe(false);
+
+      const jsonProject = workspaceWith({ spec: 'chara_card_v3', cardJson: '{}' }) as unknown as ProjectWorkspace;
+      const outJson = serializeWorkspaceForArchive(jsonProject);
+      expect(Object.hasOwn(outJson['cardShell'] as Record<string, unknown>, 'pngBytesBase64')).toBe(false);
+    });
+
+    it('deserializeWorkspaceFromArchive restores the bytes symmetrically', () => {
+      const serialized = serializeWorkspaceForArchive(
+        workspaceWith(PNG_SHELL) as unknown as ProjectWorkspace,
+      ) as unknown as ProjectWorkspace;
+      const restored = deserializeWorkspaceFromArchive(serialized);
+      assert(restored.cardShell);
+      expect(restored.cardShell.pngBytes).toEqual(SHELL_BYTES);
+      expect(Object.hasOwn(restored.cardShell, 'pngBytesBase64')).toBe(false);
+      // Symmetric: re-serializing the restored shell produces the same base64.
+      const again = serializeWorkspaceForArchive(restored);
+      expect((again['cardShell'] as Record<string, unknown>)['pngBytesBase64']).toBe(
+        base64EncodeBytes(SHELL_BYTES),
+      );
+    });
+
+    it('deserializeWorkspaceFromArchive drops undecodable base64, keeping the shell JSON', () => {
+      const broken = workspaceWith({
+        spec: 'chara_card_v2',
+        cardJson: '{"spec":"chara_card_v2"}',
+        pngBytesBase64: '!!!not base64!!!',
+      }) as unknown as ProjectWorkspace;
+      const kept = deserializeWorkspaceFromArchive(broken);
+      assert(kept.cardShell);
+      expect(kept.cardShell.pngBytes).toBeUndefined();
+      expect(kept.cardShell.cardJson).toBe('{"spec":"chara_card_v2"}');
+      expect(Object.hasOwn(kept.cardShell, 'pngBytesBase64')).toBe(false);
+    });
+
+    it('deserializeWorkspaceFromArchive passes shell-less and already-runtime forms through', () => {
+      const { cardShell: _omitted, ...shellless } = workspaceWith(undefined) as Record<string, unknown>;
+      const asProject = shellless as unknown as ProjectWorkspace;
+      expect(deserializeWorkspaceFromArchive(asProject)).toBe(asProject);
+      // An in-memory workspace (bytes already in place) is untouched.
+      const runtime = workspaceWith(PNG_SHELL) as unknown as ProjectWorkspace;
+      expect(deserializeWorkspaceFromArchive(runtime)).toBe(runtime);
     });
   });
 

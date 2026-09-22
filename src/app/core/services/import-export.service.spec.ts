@@ -8,6 +8,7 @@ import {
   createEmptyBook,
 } from '../models/lorebook.model';
 import { LORESTITCH_ARCHIVE_VERSION, ProjectWorkspace } from '../models/project.model';
+import { base64EncodeBytes } from '../models/character-card';
 import { estimateTokens } from './token-estimator';
 // Real SillyTavern world-info exports used as import fixtures.
 import fuyukiCard from '../../../../example_card/Fate Stay Night - Fuyuki Lorebook(1).json';
@@ -758,5 +759,95 @@ describe('ImportExportService exports', () => {
     const fallback = downloads[1];
     assert(fallback);
     expect(fallback.fileName).toBe('lorestitch-lorebook.json');
+  });
+
+  it('carries a card shell with PNG bytes through archive export and import losslessly', async () => {
+    // plan 15 §3.2: archives are JSON — the Uint8Array must ride as explicit
+    // base64 (`pngBytesBase64`), never as a keyed object, and import decodes
+    // it back to the same bytes.
+    const bytes = Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 250, 251, 252, 253, 254, 255);
+    const project: ProjectWorkspace = {
+      ...makeProject('Card Carrier'),
+      cardShell: {
+        spec: 'chara_card_v2',
+        cardJson: '{"spec":"chara_card_v2"}',
+        pngKeyword: 'chara',
+        pngBytes: bytes,
+        extraCardJson: { ccv3: '{"spec":"chara_card_v3"}' },
+      },
+    };
+
+    service.exportProject(project);
+    const capture = downloads[0];
+    assert(capture);
+    const archive = await payloadOf(capture);
+    const shell = (archive['workspace'] as Record<string, unknown>)['cardShell'] as Record<
+      string,
+      unknown
+    >;
+    expect(shell['pngBytesBase64']).toBe(base64EncodeBytes(bytes));
+    expect(Object.hasOwn(shell, 'pngBytes')).toBe(false); // never rides JSON verbatim
+    expect(shell['extraCardJson']).toEqual({ ccv3: '{"spec":"chara_card_v3"}' });
+
+    const parsed = service.parseImport(archive);
+    assert(parsed);
+    assert(parsed.workspace);
+    assert(parsed.workspace.cardShell);
+    const restored = parsed.workspace.cardShell.pngBytes;
+    assert(restored);
+    expect([...restored]).toEqual([...bytes]);
+    expect(Object.hasOwn(parsed.workspace.cardShell, 'pngBytesBase64')).toBe(false);
+    expect(parsed.workspace.cardShell.pngKeyword).toBe('chara');
+    expect(parsed.workspace.cardShell.spec).toBe('chara_card_v2');
+  });
+
+  it('serializes a JSON-card shell without pngBytesBase64 and round-trips it', async () => {
+    const project: ProjectWorkspace = {
+      ...makeProject('Json Card'),
+      cardShell: { spec: 'chara_card_v3', cardJson: '{"spec":"chara_card_v3"}' },
+    };
+
+    service.exportProject(project);
+    const capture = downloads[0];
+    assert(capture);
+    const archive = await payloadOf(capture);
+    const shell = (archive['workspace'] as Record<string, unknown>)['cardShell'] as Record<
+      string,
+      unknown
+    >;
+    expect(Object.hasOwn(shell, 'pngBytesBase64')).toBe(false);
+    expect(shell['cardJson']).toBe('{"spec":"chara_card_v3"}');
+
+    const parsed = service.parseImport(archive);
+    assert(parsed);
+    assert(parsed.workspace);
+    expect(parsed.workspace.cardShell).toEqual({
+      spec: 'chara_card_v3',
+      cardJson: '{"spec":"chara_card_v3"}',
+    });
+  });
+
+  it('leaves shell-less archives byte-identical to before card shells existed', async () => {
+    const project = makeProject('Legacy');
+    service.exportProject(project);
+    const capture = downloads[0];
+    assert(capture);
+    const archive = await payloadOf(capture);
+    const workspace = archive['workspace'] as Record<string, unknown>;
+    expect(workspace).toEqual(project);
+    expect(Object.hasOwn(workspace, 'cardShell')).toBe(false);
+    const parsed = service.parseImport(archive);
+    assert(parsed);
+    assert(parsed.workspace);
+    expect(Object.hasOwn(parsed.workspace, 'cardShell')).toBe(false);
+  });
+
+  it('rejects an archive whose cardShell is malformed (shape-checked when present)', () => {
+    const archive = {
+      format: 'lorestitch-project',
+      version: LORESTITCH_ARCHIVE_VERSION,
+      workspace: { ...makeProject('Bad Shell'), cardShell: { spec: 'chara_card_v1' } },
+    };
+    expect(service.parseImport(archive)).toBeNull();
   });
 });
