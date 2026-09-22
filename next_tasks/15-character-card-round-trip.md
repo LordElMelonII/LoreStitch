@@ -15,6 +15,13 @@
 > **Dispatch precondition**: the user supplies the reference card PNG + JSON
 > (§3.7) at task start — promised 2026-09-22, not yet provided. Planning,
 > review, and the in-test codec specs need nothing; P4 (e2e) blocks on them.
+> **User decisions (2026-09-22)**: (1) the card shell is **stored at import**
+> (no re-supplying an image at export, no placeholder images); (2) **both card
+> exports require a shell** — when the project came from neither a card PNG
+> nor a card JSON, both entries are disabled with an explanatory tooltip;
+> LoreStitch never fabricates cards. Checkpoint 15-1 therefore covers only
+> menu-placement evidence, final copy, and the §7.2 inline-vs-separate
+> implementation choice.
 
 ---
 
@@ -142,11 +149,11 @@ export interface CardShell {
 // ProjectWorkspace gains optional `readonly cardShell?: CardShell`
 ```
 
-- `isProjectWorkspace` tolerance: absent = projects created fresh from
-  `createProject` — PNG export is simply unavailable for them (§3.4);
-  JSON-card export from a shell-less project fabricates a minimal V2 card
-  (`data.name` from the project title) — a shell-less *JSON card* export needs
-  no image and stays available.
+- `isProjectWorkspace` tolerance: absent = projects that came from neither
+  a card PNG nor a card JSON — **both card exports are disabled for them**
+  (user decision 2026-09-22; no card fabrication). A shell from a JSON-card
+  import carries `cardJson` but no `pngBytes`: JSON-card export works, PNG
+  export stays disabled (no image to embed).
 - `.stproj` archives are JSON: `pngBytes` must not ride the serializer
   verbatim (`JSON.stringify` renders a `Uint8Array` as a keyed object, not
   data) — the archive writer needs an explicit base64 transform on export
@@ -175,10 +182,13 @@ export interface CardShell {
 
 Two new exports beside the existing four:
 
-- **Character card (PNG)** — only when `cardShell.pngBytes` exists: embed the
-  updated card JSON into the shell, download as `<card-name>.png`.
-- **Character card (JSON)** — always available: from the shell's
-  `cardJson` (book swapped) or a fabricated minimal V2 card shell-less.
+- **Character card (PNG)** — requires a shell with `pngBytes` (i.e. the
+  project was imported from a card PNG): embed the updated card JSON into
+  the shell, download as `<card-name>.png`.
+- **Character card (JSON)** — requires a shell (any card import): the
+  shell's `cardJson` with the book swapped. No fabrication for shell-less
+  projects (user decision 2026-09-22) — both entries are simply disabled
+  when no shell exists.
 - Both return the `ExportResult`-style contract; **when task 09 lands, card
   exports route through the same pre-flight validator** (the embedded book is
   a book) — noted here so 09's wiring does not miss the two new call sites.
@@ -192,9 +202,10 @@ Two new exports beside the existing four:
 
 Card parse failures reuse the import-failure snackbar shape with
 card-specific copy ("Not a character card — no embedded lorebook found in the
-PNG."). PNG export without a shell is disabled in the menu (tooltip explains:
-"Export a card PNG by importing one first") rather than erroring at click
-time. Copy finalized in the P2 phase report.
+PNG."). Card exports without a shell are disabled in the menu (tooltip
+explains: "Import a character card first") rather than erroring at click
+time — a card-JSON project additionally shows the PNG entry disabled
+("No card image stored — import a card PNG first"). Copy finalized in the P2 phase report.
 
 ### 3.6 Test matrix
 
@@ -202,7 +213,7 @@ time. Copy finalized in the P2 phase report.
 |------|----------------|
 | Unit — `character-card.spec.ts` | codec: minimal PNGs **built in-test** (crafted chunks + crc32): parse→embed→parse identity for every non-book byte; replace-in-place when the chunk exists (length change allowed, recompute CRC), insert-before-IEND when absent; multiple `chara` chunks → first wins + warning reason; truncated/signature-less bytes → `CardError`, never throw; oversized book (multi-100KB) round-trips; Latin-1 text boundary respected |
 | Unit — `character-card.spec.ts` (JSON path) | V2/V3 card JSON open; V1 card → `card-without-book` error; unknown card fields survive open→embed verbatim (never-drop pin at the card level); base64 round-trip of the `chara` payload |
-| Unit — `import-export.service.spec.ts` | card JSON import produces a project whose book matches the plain-book import of the same `character_book` (pipeline-equivalence pin); card PNG import/export: IDAT bytes unchanged; project without shell exports the JSON card but has PNG export unavailable; shell round-trips through `.stproj` (base64 encode/decode) |
+| Unit — `import-export.service.spec.ts` | card JSON import produces a project whose book matches the plain-book import of the same `character_book` (pipeline-equivalence pin); card PNG import/export: IDAT bytes unchanged; project with no shell has both card exports unavailable; card-JSON-sourced project has JSON export enabled but PNG export unavailable; shell round-trips through `.stproj` (base64 encode/decode) |
 | Unit — workspace/archive | `isProjectWorkspace` accepts with/without `cardShell`; old archives unchanged |
 | E2E — new `e2e/character-card.spec.ts` | fixture card PNG (§3.7): import → edit an entry → export card PNG → re-import → edit visible; byte-compare the exported PNG against the fixture shell for all non-`chara` bytes; card-JSON import via the same helper path; PNG export disabled without a shell |
 | Existing suites | round-trip/fidelity specs green **without edits** (card work is additive); all shell/menu e2e still pass with the two new export entries |
@@ -237,7 +248,7 @@ covered, exceeding the "ideally both" ask.
 | Phase | Files | Work |
 |-------|-------|------|
 | **P1 — Codec + card model** (core-engine) | `core/models/character-card.ts` (+spec), `core/models/project.model.ts` (shell + tolerance), `core/models/README.md` | §3.1 + §3.2 |
-| **Checkpoint 15-1** (user) | — | shell-storage decision (store vs. re-import-per-export), PNG-export availability rule, menu placement evidence, copy |
+| **Checkpoint 15-1** (user) | — | menu placement evidence (rendered mock), final copy, §7.2 inline-vs-separate storage choice — shell storage and export availability are pre-decided (2026-09-22: store the shell; both card exports require it) |
 | **P2 — Wiring** (ui-specialist) | `import-export.service.ts`, `project-actions.service.ts`, `project-actions.constants.ts`, export menu templates, snackbar copy | §3.3 + §3.4 + §3.5 |
 | **P3 — Review** (ts-reviewer) | all touched | `DataView` byte-reading rigor, result-union exhaustiveness, `Uint8Array` immutability, lint |
 | **P4 — E2E & evidence** (qa-auditor) | `e2e/character-card.spec.ts`, `example_card/` fixtures (user-provided, §3.7), screenshots | §3.6 + §3.7 + baseline |
@@ -250,8 +261,10 @@ character card import/export wiring`, `feat(shell): card export surface`,
 
 1. **`core-engine`** — P1 (skills: `typescript-advanced-types`). *Gate:
    `npm test`.*
-2. **User checkpoint 15-1** — shell storage + export surface + copy. Gate
-   stays open until answered.
+2. **User checkpoint 15-1** — menu placement (rendered-mock evidence),
+   final copy, and the §7.2 inline-vs-separate storage confirmation.
+   Shell storage and export availability are pre-decided (§ header).
+   Gate stays open until answered.
 3. **`ui-specialist`** — P2 (skills: `material-3`, `frontend-design`). *Gate:
    `npm test` + `npm run build`.*
 4. **`ts-reviewer`** — P3. *Gate: `npm run lint`.*
@@ -268,11 +281,12 @@ JSON keys) and re-proven by e2e re-import.
 
 ## 7. Risks & Open Questions
 
-1. **Shell storage cost**: storing the card PNG in the workspace grows
-   IndexedDB records and `.stproj` archives by the image size (cards are
-   typically 0.4–1.5 MB). Alternative — re-import the card at export time —
-   kills the one-click promise. Checkpoint 15-1 decides; recommendation is
-   store (data-loss prevention beats archive size).
+1. **Shell storage cost** — **decided 2026-09-22 (user): store the shell at
+   import.** The card PNG grows IndexedDB records and `.stproj` archives by
+   the image size (cards are typically 0.4–1.5 MB; the reference fixture is
+   1.4 MB). Re-supplying the card at export time was rejected (kills the
+   one-click promise), as were placeholder images (destroys the avatar).
+   The remaining sub-choice is §7.2's inline-vs-separate record.
 2. **IndexedDB write amplification**: every debounced `scheduleSave` put
    serializes the whole `ProjectWorkspace` record — with the shell embedded,
    a ~1 MB image is structured-cloned on every 400 ms save window even when
