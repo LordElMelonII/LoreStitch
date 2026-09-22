@@ -6,8 +6,8 @@ import {
   entryDelimiterNameFromKey,
   malformedWrapperLabel,
 } from '../models/delimiters';
-import { isRegexShapedKey, isValidStRegex, parseStRegex } from '../models/st-regex';
-import { matchStKey, type StMatchOptions } from '../models/st-key-match';
+import { isRegexShapedKey, isValidStRegex, parseStRegex, type StRegex } from '../models/st-regex';
+import { findPlaintextRanges } from '../models/st-key-match';
 
 /**
  * Lorebook health linter — one pure, read-only diagnostic pass over a
@@ -210,43 +210,84 @@ function quotedList(items: readonly string[]): string {
 }
 
 /**
- * First key of `keys` matching `content` under ST `matchKeys` semantics, or
- * `null`. Oracle-equivalent to
- * `keys.find(k => matchStKey(k, content, options))` with one accelerator:
- * the case-folded haystack is computed at most once per call instead of once
- * per plaintext key. `String#toLowerCase` is idempotent, so passing the
- * pre-folded text with `caseSensitive: false` re-folds it to itself;
- * regex-shaped keys bypass every option (world-info.js:338-342) and always
- * test the raw haystack, so their input is never folded.
+ * First key of the entry's key list matching `content` under ST `matchKeys`
+ * semantics, or `null`. Oracle-equivalent to
+ * `keys.find(k => matchStKey(k, content, options))`, computed from a
+ * per-target `TargetKeyPlan` (see `prepareTargetKeys`) plus a per-source
+ * pre-folded haystack — the recursion pass matches the same target keys
+ * against every source, so per-key work is hoisted out of its O(V²) pair
+ * loop. Equivalence notes, in key order:
+ *
+ * - Regex keys bypass every option (world-info.js:338-342) and always test
+ *   the raw haystack. The plan's compiled regex is REUSED across pairs;
+ *   `lastIndex` is reset before each test, which is observably identical to
+ *   `matchStKey`'s fresh-per-call `RegExp` for a boolean `test` (a fresh
+ *   regex means `lastIndex === 0`; non-global tests ignore it entirely).
+ * - Plaintext keys call `findPlaintextRanges` directly: the plan already ran
+ *   the `parseStRegex` gate on the raw key. Classification must stay on the
+ *   raw spelling — folding a key can change that gate's verdict (e.g. the
+ *   flags of `/x/G` fold into the valid `/x/g`).
+ * - Case-insensitive plaintext keys test pre-folded key and haystack with
+ *   `caseSensitive: true`, which skips `findPlaintextRanges`' internal
+ *   `toLowerCase` folds (idempotent on already-folded input). Key order and
+ *   the first-match-wins rule are semantic: the matched spelling is reported
+ *   in `self-trigger` details.
  */
 function firstMatchingKey(
-  keys: readonly string[],
+  plan: TargetKeyPlan,
   content: string,
+  foldedContent: string,
   caseSensitive: boolean | undefined,
   matchWholeWords: boolean | null,
 ): string | null {
-  const rawOptions: StMatchOptions = { caseSensitive, matchWholeWords };
-  const foldedOptions: StMatchOptions = { caseSensitive: false, matchWholeWords };
-  let folded: string | null = null;
-  for (const key of keys) {
-    if (parseStRegex(key) !== null) {
-      if (matchStKey(key, content, rawOptions)) {
-        return key;
+  // Tri-state resolution matches resolveStMatchOptions in st-key-match.ts:
+  // nullish means ST's global default (false).
+  const wholeWords = matchWholeWords ?? false;
+  for (const key of plan) {
+    if (key.regex) {
+      key.regex.regex.lastIndex = 0;
+      if (key.regex.regex.test(content)) {
+        return key.spelling;
       }
       continue;
     }
     if (caseSensitive === true) {
-      if (matchStKey(key, content, rawOptions)) {
-        return key;
+      if (findPlaintextRanges(key.spelling, content, true, wholeWords).length > 0) {
+        return key.spelling;
       }
       continue;
     }
-    folded ??= content.toLowerCase();
-    if (matchStKey(key, folded, foldedOptions)) {
-      return key;
+    if (findPlaintextRanges(key.folded, foldedContent, true, wholeWords).length > 0) {
+      return key.spelling;
     }
   }
   return null;
+}
+
+/** One target key with its per-pass match facts (see `TargetKeyPlan`). */
+interface PlannedKey {
+  /** The key as written — the reported spelling on a match. */
+  readonly spelling: string;
+  /** `parseStRegex(spelling)`; `null` takes the plaintext path. */
+  readonly regex: StRegex | null;
+  /** `spelling.toLowerCase()` — for the case-insensitive plaintext path. */
+  readonly folded: string;
+}
+
+/** Read-only alias: the plan is an ordered key list, first match wins. */
+type TargetKeyPlan = readonly PlannedKey[];
+
+/**
+ * Computes one target entry's `TargetKeyPlan`. Pure; each key's facts are
+ * deterministic, so hoisting this out of the pair loop cannot change any
+ * verdict — it only replaces O(V²·k) `parseStRegex`/fold calls with O(V·k).
+ */
+function prepareTargetKeys(entry: CharacterBookEntry): TargetKeyPlan {
+  return entry.keys.map((spelling) => ({
+    spelling,
+    regex: parseStRegex(spelling),
+    folded: spelling.toLowerCase(),
+  }));
 }
 
 // ============================================================================
@@ -674,30 +715,56 @@ function lintRecursion(
   // content with B's own match options. Whole content is scanned — a
   // conservative superset of ST's scan_depth window (§7.2), which is why the
   // copy says "may".
+  //
+  // Target eligibility and the per-key plans are invariant across sources, so
+  // they are computed once per pass — not once per pair — keeping the O(V²)
+  // pair loop free of per-key regex parsing and case folding. The filtered
+  // list preserves entry order, so successors are pushed (and self-triggers
+  // emitted) in exactly the unfiltered loop's order.
+  interface RecursionTarget {
+    readonly node: RecursionNode;
+    readonly plan: TargetKeyPlan;
+    readonly caseSensitive: boolean | undefined;
+    readonly matchWholeWords: boolean | null;
+  }
+  const targets: RecursionTarget[] = [];
+  for (const node of nodes) {
+    if (!node.entry.enabled || node.entry.constant === true) {
+      continue;
+    }
+    const ext = entryExt(node.entry);
+    if (extFlag(ext, 'exclude_recursion') || !hasUsableKeys(node.entry.keys)) {
+      continue;
+    }
+    targets.push({
+      node,
+      plan: prepareTargetKeys(node.entry),
+      caseSensitive: node.entry.case_sensitive,
+      matchWholeWords: extBoolOption(ext, 'match_whole_words'),
+    });
+  }
+
   for (const source of nodes) {
     if (!source.entry.enabled || extFlag(entryExt(source.entry), 'prevent_recursion')) {
       continue;
     }
     const content = (source.entry.content ?? '').slice(0, MATCH_CONTENT_CAP);
-    for (const target of nodes) {
-      if (!target.entry.enabled || target.entry.constant === true) {
-        continue;
-      }
-      const ext = entryExt(target.entry);
-      if (extFlag(ext, 'exclude_recursion') || !hasUsableKeys(target.entry.keys)) {
-        continue;
-      }
+    // Folded once per source instead of once per pair/key (see
+    // `firstMatchingKey` for why passing pre-folded input is equivalent).
+    const foldedContent = content.toLowerCase();
+    for (const target of targets) {
       const matched = firstMatchingKey(
-        target.entry.keys,
+        target.plan,
         content,
-        target.entry.case_sensitive,
-        extBoolOption(ext, 'match_whole_words'),
+        foldedContent,
+        target.caseSensitive,
+        target.matchWholeWords,
       );
       if (matched === null) {
         continue;
       }
-      source.successors.push(target);
-      if (source === target && reportSelfTriggers) {
+      source.successors.push(target.node);
+      if (source === target.node && reportSelfTriggers) {
         // Self-edge: reported separately as `self-trigger`, never as a cycle.
         emit(
           {

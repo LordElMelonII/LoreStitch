@@ -1,6 +1,6 @@
 import { Service, signal } from '@angular/core';
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { ProjectWorkspace } from '../models/lorebook.model';
+import type { ProjectWorkspace } from '../models/project.model';
 
 interface LoreStitchDb extends DBSchema {
   projects: {

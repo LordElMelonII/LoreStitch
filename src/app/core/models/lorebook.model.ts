@@ -8,15 +8,6 @@
  * `convertCharacterBook()` so values survive a round trip.
  */
 
-/**
- * The linter's rule union, type-only imported from the linter core: the model
- * needs the type for `LintPrefs`, but no runtime import (the linter imports
- * this module's helpers at runtime, so a value import here would close a
- * circular import). The runtime rule whitelist for archive sanitizing lives
- * beside `LintPrefs` below, compile-time-exhaustive against this union.
- */
-import type { LintRuleId } from '../services/linter';
-
 // ============================================================================
 // SillyTavern Character Card V2 spec
 // ============================================================================
@@ -147,113 +138,20 @@ export const WI_POSITION_OPTIONS: readonly {
 // LoreStitch version-control model
 // ============================================================================
 
-export interface ProjectCommit {
-  id: string; // SHA-256 hash
-  parentId: string | null;
-  timestamp: number;
-  message: string;
-  snapshot: CharacterBook; // Full snapshot keeps rollbacks O(1)
-}
-
-export interface ProjectWorkspace {
-  id: string; // UUID v4
-  title: string;
-  createdAt: number;
-  updatedAt: number;
-  /**
-   * Legacy field: character-card projects existed before card support was
-   * removed. New projects are always `standalone_lorebook`; the value is kept
-   * so old `.stproj` archives and IndexedDB stores keep loading.
-   */
-  targetType: 'standalone_lorebook' | 'tavern_card_v2';
-  /** Legacy card metadata from removed card imports; preserved verbatim. */
-  rawCardData?: Omit<TavernCardV2['data'], 'character_book'>;
-  activeBook: CharacterBook;
-  headCommitId: string | null;
-  commits: ProjectCommit[];
-  /**
-   * Linter preferences (plan 03 §3.6.5): the signatures of diagnostics the
-   * author marked "not an issue" and the rules they muted. Workspace
-   * metadata only — never part of `ProjectCommit.snapshot` (a
-   * `CharacterBook`, so rollbacks neither touch nor carry it) and never
-   * written to ST-facing exports. Optional in `.stproj` archives in both
-   * directions, which is why `LORESTITCH_ARCHIVE_VERSION` stays 1: old and
-   * new archives interoperate unchanged.
-   */
-  lintPrefs?: LintPrefs;
-}
-
-/**
- * Author's linter preferences, persisted in the `.stproj` archive and
- * IndexedDB (plan 03 §3.6.5). Both lists are sanitize inputs: order and
- * duplicates are preserved verbatim, malformed entries are dropped on import
- * (`sanitizeLintPrefs`), never sorted or de-duplicated.
- */
-export interface LintPrefs {
-  /** `lintDiagnosticSignature` values marked "not an issue" by the author. */
-  ignoredSignatures: string[];
-  /** Rule ids the author muted — passed to `lintBook` as `mutedRules`. */
-  mutedRules: LintRuleId[];
-}
-
-/**
- * Compile-time-exhaustive runtime whitelist of `LintRuleId`. It lives beside
- * the archive model (not in `services/linter`) because archive sanitizing
- * must check rule ids at runtime, and the linter imports this module — a
- * runtime import from here back into the linter would close a circular
- * import. Adding a rule to `LintRuleId` without updating this table fails
- * compilation here.
- */
-const LINT_RULE_ID_TABLE: Record<LintRuleId, true> = {
-  'invalid-regex': true,
-  'duplicate-key': true,
-  'secondary-keys-ignored': true,
-  'selective-without-secondary': true,
-  'never-activatable': true,
-  'recursion-cycle': true,
-  'self-trigger': true,
-  'malformed-wrapper': true,
-};
-
-/** True when `value` is one of the linter's rule ids. */
-export function isLintRuleId(value: unknown): value is LintRuleId {
-  // Object.hasOwn, not `in`: prototype members like `toString` must not pass.
-  return typeof value === 'string' && Object.hasOwn(LINT_RULE_ID_TABLE, value);
-}
-
-/**
- * Sanitizes an imported `lintPrefs` value (plan 03 §3.6.5.2). The choice is
- * resilient sanitize, not archive rejection — an old or hand-edited archive
- * must still load:
- *
- * - A non-object value (or absence, i.e. `undefined`) → `undefined`; callers
- *   treat that as "no preferences".
- * - `ignoredSignatures`: an array keeps its non-blank string entries in
- *   order (blank — empty or whitespace-only — and non-string entries are
- *   dropped: a blank signature could never match a real diagnostic; kept
- *   entries are never trimmed); a missing or wrong-typed key → `[]`.
- * - `mutedRules`: an array keeps its valid `LintRuleId` entries in order
- *   (unknown rule ids from other app versions are dropped); a missing or
- *   wrong-typed key → `[]`.
- * - Well-shaped values are kept content-verbatim: nothing is added,
- *   re-sorted, trimmed or de-duplicated.
- */
-export function sanitizeLintPrefs(value: unknown): LintPrefs | undefined {
-  if (!isJsonObject(value)) {
-    return undefined;
-  }
-  const signatures = value['ignoredSignatures'];
-  const rules = value['mutedRules'];
-  return {
-    ignoredSignatures: Array.isArray(signatures)
-      ? signatures.filter(
-          (signature): signature is string =>
-            typeof signature === 'string' && signature.trim() !== '',
-        )
-      : [],
-    mutedRules: Array.isArray(rules) ? rules.filter(isLintRuleId) : [],
-  };
-}
+// The LoreStitch project/VCS model (ProjectWorkspace, ProjectCommit, LintPrefs
+// and their archive guards/sanitizers) lives in `project.model.ts`. These
+// re-exports keep the historical import path working for consumers that
+// predate the split (features, src/testing and the model spec); core modules
+// import the new home directly. All cross-module references between the two
+// files are hoisted function declarations, so the module cycle these
+// re-exports create is safe in both evaluation orders.
+export {
+  LORESTITCH_ARCHIVE_VERSION,
+  isLintRuleId,
+  isProjectWorkspace,
+  sanitizeLintPrefs,
+} from './project.model';
+export type { LintPrefs, ProjectCommit, ProjectWorkspace } from './project.model';
 
 // ============================================================================
 // Native SillyTavern world-info format (mirrors example_card/world-info.js)
@@ -382,8 +280,9 @@ export function stNumberToPosition(
  */
 export function entryStPosition(entry: CharacterBookEntry): number {
   const ext = (entry.extensions ?? {}) as Record<string, unknown>;
-  if (typeof ext['position'] === 'number') {
-    return ext['position'] as number;
+  const mirrored = ext['position'];
+  if (typeof mirrored === 'number') {
+    return mirrored;
   }
   const position = entry.position;
   if (position && position in WI_POSITION_TO_ST) {
@@ -402,13 +301,11 @@ export function normalizeBookPositions(book: CharacterBook): CharacterBook {
     ...book,
     entries: book.entries.map((entry) => {
       const ext = (entry.extensions ?? {}) as Record<string, unknown>;
-      return typeof ext['position'] === 'number'
+      const mirrored = ext['position'];
+      return typeof mirrored === 'number'
         ? {
             ...entry,
-            position: stNumberToPosition(
-              ext['position'] as number,
-              (entry.position ?? 'before_char') as WiPosition,
-            ),
+            position: stNumberToPosition(mirrored, (entry.position ?? 'before_char') as WiPosition),
           }
         : entry;
     }),
@@ -796,14 +693,10 @@ function isStCharacterFilterOrNull(value: unknown): value is StCharacterFilter |
 // ============================================================================
 
 /**
- * Archive format version written by `exportProject`; import rejects newer ones.
- * Deliberately still 1 after `ProjectWorkspace.lintPrefs` (plan 03 §3.6.5.2):
- * the field is optional in the archive both ways, so old and new archives
- * interoperate without a bump.
+ * Plain-object guard shared by the import validators here and the archive
+ * guards in `project.model.ts` (exported for the latter).
  */
-export const LORESTITCH_ARCHIVE_VERSION = 1;
-
-function isJsonObject(value: unknown): value is Record<string, unknown> {
+export function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -825,41 +718,6 @@ export function isCharacterBook(json: unknown): json is CharacterBook {
   return json['entries'].every(
     (entry: unknown) =>
       isJsonObject(entry) && typeof entry['content'] === 'string' && isStringArray(entry['keys']),
-  );
-}
-
-/** Structural guard for a commit: the fields the VCS / history code indexes. */
-function isProjectCommit(value: unknown): value is ProjectCommit {
-  return (
-    isJsonObject(value) &&
-    typeof value['id'] === 'string' &&
-    (typeof value['parentId'] === 'string' || value['parentId'] === null) &&
-    typeof value['timestamp'] === 'number' &&
-    typeof value['message'] === 'string' &&
-    isCharacterBook(value['snapshot'])
-  );
-}
-
-/**
- * Structural guard for `ProjectWorkspace` at depth 1–2: the fields the
- * workspace, storage (the `by-updatedAt` index) and commit-history code index
- * must carry their declared types, `activeBook` and every commit snapshot
- * must pass `isCharacterBook`. Unknown extra keys are irrelevant here — they
- * round-trip untouched. `lintPrefs` is likewise never rejected here: it is
- * optional workspace metadata, and malformed values are sanitized on import
- * (`sanitizeLintPrefs`) instead of failing the archive (plan 03 §3.6.5.2).
- */
-export function isProjectWorkspace(json: unknown): json is ProjectWorkspace {
-  return (
-    isJsonObject(json) &&
-    typeof json['id'] === 'string' &&
-    typeof json['title'] === 'string' &&
-    typeof json['createdAt'] === 'number' &&
-    typeof json['updatedAt'] === 'number' &&
-    (typeof json['headCommitId'] === 'string' || json['headCommitId'] === null) &&
-    isCharacterBook(json['activeBook']) &&
-    Array.isArray(json['commits']) &&
-    json['commits'].every((commit: unknown) => isProjectCommit(commit))
   );
 }
 

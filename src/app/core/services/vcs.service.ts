@@ -1,5 +1,6 @@
 import { Service } from '@angular/core';
-import { CharacterBook, ProjectCommit, ProjectWorkspace } from '../models/lorebook.model';
+import type { CharacterBook, CharacterBookEntry } from '../models/lorebook.model';
+import type { ProjectCommit, ProjectWorkspace } from '../models/project.model';
 import { hasSubtleCrypto, sha256Hex } from './sha256';
 
 /** Creates a Git-style short display id from a full SHA-256 hash. */
@@ -41,6 +42,20 @@ function canonicalJson(value: unknown): unknown {
   }
   return value;
 }
+
+/**
+ * Memo of canonical serializations, keyed by object identity. Correct only
+ * under the app-wide immutable-update invariant: model values (books,
+ * entries) are never mutated in place — every change produces new object
+ * references with structural sharing for untouched parts — so an object's
+ * canonical serialization can never change over its lifetime. Dirty tracking
+ * (`isDirty`, `dirtyEntryIds`) runs inside `computed()` signal graphs and
+ * re-serializes the HEAD snapshot and every unchanged entry on each
+ * working-tree change (per keystroke); the memo reduces that to one full
+ * serialization per actually-changed object. Observationally pure: same
+ * input value → same output string, no I/O.
+ */
+const canonicalSerializations = new WeakMap<object, string>();
 
 /**
  * Commit engine for lorebooks. Commits are content-addressed: the id is the
@@ -118,10 +133,20 @@ export class VcsService {
   /**
    * Serializes any model value to a stable string for dirty comparisons. Keys
    * are recursively sorted (array order preserved) so the same logical state
-   * always compares equal, regardless of insertion order.
+   * always compares equal, regardless of insertion order. Object results are
+   * memoized by identity (see `canonicalSerializations`); primitives cannot
+   * be WeakMap keys and skip the memo.
    */
   serialize(value: unknown): string {
-    return JSON.stringify(canonicalJson(value));
+    if (typeof value !== 'object' || value === null) {
+      return JSON.stringify(canonicalJson(value));
+    }
+    let serialized = canonicalSerializations.get(value);
+    if (serialized === undefined) {
+      serialized = JSON.stringify(canonicalJson(value));
+      canonicalSerializations.set(value, serialized);
+    }
+    return serialized;
   }
 
   serializeBook(book: CharacterBook): string {
@@ -143,7 +168,7 @@ export class VcsService {
    */
   dirtyEntryIds(project: ProjectWorkspace): Set<number> {
     const head = this.headCommit(project);
-    const headEntries = new Map<number, CharacterBook['entries'][number]>();
+    const headEntries = new Map<number, CharacterBookEntry>();
     head?.snapshot.entries.forEach((e) => {
       if (typeof e.id === 'number') {
         headEntries.set(e.id, e);

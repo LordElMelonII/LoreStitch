@@ -2,22 +2,24 @@ import { DOCUMENT, Service, inject } from '@angular/core';
 import {
   CharacterBook,
   LoreFileFormat,
-  LORESTITCH_ARCHIVE_VERSION,
-  ProjectWorkspace,
   SillyTavernWorldInfo,
   characterBookToStNative,
   detectLoreFileFormat,
   entryTitle,
   extractSubBook,
   isCharacterBook,
-  isProjectWorkspace,
   isSillyTavernWorldInfo,
   normalizeBookPositions,
   normalizeImportedBook,
-  sanitizeLintPrefs,
   stNativeToCharacterBook,
   toSpecCompliantBook,
 } from '../models/lorebook.model';
+import {
+  LORESTITCH_ARCHIVE_VERSION,
+  isProjectWorkspace,
+  sanitizeLintPrefs,
+  type ProjectWorkspace,
+} from '../models/project.model';
 import { estimateTokens } from './token-estimator';
 
 /** Result of parsing an imported JSON document. */
@@ -95,10 +97,7 @@ export class ImportExportService {
         const archive = json as Record<string, unknown>;
         // Future archive versions may carry a workspace shape this build
         // cannot understand — reject instead of importing a corrupt project.
-        if (
-          archive['version'] !== undefined &&
-          archive['version'] !== LORESTITCH_ARCHIVE_VERSION
-        ) {
+        if (archive['version'] !== undefined && archive['version'] !== LORESTITCH_ARCHIVE_VERSION) {
           return null;
         }
         if (!isProjectWorkspace(archive['workspace'])) {

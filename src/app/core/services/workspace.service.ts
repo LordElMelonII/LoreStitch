@@ -2,12 +2,11 @@ import { Service, computed, inject, signal } from '@angular/core';
 import {
   CharacterBook,
   CharacterBookEntry,
-  LintPrefs,
-  ProjectWorkspace,
   createEmptyBook,
   createEmptyEntry,
   entryTitle,
 } from '../models/lorebook.model';
+import type { LintPrefs, ProjectWorkspace } from '../models/project.model';
 import { randomUuid } from './sha256';
 import { LAST_PROJECT_KEY, StorageService } from './storage.service';
 import { VcsService } from './vcs.service';
@@ -269,15 +268,7 @@ export class WorkspaceService {
       return;
     }
     const newId = this.nextEntryId(project);
-    const copy: CharacterBookEntry = {
-      ...structuredClone(source),
-      id: newId,
-      comment: `${entryTitle(source)} (copy)`,
-      extensions: {
-        ...structuredClone(source.extensions ?? {}),
-        display_index: project.activeBook.entries.length,
-      },
-    };
+    const copy = this.entryCopy(source, newId, project.activeBook.entries.length);
     const index = project.activeBook.entries.findIndex((e) => e.id === entryId);
     this.mutateProject((p) => {
       const entries = [...p.activeBook.entries];
@@ -301,21 +292,32 @@ export class WorkspaceService {
         if (source.id === undefined || !ids.has(source.id)) {
           continue;
         }
-        const copy: CharacterBookEntry = {
-          ...structuredClone(source),
-          id: nextId++,
-          comment: `${entryTitle(source)} (copy)`,
-          extensions: {
-            ...structuredClone(source.extensions ?? {}),
-            display_index: entries.length,
-          },
-        };
+        // display_index tracks the growing array, exactly one past the end at
+        // each insertion.
+        const copy = this.entryCopy(source, nextId++, entries.length);
         const at = entries.findIndex((e) => e.id === source.id);
         entries.splice(at + 1, 0, copy);
         duplicated++;
       }
       return duplicated ? this.withBook(p, { ...p.activeBook, entries }) : p;
     });
+  }
+
+  /** Deep-cloned "(copy)" of `source` with a fresh id and display index. */
+  private entryCopy(
+    source: CharacterBookEntry,
+    id: number,
+    displayIndex: number,
+  ): CharacterBookEntry {
+    return {
+      ...structuredClone(source),
+      id,
+      comment: `${entryTitle(source)} (copy)`,
+      extensions: {
+        ...structuredClone(source.extensions ?? {}),
+        display_index: displayIndex,
+      },
+    };
   }
 
   deleteEntry(entryId: number): void {

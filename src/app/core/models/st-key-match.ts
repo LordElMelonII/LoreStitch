@@ -141,14 +141,21 @@ function collectWholeWordRanges(haystack: string, transformedKey: string): StKey
 }
 
 /**
- * The range-returning view of `matchStKey`'s plaintext path
- * (world-info.js:345-363), sharing the exact fold/boundary logic with it:
- * case-fold both sides (world-info.js:345-346, 268-270); whole-word
- * single-word keys report boundary-delimited key spans (world-info.js:356),
- * multi-word keys (world-info.js:350-353) and the default path
- * (world-info.js:362) keep substring semantics.
+ * The plaintext matching core shared by `matchStKey` and `findStKeyMatches`
+ * (world-info.js:345-363): case-fold both sides (world-info.js:345-346,
+ * 268-270); whole-word single-word keys report boundary-delimited key spans
+ * (world-info.js:356), multi-word keys (world-info.js:350-353) and the
+ * default path (world-info.js:362) keep substring semantics.
+ *
+ * Exported for hot-path callers (the linter's recursion pass) that fold key
+ * and haystack once per pass instead of once per call: with
+ * `caseSensitive: true` this function performs no folds itself, so passing
+ * pre-folded inputs is observably identical to the `caseSensitive: false`
+ * path. Callers that classify keys against ST's regex gate must run that
+ * gate on the RAW key spelling — folding can change its verdict (e.g. the
+ * flags of `/x/G` fold into the valid `/x/g`).
  */
-function findPlaintextRanges(
+export function findPlaintextRanges(
   key: string,
   text: string,
   caseSensitive: boolean,
