@@ -4,7 +4,7 @@ import { type MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ParsedImport, ImportExportService } from '../../core/services/import-export.service';
-import { ProjectWorkspace } from '../../core/models/project.model';
+import type { ProjectWorkspace } from '../../core/models/project.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { LayoutService } from '../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';

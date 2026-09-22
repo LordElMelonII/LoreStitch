@@ -1,5 +1,5 @@
 import { CharacterBookEntry, createEmptyEntry } from '../app/core/models/lorebook.model';
-import { LintPrefs, ProjectWorkspace } from '../app/core/models/project.model';
+import type { LintPrefs, ProjectWorkspace } from '../app/core/models/project.model';
 
 export interface ProjectFixtureOptions {
   id?: string;

@@ -286,7 +286,7 @@ export function normalizeBookPositions(book: CharacterBook): CharacterBook {
       return typeof mirrored === 'number'
         ? {
             ...entry,
-            position: stNumberToPosition(mirrored, (entry.position ?? 'before_char') as WiPosition),
+            position: stNumberToPosition(mirrored, entry.position ?? 'before_char'),
           }
         : entry;
     }),

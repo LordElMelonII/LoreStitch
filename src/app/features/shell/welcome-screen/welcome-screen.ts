@@ -3,7 +3,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { ProjectWorkspace } from '../../../core/models/project.model';
+import type { ProjectWorkspace } from '../../../core/models/project.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { ProjectActionsService } from '../project-actions.service';
 

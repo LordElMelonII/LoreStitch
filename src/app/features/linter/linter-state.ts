@@ -6,7 +6,7 @@ import {
   lintBook,
   lintDiagnosticSignature,
 } from '../../core/services/linter';
-import { LintPrefs } from '../../core/models/project.model';
+import type { LintPrefs } from '../../core/models/project.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 
 /**
