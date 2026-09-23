@@ -359,9 +359,13 @@
       <mat-icon>add_circle</mat-icon>
       <span>New project…</span>
     </button>
-    <button mat-menu-item (click)="actions.importReplaceFromPicker()">
+    <button
+      mat-menu-item
+      (click)="actions.importReplaceFromPicker()"
+      matTooltip="Lorebook JSON, character cards (PNG or JSON), SillyTavern world info, or .stproj archives"
+    >
       <mat-icon>upload_file</mat-icon>
-      <span>Open .json / .stproj…</span>
+      <span>Open lorebook or card…</span>
     </button>
     @if (workspace.activeProject(); as project) {
       <mat-divider></mat-divider>

@@ -261,7 +261,7 @@ test.describe('character card round trip (plan 15 §3.6)', () => {
 
     await page.goto('/');
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Import .json / .stproj' }).click();
+    await page.getByRole('button', { name: 'Import lorebook or character card' }).click();
     await (await chooser).setFiles(path);
     await expectSnackbar(page, 'Not a character card — no embedded lorebook found in the PNG.');
     // The failure kept the app project-less: the welcome screen remains.

@@ -366,7 +366,7 @@ test.describe('delimiters via the real dialog', () => {
     // Re-import that export through the Projects menu (replaces the project).
     const reimportChooser = page.waitForEvent('filechooser');
     await page.locator('[aria-label="Projects menu"]').click();
-    await page.getByText('Open .json / .stproj').click();
+    await page.getByText('Open lorebook or card').click();
     await (await reimportChooser).setFiles(await wrapped.download.path());
     await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
     await expect(page.locator('.entries-sidenav')).toBeAttached();
@@ -565,7 +565,7 @@ test.describe('delimiters via the real dialog', () => {
     // Re-import that export through the Projects menu (replaces the project).
     const reimportChooser = page.waitForEvent('filechooser');
     await page.locator('[aria-label="Projects menu"]').click();
-    await page.getByText('Open .json / .stproj').click();
+    await page.getByText('Open lorebook or card').click();
     await (await reimportChooser).setFiles(await exported.download.path());
     await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
     await expect(page.locator('.entries-sidenav')).toBeAttached();

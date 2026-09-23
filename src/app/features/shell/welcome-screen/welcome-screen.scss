@@ -35,6 +35,15 @@
     justify-content: center;
   }
 
+  // What the import picker accepts (plan 15 follow-up): the button names the
+  // purposes; this line carries the exhaustive format list so nothing hides.
+  .welcome-hint {
+    margin: 2px 0 0;
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+    max-width: 420px;
+  }
+
   .recent {
     margin-top: 28px;
     display: flex;

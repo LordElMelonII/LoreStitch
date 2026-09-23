@@ -35,7 +35,7 @@ export type CardExportTitle = 'Character card (PNG)' | 'Character card (JSON)';
  */
 export async function importLorebook(page: Page, path: string): Promise<void> {
   const importChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Import .json / .stproj' }).click();
+  await page.getByRole('button', { name: 'Import lorebook or character card' }).click();
   await (await importChooser).setFiles(path);
   // Assert the project-open top bar, not merely an attached sidenav: the
   // welcome state also renders a sidenav, so a silently failed import would
@@ -188,15 +188,15 @@ export async function exportCard(page: Page, flavor: 'PNG' | 'JSON'): Promise<Do
 }
 
 /**
- * Re-imports a saved/exported file through the projects menu ('Open .json /
- * .stproj…'), the only import picker reachable with a project already open.
+ * Re-imports a saved/exported file through the projects menu ('Open lorebook
+ * or card…'), the only import picker reachable with a project already open.
  * The round-trip spec drives this same flow inline; it lives here so the
  * card suite reuses it without editing that spec.
  */
 export async function importViaProjectsMenu(page: Page, path: string): Promise<void> {
   const chooser = page.waitForEvent('filechooser');
   await page.locator('[aria-label="Projects menu"]').click();
-  await page.getByText('Open .json / .stproj').click();
+  await page.getByText('Open lorebook or card').click();
   await (await chooser).setFiles(path);
   await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
   await expect(page.locator('.entries-sidenav')).toBeAttached();

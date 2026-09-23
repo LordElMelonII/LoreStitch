@@ -416,7 +416,7 @@ test.describe('responsive studio shell', () => {
           await page.goto('/');
           const [chooser] = await Promise.all([
             page.waitForEvent('filechooser'),
-            page.getByRole('button', { name: 'Import .json / .stproj' }).first().click(),
+            page.getByRole('button', { name: 'Import lorebook or character card' }).first().click(),
           ]);
           await chooser.setFiles(FATE_PATH);
           await expect(page.locator('.entries-sidenav')).toBeAttached();

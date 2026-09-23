@@ -123,7 +123,7 @@ test.describe('native lorebook round trip', () => {
     // 4. The export re-imports through the UI and the edits are still there.
     const reimportChooser = page.waitForEvent('filechooser');
     await page.locator('[aria-label="Projects menu"]').click();
-    await page.getByText('Open .json / .stproj').click();
+    await page.getByText('Open lorebook or card').click();
     await (await reimportChooser).setFiles(await exported.download.path());
     await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
     await expect(page.locator('.entries-sidenav')).toBeAttached();
@@ -160,7 +160,7 @@ test.describe('native lorebook round trip', () => {
     // Re-importing the export keeps the wrapper untouched in the editor.
     const reimportChooser = page.waitForEvent('filechooser');
     await page.locator('[aria-label="Projects menu"]').click();
-    await page.getByText('Open .json / .stproj').click();
+    await page.getByText('Open lorebook or card').click();
     await (await reimportChooser).setFiles(await exported.download.path());
     await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
     await expect(page.locator('.entries-sidenav')).toBeAttached();

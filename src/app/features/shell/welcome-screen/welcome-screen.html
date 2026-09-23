@@ -7,9 +7,12 @@
       <mat-icon>add_circle</mat-icon> New project
     </button>
     <button matButton type="button" (click)="actions.importReplaceFromPicker()">
-      <mat-icon>upload_file</mat-icon> Import .json / .stproj
+      <mat-icon>upload_file</mat-icon> Import lorebook or character card
     </button>
   </div>
+  <p class="welcome-hint">
+    Lorebook JSON, SillyTavern character cards (PNG or JSON), and .stproj archives.
+  </p>
   @if (workspace.savedProjects().length) {
     <div class="recent">
       <h3>Recent projects</h3>
