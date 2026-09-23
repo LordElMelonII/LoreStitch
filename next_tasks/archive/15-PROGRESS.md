@@ -270,3 +270,31 @@ project (no fabrication), card-JSON export is field-faithful not byte-identical,
 `cardDisplayName` defensive lines structurally uncovered, round-trip/mobile-bar e2e
 spot-checked on desktop-chrome only. Branch awaits the user's manual test before the
 ff-only merge.
+
+## Follow-up fix (pre-merge user test) — 2026-09-22
+
+**`2c2b7f0`, `feat(shell): advertise character cards at import entry points`** — the user's
+manual test found the import entry points still advertising the pre-task-15 formats
+("Open .json / .stproj…" in the Projects menu, "Import .json / .stproj" on the welcome
+screen) even though the picker already accepts cards. User-approved purpose-first copy:
+- Welcome button → "Import lorebook or character card" + new muted caption
+  (`welcome-hint`): "Lorebook JSON, SillyTavern character cards (PNG or JSON), and
+  .stproj archives."
+- Projects-menu item → "Open lorebook or card…" + matTooltip: "Lorebook JSON, character
+  cards (PNG or JSON), SillyTavern world info, or .stproj archives."
+
+Pins migrated in the same change: `e2e/helpers.ts` (single source for `importLorebook`/
+`importViaProjectsMenu`), direct call sites in delimiters ×2, round-trip ×2,
+ui-responsiveness ×1, character-card ×1; 3 gitignored capture scripts. No behavior
+change; welcome unit spec pins only `toContain('Import')` — untouched.
+
+**Gates**: unit + lint exit 0; `character-card` 5/5 on all three projects;
+spot-checks (desktop-chrome): round-trip 4 passed/1 skip, delimiters 10 passed/2 skips,
+ui-responsiveness 22 passed, batch-and-tokens 5 passed (helper-consumer). Remaining
+unspot-checked helper consumers (nested-menu-touch, linter, mobile-bottom-bar e2e,
+search-responsiveness, regex-sandbox) ride the single helper string — not swept per the
+long-gate rule.
+
+**Baseline**: `__screenshots__/15-character-card-round-trip/{before,after}/import-entry-*`
+(capture script `import-entry-capture.mjs`, pinned conditions; after-set shows the real
+tooltip and caption). Still awaiting the user's ff-merge go.
