@@ -3,6 +3,31 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.5.0 — September 23, 2026
+
+The character-card release. Lorebooks mostly travel as SillyTavern character
+cards — PNGs or JSON — and LoreStitch can now open them, let you edit the
+lorebook inside, and hand the card back with everything else untouched.
+
+### Highlights
+
+- **Open a character card, edit its lorebook** — importing a character card
+  PNG or a card JSON file (V2 or V3) turns the lorebook embedded inside into
+  a normal LoreStitch project, titled after the character. The Export menu's
+  new "Character card" section hands the card back: the edited book goes into
+  the same card image or JSON under its original name — you never re-supply
+  the picture or pick a file format.
+- **Cards stay whole** — LoreStitch edits the lorebook, never the character:
+  the artwork, the character's name, descriptions, greetings, any custom
+  fields other tools added, and even unrelated data tucked inside the PNG all
+  ride along untouched. A file that isn't a card — or a card without a
+  lorebook — is refused with a plain-language message instead of a mangled
+  import.
+- **The picker finally says so** — the Projects menu now opens "lorebook or
+  card…" with a tooltip listing every accepted format, and the welcome
+  screen's import button says "lorebook or character card" with a short
+  format line underneath.
+
 ## 1.4.1 — September 21, 2026
 
 A shape-up for the phone batch bar. Selecting several entries used to trade
