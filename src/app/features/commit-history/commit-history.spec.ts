@@ -39,9 +39,7 @@ describe('CommitHistory', () => {
   }
 
   function commitInput(): HTMLInputElement {
-    const input = element().querySelector<HTMLInputElement>(
-      'input[aria-label="Commit message"]',
-    );
+    const input = element().querySelector<HTMLInputElement>('input[aria-label="Commit message"]');
     assert(input);
     return input;
   }
@@ -413,7 +411,7 @@ describe('CommitHistory', () => {
       await mount();
       const exportSpy = vi
         .spyOn(importer, 'exportProject')
-        .mockImplementation(() => undefined);
+        .mockImplementation(() => ({ ok: true }));
 
       element().querySelector<HTMLButtonElement>('.history-hint button')?.click();
       await fixture.whenStable();
@@ -426,7 +424,7 @@ describe('CommitHistory', () => {
       await mount();
       const exportSpy = vi
         .spyOn(importer, 'exportProject')
-        .mockImplementation(() => undefined);
+        .mockImplementation(() => ({ ok: true }));
 
       element().querySelector<HTMLButtonElement>('.history-hint button')?.click();
       await fixture.whenStable();

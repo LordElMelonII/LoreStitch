@@ -34,6 +34,8 @@ import {
   type OpenedCard,
 } from '../models/character-card';
 import { isJsonObject } from '../models/lorebook.model';
+import { type BookDefect, validateBook } from '../models/book-schema';
+import { type BookRepair, planBookRepair } from '../models/book-repair';
 import { estimateTokens } from './token-estimator';
 
 /** Result of parsing an imported JSON document. */
@@ -85,6 +87,33 @@ export interface CardExportFailure {
   readonly reason: CardExportFailureReason;
   readonly message: string;
 }
+
+/**
+ * Result of the book-carrying exports (plan 09 §3.5): every method runs
+ * `validateBook` on the exact book it is about to serialize BEFORE any bytes
+ * are produced. `ok: true` means the book was clean and the download fired —
+ * the bytes are identical to the pre-validation behavior, validation only
+ * observes. `ok: false` means no `download*` method was called; `defects`
+ * carry the findings, and `repair` is the one-click plan for the fixable
+ * subset (`null` when the defects admit no repair — hard-block territory).
+ * Callers may ignore the result for now; the repair-dialog surfacing is a
+ * later phase (plan 09 §3.5 P2).
+ */
+export type ExportResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly defects: BookDefect[];
+      readonly repair: BookRepair | null;
+      /**
+       * Additive (plan 09 deviation, P1): present only on `exportProject`'s
+       * snapshot hard-block. Snapshots are history — not repairable
+       * in-session — so the failure must be attributable: a human label
+       * naming the offending commit (`"<message> (<id prefix>)"`), for the UI
+       * to surface verbatim.
+       */
+      readonly source?: string;
+    };
 
 /**
  * Card-JSON export availability (plan 15 §3.5): any shell — a card JSON was
@@ -310,36 +339,80 @@ export class ImportExportService {
   // Exports
   // -------------------------------------------------------------------------
 
-  /** Clean SillyTavern CharacterBook JSON (V2 schema, no LoreStitch extras). */
-  exportCharacterBook(book: CharacterBook, title: string): void {
+  /**
+   * Clean SillyTavern CharacterBook JSON (V2 schema, no LoreStitch extras).
+   * Validates first (plan 09 §3.5): a defective book returns its findings and
+   * repair plan instead of downloading.
+   */
+  exportCharacterBook(book: CharacterBook, title: string): ExportResult {
+    const defects = validateBook(book);
+    if (defects.length > 0) {
+      return { ok: false, defects, repair: planBookRepair(book, defects) };
+    }
     this.downloadJson(toSpecCompliantBook(book), `${this.fileName(title)}-lorebook.json`);
+    return { ok: true };
   }
 
-  /** Native SillyTavern world-info JSON, directly importable into ST. */
-  exportStNative(book: CharacterBook, title: string): void {
+  /**
+   * Native SillyTavern world-info JSON, directly importable into ST.
+   * Validates first (plan 09 §3.5) — the uid-keyed bag silently collapses
+   * duplicate ids, so the pre-flight is what keeps malformed bytes off disk.
+   */
+  exportStNative(book: CharacterBook, title: string): ExportResult {
+    const defects = validateBook(book);
+    if (defects.length > 0) {
+      return { ok: false, defects, repair: planBookRepair(book, defects) };
+    }
     this.downloadJson(characterBookToStNative(book), `${this.fileName(title)}-world-info.json`);
+    return { ok: true };
   }
 
   /**
    * Modular split export: writes only the selected entries as a standalone
    * lorebook file (see `extractSubBook` for how the sub-book is derived).
+   * Validates the SUB-BOOK — that is the book being written (plan 09 §3.5).
    */
   exportSelectedBook(
     book: CharacterBook,
     entryIds: readonly number[],
     title: string,
     format: 'st_native' | 'character_book',
-  ): void {
+  ): ExportResult {
     const subBook = extractSubBook(book, entryIds, title);
-    if (format === 'character_book') {
-      this.exportCharacterBook(subBook, title);
-    } else {
-      this.exportStNative(subBook, title);
+    const defects = validateBook(subBook);
+    if (defects.length > 0) {
+      return { ok: false, defects, repair: planBookRepair(subBook, defects) };
     }
+    return format === 'character_book'
+      ? this.exportCharacterBook(subBook, title)
+      : this.exportStNative(subBook, title);
   }
 
-  /** Full project archive including the commit history. */
-  exportProject(project: ProjectWorkspace): void {
+  /**
+   * Full project archive including the commit history. Validates the
+   * activeBook AND every commit snapshot (plan 09 §3.5): snapshots are
+   * history — not repairable in-session — so a defective snapshot hard-blocks
+   * with `repair: null` and `source` naming its commit. Snapshots are checked
+   * first: the block is terminal (no repair exists), and reporting the
+   * activeBook's fixable defects first would route the user into a repair
+   * that cannot unblock the archive.
+   */
+  exportProject(project: ProjectWorkspace): ExportResult {
+    for (const commit of project.commits) {
+      const snapshotDefects = validateBook(commit.snapshot);
+      if (snapshotDefects.length > 0) {
+        return {
+          ok: false,
+          defects: snapshotDefects,
+          repair: null,
+          source: `${commit.message} (${commit.id.slice(0, 7)})`,
+        };
+      }
+    }
+    const defects = validateBook(project.activeBook);
+    if (defects.length > 0) {
+      return { ok: false, defects, repair: planBookRepair(project.activeBook, defects) };
+    }
     const archive = {
       format: 'lorestitch-project' as const,
       version: LORESTITCH_ARCHIVE_VERSION,
@@ -351,6 +424,7 @@ export class ImportExportService {
       workspace: serializeWorkspaceForArchive(project),
     };
     this.downloadJson(archive, `${this.fileName(project.title)}.stproj`);
+    return { ok: true };
   }
 
   /**
@@ -429,6 +503,8 @@ export class ImportExportService {
   /**
    * Proofread/digest export in Markdown:
    * `### [name] (Order: n | Keys: a, b)` followed by the entry content.
+   * Stays `void` and unvalidated by design (plan 09 §3.5): a proofreading
+   * artifact, never an ST input — defective books still digest.
    */
   exportMarkdownDigest(
     book: CharacterBook,

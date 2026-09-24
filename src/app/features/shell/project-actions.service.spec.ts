@@ -441,7 +441,9 @@ describe('ProjectActionsService', () => {
 
   it('exports the picked selection as a standalone book', async () => {
     await workspace.createProject('Fuyuki');
-    const exportSpy = vi.spyOn(importer, 'exportSelectedBook').mockImplementation(() => undefined);
+    const exportSpy = vi
+      .spyOn(importer, 'exportSelectedBook')
+      .mockImplementation(() => ({ ok: true }));
     openResponsive.mockReturnValue({
       afterDismissed: () => of({ entryIds: [0, 2], title: 'Split book', format: 'st_native' }),
     });
@@ -482,7 +484,9 @@ describe('ProjectActionsService', () => {
 
   it('exports nothing when the picker dialog is dismissed', async () => {
     await workspace.createProject('Fuyuki');
-    const exportSpy = vi.spyOn(importer, 'exportSelectedBook').mockImplementation(() => undefined);
+    const exportSpy = vi
+      .spyOn(importer, 'exportSelectedBook')
+      .mockImplementation(() => ({ ok: true }));
 
     await actions.exportSelectedEntries([0]);
 
@@ -492,7 +496,9 @@ describe('ProjectActionsService', () => {
 
   it('exports nothing when the project disappeared while the dialog was open', async () => {
     await workspace.createProject('Fuyuki');
-    const exportSpy = vi.spyOn(importer, 'exportSelectedBook').mockImplementation(() => undefined);
+    const exportSpy = vi
+      .spyOn(importer, 'exportSelectedBook')
+      .mockImplementation(() => ({ ok: true }));
     openResponsive.mockImplementation(() => {
       workspace.activeProject.set(null);
       return { afterDismissed: () => of({ entryIds: [0], title: 'Split', format: 'st_native' }) };
@@ -509,9 +515,11 @@ describe('ProjectActionsService', () => {
 
   it('exports the open project in every fixed format through the importer', async () => {
     await workspace.createProject('Fuyuki');
-    const bookSpy = vi.spyOn(importer, 'exportCharacterBook').mockImplementation(() => undefined);
-    const nativeSpy = vi.spyOn(importer, 'exportStNative').mockImplementation(() => undefined);
-    const archiveSpy = vi.spyOn(importer, 'exportProject').mockImplementation(() => undefined);
+    const bookSpy = vi
+      .spyOn(importer, 'exportCharacterBook')
+      .mockImplementation(() => ({ ok: true }));
+    const nativeSpy = vi.spyOn(importer, 'exportStNative').mockImplementation(() => ({ ok: true }));
+    const archiveSpy = vi.spyOn(importer, 'exportProject').mockImplementation(() => ({ ok: true }));
     const digestSpy = vi
       .spyOn(importer, 'exportMarkdownDigest')
       .mockImplementation(() => undefined);
@@ -530,9 +538,11 @@ describe('ProjectActionsService', () => {
   });
 
   it('skips every fixed-format export without an open project', async () => {
-    const bookSpy = vi.spyOn(importer, 'exportCharacterBook').mockImplementation(() => undefined);
-    const nativeSpy = vi.spyOn(importer, 'exportStNative').mockImplementation(() => undefined);
-    const archiveSpy = vi.spyOn(importer, 'exportProject').mockImplementation(() => undefined);
+    const bookSpy = vi
+      .spyOn(importer, 'exportCharacterBook')
+      .mockImplementation(() => ({ ok: true }));
+    const nativeSpy = vi.spyOn(importer, 'exportStNative').mockImplementation(() => ({ ok: true }));
+    const archiveSpy = vi.spyOn(importer, 'exportProject').mockImplementation(() => ({ ok: true }));
     const digestSpy = vi
       .spyOn(importer, 'exportMarkdownDigest')
       .mockImplementation(() => undefined);

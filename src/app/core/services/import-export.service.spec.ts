@@ -1196,6 +1196,389 @@ describe('ImportExportService exports', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(downloads).toHaveLength(0);
   });
+
+  // -------------------------------------------------------------------------
+  // Export pre-flight (plan 09 §3.5): every book-carrying export validates the
+  // exact book it is about to write BEFORE serialization — a clean book
+  // downloads byte-identically to the pre-task behavior (the pins below were
+  // captured against the unchanged serializers at task start), a defective one
+  // returns `{ ok: false, defects, repair }` and no `download*` call fires.
+  // -------------------------------------------------------------------------
+
+  /** Drains the macrotask queue, then asserts nothing was downloaded. */
+  async function expectNoDownload(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(downloads).toHaveLength(0);
+  }
+
+  it('blocks a fixable V2 export with the findings and a repair plan, downloading nothing', async () => {
+    const book: CharacterBook = {
+      name: 'Duplicated',
+      extensions: {},
+      entries: [makeEntry(7), makeEntry(1, { id: 7 })],
+    };
+
+    const result = service.exportCharacterBook(book, 'Duplicated');
+
+    expect(result.ok).toBe(false);
+    assert(!result.ok);
+    expect(result.defects.map((defect) => defect.kind)).toEqual([
+      'entry-id-duplicate',
+      'entry-id-duplicate',
+    ]);
+    assert(result.repair);
+    expect(result.repair.changes).toEqual([
+      // First occurrence keeps id 7; the later one renumbers from max+1.
+      { kind: 'reassign-id', entryTitle: 'Entry 1', from: '7', to: '8' },
+    ]);
+    await expectNoDownload();
+  });
+
+  it('blocks an unfixable V2 export with repair null, downloading nothing', async () => {
+    const book: CharacterBook = {
+      name: 'Broken',
+      extensions: {},
+      entries: [makeEntry(0, { content: 5 as unknown as string })],
+    };
+
+    const result = service.exportCharacterBook(book, 'Broken');
+
+    expect(result.ok).toBe(false);
+    assert(!result.ok);
+    expect(result.defects.map((defect) => defect.kind)).toEqual(['entry-content-not-string']);
+    expect(result.repair).toBeNull(); // hard-block territory — no repair exists
+    await expectNoDownload();
+  });
+
+  it('returns ok for a clean V2 book and pins the bytes byte-identically', async () => {
+    // Byte-identity pin (plan 09 §3.6): the exact serialized output captured
+    // against the pre-task serializer — validation observes, never mutates.
+    const expectedBytes = `{
+  "name": "Clean Book",
+  "extensions": {},
+  "entries": [
+    {
+      "id": 0,
+      "keys": [
+        "rose"
+      ],
+      "secondary_keys": [
+        "night"
+      ],
+      "content": "content 0",
+      "comment": "Entry 0",
+      "enabled": true,
+      "insertion_order": 0,
+      "extensions": {
+        "position": 0
+      },
+      "position": "before_char"
+    }
+  ]
+}`;
+    const book: CharacterBook = {
+      name: 'Clean Book',
+      extensions: {},
+      entries: [makeEntry(0, { keys: ['rose'], secondary_keys: ['night'] })],
+    };
+
+    const result = service.exportCharacterBook(book, 'Clean Book');
+
+    expect(result).toEqual({ ok: true });
+    expect(downloads).toHaveLength(1);
+    const capture = downloads[0];
+    assert(capture);
+    expect(capture.fileName).toBe('Clean-Book-lorebook.json');
+    expect(await capture.blob.text()).toBe(expectedBytes);
+    await settle();
+  });
+
+  it('blocks a fixable native export — the uid bag would silently collapse it', async () => {
+    const book: CharacterBook = {
+      name: 'Duplicated',
+      extensions: {},
+      entries: [makeEntry(7), makeEntry(1, { id: 7 })],
+    };
+
+    const result = service.exportStNative(book, 'Duplicated');
+
+    expect(result.ok).toBe(false);
+    assert(!result.ok);
+    expect(result.defects).toHaveLength(2);
+    assert(result.repair);
+    expect(result.repair.changes.map((change) => change.kind)).toEqual(['reassign-id']);
+    await expectNoDownload();
+  });
+
+  it('returns ok for a clean native book and pins the bytes byte-identically', async () => {
+    // Byte-identity pin (plan 09 §3.6): the exact serialized output captured
+    // against the pre-task serializer.
+    const expectedBytes = `{
+  "entries": {
+    "3": {
+      "uid": 3,
+      "key": [
+        "key-3"
+      ],
+      "keysecondary": [],
+      "comment": "Entry 3",
+      "content": "content 3",
+      "constant": false,
+      "vectorized": false,
+      "selective": false,
+      "selectiveLogic": 0,
+      "addMemo": true,
+      "order": 3,
+      "position": 0,
+      "disable": false,
+      "excludeRecursion": false,
+      "preventRecursion": false,
+      "delayUntilRecursion": false,
+      "probability": 100,
+      "useProbability": true,
+      "depth": 4,
+      "outletName": "",
+      "group": "",
+      "groupOverride": false,
+      "groupWeight": 100,
+      "scanDepth": null,
+      "caseSensitive": null,
+      "matchWholeWords": null,
+      "useGroupScoring": null,
+      "automationId": "",
+      "role": null,
+      "sticky": null,
+      "cooldown": null,
+      "delay": null,
+      "triggers": [],
+      "ignoreBudget": false,
+      "displayIndex": 0,
+      "matchPersonaDescription": false,
+      "matchCharacterDescription": false,
+      "matchCharacterPersonality": false,
+      "matchCharacterDepthPrompt": false,
+      "matchScenario": false,
+      "matchCreatorNotes": false
+    }
+  },
+  "name": "Clean Native"
+}`;
+    const book: CharacterBook = {
+      name: 'Clean Native',
+      extensions: {},
+      entries: [makeEntry(3)],
+    };
+
+    const result = service.exportStNative(book, 'Clean Native');
+
+    expect(result).toEqual({ ok: true });
+    expect(downloads).toHaveLength(1);
+    const capture = downloads[0];
+    assert(capture);
+    expect(capture.fileName).toBe('Clean-Native-world-info.json');
+    expect(await capture.blob.text()).toBe(expectedBytes);
+    await settle();
+  });
+
+  it('validates the SUB-book on split export and blocks a fixable selection', async () => {
+    // Both entries carry id 5, so the selection [5] extracts BOTH — the
+    // sub-book (the book actually written) is defective even though the check
+    // must never fire on the source book's behalf.
+    const book: CharacterBook = {
+      name: 'Source',
+      extensions: {},
+      entries: [makeEntry(5, { keys: ['target'] }), makeEntry(9, { id: 5, keys: ['twin'] })],
+    };
+
+    const result = service.exportSelectedBook(book, [5], 'Subset', 'st_native');
+
+    expect(result.ok).toBe(false);
+    assert(!result.ok);
+    expect(result.defects).toHaveLength(2); // both duplicate positions report
+    assert(result.repair);
+    expect(result.repair.changes).toEqual([
+      { kind: 'reassign-id', entryTitle: 'Entry 9', from: '5', to: '6' },
+    ]);
+    await expectNoDownload();
+  });
+
+  it('blocks the split export with repair null when the sub-book is unfixable', async () => {
+    const book: CharacterBook = {
+      name: 'Source',
+      extensions: {},
+      entries: [makeEntry(0, { content: 5 as unknown as string })],
+    };
+
+    const result = service.exportSelectedBook(book, [0], 'Subset', 'character_book');
+
+    expect(result.ok).toBe(false);
+    assert(!result.ok);
+    expect(result.defects.map((defect) => defect.kind)).toEqual(['entry-content-not-string']);
+    expect(result.repair).toBeNull();
+    await expectNoDownload();
+  });
+
+  it('returns ok for a clean split selection through the same export path', async () => {
+    const book: CharacterBook = {
+      name: 'Source',
+      extensions: {},
+      entries: [makeEntry(0), makeEntry(2)],
+    };
+
+    const result = service.exportSelectedBook(book, [2], 'Subset', 'character_book');
+
+    expect(result).toEqual({ ok: true });
+    expect(downloads).toHaveLength(1);
+    const capture = downloads[0];
+    assert(capture);
+    expect(capture.fileName).toBe('Subset-lorebook.json');
+    await settle();
+  });
+
+  it('hard-blocks the archive on a defective snapshot, naming the commit', async () => {
+    // Snapshots are history — not repairable in-session — so a defective
+    // snapshot hard-blocks even when the activeBook is fixable too (snapshot
+    // checks run first: no repair can unblock the archive anyway).
+    const project = makeProject('Broken History');
+    project.commits = [
+      {
+        id: 'aaaa111bbbb22',
+        parentId: null,
+        timestamp: 1,
+        message: 'Initial commit',
+        snapshot: {
+          name: 'Old',
+          extensions: {},
+          entries: [makeEntry(7), makeEntry(1, { id: 7 })],
+        },
+      },
+    ];
+    project.headCommitId = 'aaaa111bbbb22';
+    project.activeBook = {
+      name: 'Current',
+      extensions: {},
+      entries: [makeEntry(0, { insertion_order: NaN })],
+    };
+
+    const result = service.exportProject(project);
+
+    expect(result.ok).toBe(false);
+    assert(!result.ok);
+    // The snapshot's defects are reported, not the activeBook's fixable one.
+    expect(result.defects.map((defect) => defect.kind)).toEqual([
+      'entry-id-duplicate',
+      'entry-id-duplicate',
+    ]);
+    expect(result.repair).toBeNull();
+    // The block names the offending commit for the UI to surface verbatim.
+    expect(result.source).toBe('Initial commit (aaaa111)');
+    await expectNoDownload();
+  });
+
+  it('offers the activeBook repair when only the activeBook is defective', async () => {
+    const project = makeProject('Fixable Present');
+    project.commits = [
+      {
+        id: 'aaaa111bbbb22',
+        parentId: null,
+        timestamp: 1,
+        message: 'Initial commit',
+        snapshot: structuredClone(project.activeBook), // clean history
+      },
+    ];
+    project.headCommitId = 'aaaa111bbbb22';
+    project.activeBook = {
+      ...project.activeBook,
+      entries: [makeEntry(0, { insertion_order: NaN })],
+    };
+
+    const result = service.exportProject(project);
+
+    expect(result.ok).toBe(false);
+    assert(!result.ok);
+    expect(result.defects.map((defect) => defect.kind)).toEqual([
+      'entry-insertion-order-not-finite',
+    ]);
+    assert(result.repair);
+    expect(result.repair.changes).toEqual([
+      { kind: 'default-insertion-order', entryTitle: 'Entry 0', from: 'NaN', to: '100' },
+    ]);
+    await expectNoDownload();
+  });
+
+  it('exports a clean multi-commit archive ok, bytes pinned modulo the timestamp', async () => {
+    // Byte-identity pin (plan 09 §3.6): the archive envelope, its key order and
+    // the whole serialized workspace are pinned; only `exportedAt` is expected
+    // to differ run to run (extracted from the actual download).
+    const now = 1727000000000;
+    const emptyBook = createEmptyBook('Clean Project');
+    const project: ProjectWorkspace = {
+      id: 'project-1',
+      title: 'Clean Project',
+      createdAt: now,
+      updatedAt: now,
+      targetType: 'standalone_lorebook',
+      activeBook: emptyBook,
+      headCommitId: 'cccc333dddd44',
+      commits: [
+        {
+          id: 'aaaa111bbbb22',
+          parentId: null,
+          timestamp: 1727000000001,
+          message: 'Initial commit',
+          snapshot: structuredClone(emptyBook),
+        },
+        {
+          id: 'cccc333dddd44',
+          parentId: 'aaaa111bbbb22',
+          timestamp: 1727000000002,
+          message: 'Add entries',
+          snapshot: structuredClone(emptyBook),
+        },
+      ],
+    };
+
+    const result = service.exportProject(project);
+
+    expect(result).toEqual({ ok: true });
+    expect(downloads).toHaveLength(1);
+    const capture = downloads[0];
+    assert(capture);
+    expect(capture.fileName).toBe('Clean-Project.stproj');
+    const text = await capture.blob.text();
+    const archive = JSON.parse(text) as Record<string, unknown>;
+    const exportedAt = archive['exportedAt'];
+    assert(typeof exportedAt === 'string');
+    expect(Number.isNaN(Date.parse(exportedAt))).toBe(false);
+    const expected = {
+      format: 'lorestitch-project',
+      version: LORESTITCH_ARCHIVE_VERSION,
+      exportedAt,
+      workspace: project,
+    };
+    expect(text).toBe(JSON.stringify(expected, null, 2));
+    await settle();
+  });
+
+  it('keeps the markdown digest void and unvalidated by design', () => {
+    // plan 09 §3.5: the digest is a proofreading artifact, never an ST input —
+    // a book the pre-flight would block still digests.
+    const book: CharacterBook = {
+      name: 'Defected',
+      extensions: {},
+      entries: [
+        makeEntry(4, { keys: ['a'], insertion_order: 2, content: 'Body four' }),
+        makeEntry(9, { id: 4, keys: ['b'], insertion_order: 1, content: 'Body nine' }),
+      ],
+    };
+
+    service.exportMarkdownDigest(book, 'Defected');
+
+    expect(downloads).toHaveLength(1);
+    const capture = downloads[0];
+    assert(capture);
+    expect(capture.fileName).toBe('Defected-digest.md');
+  });
 });
 
 describe('ImportExportService card imports', () => {
