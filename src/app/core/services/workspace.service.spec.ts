@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { WorkspaceService } from './workspace.service';
 import { StorageService } from './storage.service';
 import { createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
+import type { BookRepair } from '../models/book-repair';
 
 /**
  * The WorkspaceService tests run against the in-memory fallback of the
@@ -146,6 +147,77 @@ describe('WorkspaceService', () => {
     book.entries = [createEmptyEntry(0, 0), createEmptyEntry(1, 1)];
     workspace.replaceBook(book);
     expect(workspace.entries()).toHaveLength(2);
+  });
+
+  it('applyBookRepair replaces the active book, marks the tree dirty and schedules the save', async () => {
+    await workspace.createProject('Fuyuki', 'standalone_lorebook');
+    const storage = TestBed.inject(StorageService);
+    const scheduleSave = vi.spyOn(storage, 'scheduleSave');
+    const before = workspace.activeProject();
+    assert(before);
+
+    const book = createEmptyBook('Repaired');
+    book.entries = [createEmptyEntry(0, 0)];
+    const repair: BookRepair = {
+      book,
+      changes: [{ kind: 'coerce-id', entryTitle: 'Tavern', from: '"0"', to: '0' }],
+    };
+
+    workspace.applyBookRepair(repair);
+
+    const after = workspace.activeProject();
+    assert(after);
+    expect(after.activeBook).toBe(book);
+    expect(workspace.hasUnsavedChanges()).toBe(true);
+    // The debounced persistence fired with the repaired tree.
+    expect(scheduleSave).toHaveBeenCalledWith(after);
+    // History is untouched — the commits array keeps its identity.
+    expect(after.commits).toBe(before.commits);
+  });
+
+  it('applyBookRepair with a selection folds the sub-book plan back onto the mapped parent entries only', async () => {
+    await workspace.createProject('Fuyuki', 'standalone_lorebook');
+    const first = createEmptyEntry(1, 0);
+    const second = { ...createEmptyEntry(2, 1), priority: Number.POSITIVE_INFINITY };
+    const third = createEmptyEntry(3, 2);
+    (third as unknown as Record<string, unknown>)['plugin_note'] = 'hand-edited';
+    workspace.replaceBook({ ...createEmptyBook('Fuyuki'), entries: [first, second, third] });
+
+    // The plan is over the sub-book of the selection [2, 3] — `extractSubBook`
+    // order, i.e. parent book order: order defaulted on the first sub entry,
+    // the second renumbered. Everything else in the plan is a no-op.
+    const subFirst = { ...structuredClone(second), insertion_order: 100 };
+    const subSecond = { ...structuredClone(third), id: 9 };
+    const repair: BookRepair = {
+      book: { ...createEmptyBook('Split'), entries: [subFirst, subSecond] },
+      changes: [
+        { kind: 'default-insertion-order', entryTitle: 'Two', from: '∞', to: '100' },
+        { kind: 'reassign-id', entryTitle: 'Three', from: '3', to: '9' },
+      ],
+    };
+
+    workspace.applyBookRepair(repair, [2, 3]);
+
+    const entries = workspace.entries();
+    expect(entries).toHaveLength(3);
+    // Unselected entry untouched (same reference — no rebuild).
+    expect(entries[0]).toBe(first);
+    // First sub entry folded back onto parent entry 2: order patched, every
+    // unflagged field (id, the infinite priority) kept as is.
+    const patchedSecond = entries[1];
+    assert(patchedSecond);
+    expect(patchedSecond.id).toBe(2);
+    expect(patchedSecond.insertion_order).toBe(100);
+    expect(patchedSecond.priority).toBe(Number.POSITIVE_INFINITY);
+    // Second sub entry folded back onto parent entry 3: id renumbered, the
+    // unknown vendor key rides along verbatim.
+    const patchedThird = entries[2];
+    assert(patchedThird);
+    expect(patchedThird.id).toBe(9);
+    expect(patchedThird.insertion_order).toBe(third.insertion_order);
+    expect((patchedThird as unknown as Record<string, unknown>)['plugin_note']).toBe('hand-edited');
+    // A repair is a working-tree edit like any other: dirty and committable.
+    expect(workspace.hasUnsavedChanges()).toBe(true);
   });
 
   it('reports a save failure when browser storage rejects writes', async () => {

@@ -3,11 +3,19 @@ import { firstValueFrom } from 'rxjs';
 import { type MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { ParsedImport, ImportExportService } from '../../core/services/import-export.service';
+import {
+  ParsedImport,
+  ImportExportService,
+  type ExportResult,
+} from '../../core/services/import-export.service';
+import type { CharacterBook } from '../../core/models/lorebook.model';
 import type { ProjectWorkspace } from '../../core/models/project.model';
+import { validateBook } from '../../core/models/book-schema';
+import { planBookRepair } from '../../core/models/book-repair';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { LayoutService } from '../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
+import { type BookRepairDialogData } from '../../shared/components/book-repair-dialog/book-repair-dialog.model';
 import { type MergeDialogData, type MergeOutcome } from '../merge-resolver/merge-resolver.model';
 import { type ExportSelection } from '../merge-resolver/export-selected.model';
 import { type ExportSelectedDialogData } from '../merge-resolver/export-selected-dialog';
@@ -155,24 +163,113 @@ export class ProjectActionsService {
     }
 
     if (mode === 'merge') {
-      await this.openMergeDialog(parsed, file.name);
+      // The merge path offers the repair on the INCOMING book before the
+      // cherry-picker opens (plan 09 §3.4) — the offer blocks the flow, and
+      // "Import as-is" merges the original book verbatim.
+      const incoming = await this.offerImportRepair(parsed.book, file.name);
+      if (!incoming) {
+        return; // Defensive hard block: nothing is imported.
+      }
+      await this.openMergeDialog({ ...parsed, book: incoming }, file.name);
       return;
     }
 
     if (parsed.workspace) {
+      // `.stproj` archives keep their own path — the plan scopes the import
+      // wiring to book imports (plan 09 §3.4).
       await this.workspace.openImportedWorkspace(parsed.workspace);
       this.snackBar.open(`Opened project “${parsed.workspace.title}”.`, 'OK', { duration: 3500 });
       return;
     }
 
-    await this.workspace.startProjectFromBook(parsed.suggestedTitle, parsed.book, parsed.cardShell);
+    const book = await this.offerImportRepair(parsed.book, file.name);
+    if (!book) {
+      return; // Defensive hard block: nothing is imported.
+    }
+    await this.workspace.startProjectFromBook(parsed.suggestedTitle, book, parsed.cardShell);
     this.snackBar.open(
       parsed.cardShell
-        ? `Imported ${parsed.book.entries.length} entries from character card ${file.name}.`
-        : `Imported ${parsed.book.entries.length} entries from ${file.name}.`,
+        ? `Imported ${book.entries.length} entries from character card ${file.name}.`
+        : `Imported ${book.entries.length} entries from ${file.name}.`,
       'OK',
       { duration: 3500 },
     );
+  }
+
+  /**
+   * Offers the guided repair for a parsed book BEFORE it enters the workspace
+   * (plan 09 §3.4). Returns the book to import: the repaired copy on "Fix",
+   * the original verbatim on "Import as-is" (a documented opt-in — the export
+   * backstop re-offers the repair at the door), and `null` after the
+   * defensive hard-block when defects admit no repair (unreachable after the
+   * import guards and `normalizeImportedBook`, but such a book imports
+   * nothing). A clean book passes straight through — no dialog, zero overhead
+   * (the never-false-positive pin, plan 09 §7.1).
+   */
+  private async offerImportRepair(book: CharacterBook, fileName: string): Promise<CharacterBook | null> {
+    const defects = validateBook(book);
+    if (defects.length === 0) {
+      return book;
+    }
+    const repair = planBookRepair(book, defects);
+    const fix = await this.openRepairDialog({
+      context: 'import',
+      repair,
+      defects,
+      bookTitle: book.name || fileName,
+    });
+    if (!repair) {
+      return null; // No automatic fix exists — import nothing.
+    }
+    return fix ? repair.book : book;
+  }
+
+  /**
+   * Surfaces a failed export's pre-flight result (plan 09 §3.5): fixable
+   * defects open the guided repair dialog (context 'export') and the result
+   * reports the user's consent; unfixable ones open the hard block listing
+   * the defects, with the snapshot attribution when present. Returns true
+   * only when the user consented to a repair plan — the caller then applies
+   * it and re-runs the same export.
+   */
+  private async offerExportRepair(
+    result: Extract<ExportResult, { ok: false }>,
+    bookTitle: string,
+  ): Promise<boolean> {
+    return this.openRepairDialog({
+      context: 'export',
+      repair: result.repair,
+      defects: result.defects,
+      source: result.source,
+      bookTitle,
+    });
+  }
+
+  /**
+   * Opens the guided repair pane through the responsive overlay — dialog on
+   * tablet/desktop, bottom sheet on phones — and resolves its boolean result
+   * (truthy only on the repair consent, the ConfirmDialog contract).
+   */
+  private async openRepairDialog(data: BookRepairDialogData): Promise<boolean> {
+    const { BookRepairDialog } = await import(
+      '../../shared/components/book-repair-dialog/book-repair-dialog'
+    );
+    const ref = this.overlays.openResponsive<
+      InstanceType<typeof BookRepairDialog>,
+      BookRepairDialogData,
+      boolean
+    >(BookRepairDialog, {
+      data,
+      dialog: {
+        width: '100%',
+        maxWidth: 'min(540px, calc(100vw - 96px))',
+        panelClass: 'app-repair-dialog',
+        ariaLabel: 'Book repair',
+      },
+      sheetPanelClass: 'app-repair-sheet',
+      sheetConfig: { ariaLabel: 'Book repair' },
+    });
+    return (await paneResult(ref)) === true;
   }
 
   /** PNG card path: bytes → card boundary; a refusal snacks its approved copy. */
@@ -318,21 +415,51 @@ export class ProjectActionsService {
     if (!selection) {
       return;
     }
-    const project = this.workspace.activeProject();
-    if (!project) {
+
+    // Each run re-reads the fresh activeBook (and bails when the project
+    // disappeared while the dialog was open) so the post-repair retry
+    // exports the repaired tree (plan 09 §3.5).
+    const runSplit = (): ExportResult | null => {
+      const current = this.workspace.activeProject();
+      if (!current) {
+        return null;
+      }
+      return this.importer.exportSelectedBook(
+        current.activeBook,
+        selection.entryIds,
+        selection.title,
+        selection.format,
+      );
+    };
+    const announce = (): void => {
+      this.snackBar.open(
+        `Exported ${selection.entryIds.length} entries as “${selection.title}”.`,
+        'OK',
+        { duration: 4000 },
+      );
+    };
+
+    const result = runSplit();
+    if (result === null || result.ok) {
+      if (result !== null) {
+        announce();
+      }
       return;
     }
-    this.importer.exportSelectedBook(
-      project.activeBook,
-      selection.entryIds,
-      selection.title,
-      selection.format,
-    );
-    this.snackBar.open(
-      `Exported ${selection.entryIds.length} entries as “${selection.title}”.`,
-      'OK',
-      { duration: 4000 },
-    );
+
+    // The split repair is planned over the SUB-book (that is what the export
+    // writes) while the workspace holds the parent. On consent, fold the fix
+    // back onto the mapped parent entries through the workspace mutator, then
+    // re-run the same export — it re-validates clean and downloads.
+    const consented = await this.offerExportRepair(result, selection.title);
+    if (!consented || !result.repair) {
+      return; // Declined or hard block: no download, nothing else.
+    }
+    this.workspace.applyBookRepair(result.repair, selection.entryIds);
+    const retry = runSplit();
+    if (retry !== null && retry.ok) {
+      announce();
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -344,29 +471,70 @@ export class ProjectActionsService {
    * the mobile bottom bar's Export menu both call them, and the two card
    * exports with them) — the logic exists exactly once; the menus only wire
    * items to these methods. Card failures snack the approved copy table
-   * (`project-actions.constants.ts`).
+   * (`project-actions.constants.ts`). Each book-carrying export consumes the
+   * importer's pre-flight `ExportResult` (plan 09 §3.5): a fixable book opens
+   * the guided repair dialog — consent applies the plan through the workspace
+   * mutator and re-runs the same export on the repaired tree (it re-reads the
+   * fresh activeBook, re-validates clean and downloads); declining downloads
+   * nothing and says nothing more (the approved copy has no extra snackbar).
+   * An unfixable book opens the hard block instead. Nothing is ever
+   * downloaded while the book is defective — the importer guarantees the
+   * no-download half by returning before any byte is written.
    */
-  exportStNative(): void {
+  async exportStNative(): Promise<void> {
     const project = this.workspace.activeProject();
-    if (project) {
-      this.importer.exportStNative(project.activeBook, project.title);
+    if (!project) {
+      return;
     }
+    const result = this.importer.exportStNative(project.activeBook, project.title);
+    if (result.ok) {
+      return;
+    }
+    const consented = await this.offerExportRepair(result, project.title);
+    if (!consented || !result.repair) {
+      return;
+    }
+    this.workspace.applyBookRepair(result.repair);
+    await this.exportStNative();
   }
 
   /** ".stproj" archive: full backup including commit history. */
-  exportProjectArchive(): void {
+  async exportProjectArchive(): Promise<void> {
     const project = this.workspace.activeProject();
-    if (project) {
-      this.importer.exportProject(project);
+    if (!project) {
+      return;
     }
+    const result = this.importer.exportProject(project);
+    if (result.ok) {
+      return;
+    }
+    const consented = await this.offerExportRepair(result, project.title);
+    if (!consented || !result.repair) {
+      return;
+    }
+    // Only an activeBook block can carry a plan (a defective snapshot
+    // hard-blocks with `repair: null`); the re-run validates the snapshots
+    // again — untouched — and then the repaired activeBook.
+    this.workspace.applyBookRepair(result.repair);
+    await this.exportProjectArchive();
   }
 
   /** "Character Book JSON": standard V2 spec for cards and third-party tools. */
-  exportBook(): void {
+  async exportBook(): Promise<void> {
     const project = this.workspace.activeProject();
-    if (project) {
-      this.importer.exportCharacterBook(project.activeBook, project.title);
+    if (!project) {
+      return;
     }
+    const result = this.importer.exportCharacterBook(project.activeBook, project.title);
+    if (result.ok) {
+      return;
+    }
+    const consented = await this.offerExportRepair(result, project.title);
+    if (!consented || !result.repair) {
+      return;
+    }
+    this.workspace.applyBookRepair(result.repair);
+    await this.exportBook();
   }
 
   /** Markdown digest of every entry, for proofreading outside the app. */

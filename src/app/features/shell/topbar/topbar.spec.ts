@@ -175,11 +175,11 @@ describe('Topbar', () => {
     // with the mobile bottom bar's export menu — covered there and in the
     // service spec); the topbar only wires menu items to it.
     const actions = TestBed.inject(ProjectActionsService);
-    const nativeSpy = vi.spyOn(actions, 'exportStNative').mockImplementation(() => undefined);
+    const nativeSpy = vi.spyOn(actions, 'exportStNative').mockImplementation(async () => undefined);
     const archiveSpy = vi
       .spyOn(actions, 'exportProjectArchive')
-      .mockImplementation(() => undefined);
-    const bookSpy = vi.spyOn(actions, 'exportBook').mockImplementation(() => undefined);
+      .mockImplementation(async () => undefined);
+    const bookSpy = vi.spyOn(actions, 'exportBook').mockImplementation(async () => undefined);
     const digestSpy = vi.spyOn(actions, 'exportDigest').mockImplementation(() => undefined);
 
     const clickItem = (title: string): void => {

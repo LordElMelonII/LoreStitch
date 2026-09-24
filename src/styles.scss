@@ -266,6 +266,25 @@ body {
   border-radius: 28px 28px 0 0;
 }
 
+// Guided book-repair pane (src/app/shared/components/book-repair-dialog,
+// Task 09): dialog on tablet/desktop, content-hugging sheet on phones. The
+// approved mock paints surface-container-high on both containers while
+// Material's own defaults are `surface` (dialog) and `surface-container-low`
+// (sheet), so the background rides the panel classes. The component paints
+// its own padding, so the containers carry none — unlike the panes above,
+// the sheet hugs its content instead of stretching to a fixed height (the
+// change list scrolls on its own when a defect flood is long).
+.app-repair-dialog .mat-mdc-dialog-surface {
+  background: var(--mat-sys-surface-container-high);
+}
+
+.app-repair-sheet .mat-bottom-sheet-container {
+  max-height: 88dvh;
+  padding: 0;
+  border-radius: 28px 28px 0 0;
+  background: var(--mat-sys-surface-container-high);
+}
+
 // The about tab group must flex within its pane; Material's body wrapper is
 // not a flex-grow item by default (same treatment as the entry editor tabs).
 app-about-dialog .about-tabs .mat-mdc-tab-body-wrapper {

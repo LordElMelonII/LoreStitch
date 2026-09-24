@@ -5,10 +5,12 @@ import { of } from 'rxjs';
 import { ImportExportService } from '../../core/services/import-export.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { encodeCardPayload } from '../../core/models/character-card';
-import { type CharacterBook } from '../../core/models/lorebook.model';
+import { createEmptyBook, createEmptyEntry, type CharacterBook } from '../../core/models/lorebook.model';
 import { PNG_SIGNATURE, concatBytes, pngChunk, textChunkData } from '../../../testing/png-fixtures';
 import { LayoutService } from '../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
+import { BookRepairDialog } from '../../shared/components/book-repair-dialog/book-repair-dialog';
+import { type BookRepairDialogData } from '../../shared/components/book-repair-dialog/book-repair-dialog.model';
 import { MergeResolverDialog } from '../merge-resolver/merge-resolver-dialog';
 import { ExportSelectedDialog } from '../merge-resolver/export-selected-dialog';
 import { ProjectActionsService } from './project-actions.service';
@@ -89,6 +91,31 @@ function cardJsonText(): string {
     spec_version: '2.0',
     data: { name: CARD_NAME, character_book: cardBook() },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Book-repair fixtures (plan 09 §3.6 rows 3–4): a defective third-party book
+// in the shape the import guards let through — a duplicate id and a string id
+// — plus the in-workspace variants the export backstop meets.
+// ---------------------------------------------------------------------------
+
+/** Duplicate id 1 (twice) and a string id "2": two fixable defects. */
+function defectiveBookJson(): Record<string, unknown> {
+  return {
+    name: 'Fuyuki',
+    entries: [
+      { id: 1, keys: ['a'], content: 'A', insertion_order: 0, enabled: true, extensions: {} },
+      { id: '2', keys: ['b'], content: 'B', insertion_order: 1, enabled: true, extensions: {} },
+      { id: 1, keys: ['c'], content: 'C', insertion_order: 2, enabled: true, extensions: {} },
+    ],
+  };
+}
+
+/** The defective book as the import pipeline's output shapes it. */
+function parseDefectiveBook(importer: ImportExportService): CharacterBook {
+  const parsed = importer.parseImport(defectiveBookJson(), 'Fuyuki');
+  assert(parsed);
+  return parsed.book;
 }
 
 /** jsdom File for binary payloads (BlobPart wants a concrete ArrayBuffer). */
@@ -277,6 +304,92 @@ describe('ProjectActionsService', () => {
       'OK',
       expect.anything(),
     );
+  });
+
+  it('offers the guided repair on a defective import and applies the fix on consent (plan 09 §3.4)', async () => {
+    stubFilePicker(jsonFile('defective.json', defectiveBookJson()));
+    let repairData: BookRepairDialogData | undefined;
+    openResponsive.mockImplementation((component: unknown, config: { data: BookRepairDialogData }) => {
+      expect(component).toBe(BookRepairDialog);
+      repairData = config.data;
+      return { afterDismissed: () => of(true) }; // "Fix 2 issues & import"
+    });
+
+    await actions.importReplaceFromPicker();
+
+    // The dialog carried the import-context repair offer.
+    assert(repairData);
+    expect(repairData.context).toBe('import');
+    expect(repairData.repair).not.toBeNull();
+    expect(repairData.repair?.changes.map((c) => c.kind)).toEqual(['coerce-id', 'reassign-id']);
+    // Fix imported the REPAIRED book: unique numeric ids.
+    expect(workspace.activeProject()?.activeBook.entries.map((e) => e.id)).toEqual([1, 2, 3]);
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      expect.stringContaining('Imported 3 entries from defective.json'),
+      'OK',
+      expect.anything(),
+    );
+  });
+
+  it('imports a defective book verbatim on "Import as-is" (documented opt-in)', async () => {
+    stubFilePicker(jsonFile('defective.json', defectiveBookJson()));
+    // The default fake resolves falsy — the decline path.
+    openResponsive.mockReturnValue({ afterDismissed: () => of(false) });
+
+    await actions.importReplaceFromPicker();
+
+    const entries = workspace.activeProject()?.activeBook.entries;
+    expect(entries?.map((e) => e.id as unknown)).toEqual([1, '2', 1]);
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      expect.stringContaining('Imported 3 entries from defective.json'),
+      'OK',
+      expect.anything(),
+    );
+  });
+
+  it('opens no repair dialog for a clean import (zero overhead)', async () => {
+    stubFilePicker(
+      jsonFile('clean.json', {
+        name: 'Clean',
+        entries: [
+          { id: 0, keys: ['a'], content: 'A', insertion_order: 0, enabled: true, extensions: {} },
+        ],
+      }),
+    );
+
+    await actions.importReplaceFromPicker();
+
+    expect(openResponsive).not.toHaveBeenCalled();
+    expect(workspace.activeProject()?.activeBook.entries).toHaveLength(1);
+  });
+
+  it('offers the repair on the incoming book before the merge resolver opens', async () => {
+    await workspace.createProject('Fuyuki');
+    stubFilePicker(jsonFile('defective.json', defectiveBookJson()));
+    const opened: { component: unknown; data: unknown }[] = [];
+    openResponsive.mockImplementation((component: unknown, config: { data: unknown }) => {
+      opened.push({ component, data: config.data });
+      // First open: the repair offer (consented); second: the merge resolver
+      // (cancelled — the merge outcome is not this test's subject).
+      return {
+        afterDismissed: () => of(opened.length === 1 ? true : undefined),
+      };
+    });
+
+    await actions.importMergeFromPicker();
+
+    expect(opened).toHaveLength(2);
+    const [repairOpen, mergeOpen] = opened as unknown as [
+      { component: unknown; data: BookRepairDialogData },
+      { component: unknown; data: { incoming: CharacterBook } },
+    ];
+    assert(repairOpen);
+    assert(mergeOpen);
+    expect(repairOpen.component).toBe(BookRepairDialog);
+    expect(repairOpen.data.context).toBe('import');
+    expect(mergeOpen.component).toBe(MergeResolverDialog);
+    // The cherry-picker receives the REPAIRED incoming book.
+    expect(mergeOpen.data.incoming.entries.map((e) => e.id)).toEqual([1, 2, 3]);
   });
 
   it('shows a parse error for a non-JSON file', async () => {
@@ -509,6 +622,53 @@ describe('ProjectActionsService', () => {
     expect(exportSpy).not.toHaveBeenCalled();
   });
 
+  it('folds the split-export repair back onto the parent entries and re-exports (plan 09 §3.5)', async () => {
+    await workspace.createProject('Fuyuki');
+    const unselected = createEmptyEntry(1, 0);
+    const first = { ...createEmptyEntry(2, 1), insertion_order: Number.POSITIVE_INFINITY };
+    const second = { ...createEmptyEntry(3, 2), insertion_order: Number.POSITIVE_INFINITY };
+    workspace.replaceBook({ ...createEmptyBook('Fuyuki'), entries: [unselected, first, second] });
+    // The REAL split export validates the SUB-book (entries 2 and 3): both
+    // orders are non-finite → plan over the sub-book, no download. The retry
+    // after the fix is faked clean.
+    const realSplit = importer.exportSelectedBook.bind(importer);
+    const splitSpy = vi
+      .spyOn(importer, 'exportSelectedBook')
+      .mockImplementationOnce((book, ids, title, format) => realSplit(book, ids, title, format))
+      .mockImplementationOnce(() => ({ ok: true }));
+    openResponsive.mockImplementation((component: unknown, config: { data: unknown }) => {
+      void config;
+      if (component === ExportSelectedDialog) {
+        return {
+          afterDismissed: () => of({ entryIds: [2, 3], title: 'Split', format: 'st_native' }),
+        };
+      }
+      return { afterDismissed: () => of(true) }; // the repair offer: Fix
+    });
+
+    await actions.exportSelectedEntries([2, 3]);
+
+    expect(splitSpy).toHaveBeenCalledTimes(2);
+    // The parent entries were patched IN PLACE of a wholesale replace: the
+    // unselected entry keeps its reference, the selected two got order 100,
+    // ids untouched.
+    const entries = workspace.entries();
+    expect(entries[0]).toBe(unselected);
+    expect(entries[1]?.id).toBe(2);
+    expect(entries[1]?.insertion_order).toBe(100);
+    expect(entries[2]?.id).toBe(3);
+    expect(entries[2]?.insertion_order).toBe(100);
+    expect(workspace.hasUnsavedChanges()).toBe(true);
+    // The re-export ran on the patched tree with the same selection.
+    expect(splitSpy.mock.calls[1]?.[1]).toEqual([2, 3]);
+    expect(splitSpy.mock.calls[1]?.[0]).toBe(workspace.activeProject()?.activeBook);
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      expect.stringContaining('Exported 2 entries as “Split”'),
+      'OK',
+      expect.anything(),
+    );
+  });
+
   // ---------------------------------------------------------------------------
   // Export (whole project, fixed formats)
   // ---------------------------------------------------------------------------
@@ -556,6 +716,95 @@ describe('ProjectActionsService', () => {
     expect(nativeSpy).not.toHaveBeenCalled();
     expect(archiveSpy).not.toHaveBeenCalled();
     expect(digestSpy).not.toHaveBeenCalled();
+  });
+
+  it('offers the repair on a defective export and downloads nothing when declined', async () => {
+    await workspace.createProject('Fuyuki');
+    const book = parseDefectiveBook(importer);
+    workspace.replaceBook(book);
+    let repairData: BookRepairDialogData | undefined;
+    openResponsive.mockImplementation((component: unknown, config: { data: BookRepairDialogData }) => {
+      expect(component).toBe(BookRepairDialog);
+      repairData = config.data;
+      return { afterDismissed: () => of(false) }; // Cancel
+    });
+    // The REAL export runs the pre-flight: a defective book returns
+    // `{ok:false}` BEFORE any download — a stray download call would crash
+    // jsdom (no URL.createObjectURL) and fail this test.
+    const nativeSpy = vi.spyOn(importer, 'exportStNative');
+
+    await actions.exportStNative();
+
+    assert(repairData);
+    expect(repairData.context).toBe('export');
+    expect(repairData.repair).not.toBeNull();
+    // The exporter ran exactly once — no re-run, no download.
+    expect(nativeSpy).toHaveBeenCalledTimes(1);
+    // Declining leaves the book untouched.
+    expect(workspace.activeProject()?.activeBook).toBe(book);
+  });
+
+  it('applies the repair and re-exports on "Fix N issues & export"', async () => {
+    await workspace.createProject('Fuyuki');
+    const book = parseDefectiveBook(importer);
+    workspace.replaceBook(book);
+    // First run: the REAL pre-flight over the defective book (returns
+    // `{ok:false}` with no download — a stray download call would crash
+    // jsdom and fail this test). Re-run after the fix: faked clean success
+    // (the actual browser download is out of unit scope).
+    const realExportStNative = importer.exportStNative.bind(importer);
+    const nativeSpy = vi
+      .spyOn(importer, 'exportStNative')
+      .mockImplementationOnce((defective) => realExportStNative(defective, 'Fuyuki'))
+      .mockImplementationOnce(() => ({ ok: true }));
+    // Capture the plan exactly as the dialog received it: what the user
+    // consented to is what must be applied.
+    let repairData: BookRepairDialogData | undefined;
+    openResponsive.mockImplementation((component: unknown, config: { data: BookRepairDialogData }) => {
+      expect(component).toBe(BookRepairDialog);
+      repairData = config.data;
+      return { afterDismissed: () => of(true) }; // Fix & export
+    });
+
+    await actions.exportStNative();
+
+    expect(nativeSpy).toHaveBeenCalledTimes(2);
+    assert(repairData?.repair);
+    // The plan was applied through the workspace mutator (same reference).
+    expect(workspace.activeProject()?.activeBook).toBe(repairData.repair.book);
+    expect(workspace.activeProject()?.activeBook.entries.map((e) => e.id)).toEqual([1, 2, 3]);
+    expect(workspace.hasUnsavedChanges()).toBe(true);
+    // The re-export read the fresh repaired tree.
+    expect(nativeSpy.mock.calls[1]?.[0]).toBe(repairData.repair.book);
+  });
+
+  it('hard-blocks the archive export naming the defective snapshot', async () => {
+    await workspace.createProject('Fuyuki');
+    const project = workspace.activeProject();
+    assert(project);
+    const commits = project.commits.map((commit, index) =>
+      index === project.commits.length - 1
+        ? { ...commit, snapshot: { ...commit.snapshot, entries: 'broken' as unknown as never } }
+        : commit,
+    );
+    workspace.activeProject.set({ ...project, commits });
+    openResponsive.mockReturnValue({ afterDismissed: () => of(true) });
+    // The REAL exportProject validates every snapshot first: hard block,
+    // no repair, no download.
+    const archiveSpy = vi.spyOn(importer, 'exportProject');
+
+    await actions.exportProjectArchive();
+
+    const [component, config] = openResponsive.mock.calls[0] as unknown as [
+      unknown,
+      { data: BookRepairDialogData },
+    ];
+    expect(component).toBe(BookRepairDialog);
+    expect(config.data.context).toBe('export');
+    expect(config.data.repair).toBeNull();
+    expect(config.data.source).toMatch(/^Initial commit.*\([0-9a-f]{7}\)$/);
+    // Terminal block: the exporter ran once and nothing was re-attempted.
+    expect(archiveSpy).toHaveBeenCalledTimes(1);
   });
 
   it('routes the card exports through the importer over the active project', async () => {

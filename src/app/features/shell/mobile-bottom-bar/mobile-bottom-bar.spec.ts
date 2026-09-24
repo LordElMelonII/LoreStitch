@@ -173,7 +173,7 @@ describe('MobileBottomBar', () => {
     await createBar();
     const exportStNative = vi
       .spyOn(TestBed.inject(ProjectActionsService), 'exportStNative')
-      .mockImplementation(() => undefined);
+      .mockImplementation(async () => undefined);
 
     const exportTrigger = itemButtons()[2];
     assert(exportTrigger);

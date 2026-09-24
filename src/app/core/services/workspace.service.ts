@@ -7,6 +7,7 @@ import {
   entryTitle,
 } from '../models/lorebook.model';
 import type { CardShell, LintPrefs, ProjectWorkspace } from '../models/project.model';
+import type { BookRepair } from '../models/book-repair';
 import { randomUuid } from './sha256';
 import { LAST_PROJECT_KEY, StorageService } from './storage.service';
 import { VcsService } from './vcs.service';
@@ -385,6 +386,61 @@ export class WorkspaceService {
   /** Applies the merge result of the cherry-picker: replaces the whole book. */
   replaceBook(book: CharacterBook): void {
     this.mutateProject((p) => this.withBook(p, book));
+  }
+
+  /**
+   * Applies a planned book repair (plan 09 §3.5) on user consent at the
+   * guided repair dialog — the ONE write path for a `BookRepair`, routed
+   * through the private `mutateProject` chokepoint like every other mutator
+   * (immutable replace → debounced IndexedDB save → tree marked dirty and
+   * committable). Never touches commit snapshots.
+   *
+   * Without a `selection` (full-book export path) the active book is replaced
+   * with `repair.book` wholesale. With one ("export selected entries"), the
+   * plan was made over the SUB-book — `extractSubBook` maps selection ids to
+   * sub-book entries in parent book order (id-bearing entries, filtered by
+   * the same id set) — so the repair folds back onto those PARENT entries by
+   * patching exactly the fields the planner writes (`id`,
+   * `insertion_order`, `priority`): the parent keeps its entry order and
+   * every untouched field, unknown vendor keys included.
+   */
+  applyBookRepair(repair: BookRepair, selection?: readonly number[]): void {
+    this.mutateProject((p) => {
+      if (!selection || selection.length === 0) {
+        return this.withBook(p, repair.book);
+      }
+      const ids = new Set(selection);
+      const selected = p.activeBook.entries.filter(
+        (entry) => entry.id !== undefined && ids.has(entry.id),
+      );
+      const repairedByEntry = new Map(
+        selected
+          .map((entry, index) => [entry, repair.book.entries[index]] as const)
+          .filter((pair): pair is [typeof pair[0], CharacterBookEntry] => pair[1] !== undefined),
+      );
+      const entries = p.activeBook.entries.map((entry) => {
+        const repaired = repairedByEntry.get(entry);
+        if (!repaired) {
+          return entry;
+        }
+        // Patch only what the planner flagged: it writes exactly these three
+        // fields and nothing else, so a per-field comparison captures the
+        // plan without re-interpreting the change list. `priority: undefined`
+        // stays an assigned key (the house unset shape, like the planner).
+        const patch: Partial<CharacterBookEntry> = {};
+        if (repaired.id !== entry.id) {
+          patch.id = repaired.id;
+        }
+        if (repaired.insertion_order !== entry.insertion_order) {
+          patch.insertion_order = repaired.insertion_order;
+        }
+        if (repaired.priority !== entry.priority) {
+          patch.priority = repaired.priority;
+        }
+        return Object.keys(patch).length > 0 ? { ...entry, ...patch } : entry;
+      });
+      return this.withBook(p, { ...p.activeBook, entries });
+    });
   }
 
   /** Patches book-level settings (e.g. `token_budget`) on the working tree. */
