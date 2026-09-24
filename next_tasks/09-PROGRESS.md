@@ -185,3 +185,46 @@ green · 60 files / 1264 tests green · build green.
 the anti-collapse pin), per-task Playwright gate (desktop-chrome on repair +
 round-trip; one mobile project on repair only — bottom-sheet pin), per-file
 coverage diff vs phase-start baseline.
+
+## Phase P4 — E2E fidelity evidence (qa-auditor)
+
+**Status**: ✅ complete — commit `7ce2c40` `test(e2e): cover the guided repair
+flow end to end`
+
+**Landed**:
+- NEW `e2e/repair.spec.ts` (6 tests) + committed fixture
+  `e2e/fixtures/defective-book.json` (byte-identical to the checkpoint-verified
+  defective book).
+- `e2e/helpers.ts` extended (no logic duplicated): `repairDialog`,
+  `importLorebookOfferingRepair`, `exportWorldInfoOfferingRepair`,
+  `exportWorldInfoViewportAware` (plain `exportWorldInfo` delegates to it —
+  desktop behavior identical, so `round-trip`/`delimiters` needed zero edits),
+  `expectProjectOpen` extracted from `importLorebook`'s tail.
+
+**All 6 cases pass** (desktop-chrome 5 passed + 1 phone-pinned skip;
+mobile-chrome 6 passed): import offer lists the 4 changes · **anti-collapse
+pin** (Fix & import → export ST native → 5-entry uid bag, all unique,
+`entries["2"]`=Gate house + `entries["4"]`=River dock) · import-as-is → export
+re-offer → Fix & export persists via `applyBookRepair` · Cancel blocks the
+download · clean book never offers (never-false-positive pin) · phone form is
+a bottom sheet (`.app-repair-sheet`, drag handle, stacked full-width actions).
+
+**Pin-behavior grep**: no existing spec pinned the old silent behavior; no
+migration needed; `round-trip.spec.ts` zero edits and green (byte-identity
+proof holds).
+
+**Gates**: typecheck:e2e clean · build green · 60 files / 1264 unit tests ·
+lint green · `repair` desktop-chrome 5+1skip / mobile-chrome 6 passed ·
+`round-trip` desktop-chrome 4+1skip. **Coverage diff** vs the P3-final baseline
+(`__screenshots__/09-book-repair/coverage-baseline.txt`): 0 deltas across 133
+rows (P4 touched only e2e files, outside unit coverage). Touched-file rows
+identical to baseline (`book-schema` 100s, `book-repair` 100/99.22/100/100,
+`book-repair-dialog` 100/97.95/100/100). Note: baseline = P3-final state (each
+earlier phase enforced its own gate); pre-task per-file values not re-captured.
+
+**No product bugs found.**
+
+**Next**: branch-final sweep (orchestrator): full Playwright matrix per
+project (`--project=desktop-chrome`, then `mobile-chrome`, then
+`mobile-safari`), closing `npm test -- --watch=false --coverage` + `npm run
+lint`; push and STOP for user merge testing.
