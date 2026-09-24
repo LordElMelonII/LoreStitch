@@ -228,3 +228,32 @@ earlier phase enforced its own gate); pre-task per-file values not re-captured.
 project (`--project=desktop-chrome`, then `mobile-chrome`, then
 `mobile-safari`), closing `npm test -- --watch=false --coverage` + `npm run
 lint`; push and STOP for user merge testing.
+
+## Branch-final sweep (orchestrator)
+
+**Status**: ✅ complete — fix-forward commit `780ee7a` `test(e2e): measure the
+sheet width pin against the content box`
+
+**First pass**: desktop-chrome 66 passed / 15 skipped · mobile-chrome 45
+passed / 36 skipped · mobile-safari 41 passed / 2 failed. Attribution:
+1. `e2e/repair.spec.ts:231` (task-authored): the phone bottom-sheet width pin
+   measured the primary button against the pane `clientWidth` (includes the
+   sheet's 20px side padding → 350/390 ≈ 0.897 < 0.9 on iPhone 14; Pixel 7's
+   412px squeaked past). Fix-forward via the authoring qa agent: measure
+   against the CONTENT box (stacked button = 1.0, non-stacked ~0.5 — pin still
+   discriminates). Re-ran `repair` on mobile-safari + mobile-chrome: green.
+2. `e2e/mobile-bottom-bar.spec.ts:123` (task-06 spec): export-menu panel
+   bottom vs bar-top geometry fails deterministically on mobile-safari —
+   **verified pre-existing on develop** (ran the spec on a develop checkout:
+   same failure). NOT a task-09 regression; left untouched, reported to the
+   user as a follow-up decision.
+
+**Repeat sweep (whole matrix)**: desktop-chrome 66/15skip green · mobile-chrome
+45/36skip green · mobile-safari 42 passed / 38 skipped / **1 pre-existing
+failure** (the develop-verified task-06 geometry pin only).
+
+**Closing gates**: `CI=true npm test -- --watch=false --coverage` → 60 files /
+1264 tests, thresholds green · `npm run lint` → green.
+
+**Next**: push branch and STOP — the user manually tests and merges
+(`git merge --ff-only` only on their go).
