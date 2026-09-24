@@ -224,11 +224,28 @@ test.describe('book repair phone form (bottom sheet)', () => {
       'column-reverse',
     );
     const primary = dialog.getByRole('button', { name: 'Fix 4 issues & import' });
-    const widthRatio = await primary.evaluate((el) => {
+    // Full-width is measured against the pane's CONTENT box, not clientWidth:
+    // `.pane.sheet` adds 20px horizontal padding per side, so on the 390px
+    // iPhone 14 the stacked button is 350/390 ≈ 0.897 of the pane's
+    // clientWidth (clientWidth includes padding — a pane-relative 0.9 floor
+    // passes on Pixel 7's 412px but fails on iPhone 14). Against the content
+    // box the stacked button is 1.0 while a non-stacked one stays ~0.5, so
+    // the 0.95 floor keeps discriminating.
+    const contentRatio = await primary.evaluate((el) => {
       const pane = el.closest('.pane');
-      return pane instanceof HTMLElement ? el.clientWidth / pane.clientWidth : 0;
+      if (!(pane instanceof HTMLElement)) {
+        return 0;
+      }
+      const padding = getComputedStyle(pane);
+      const contentWidth =
+        pane.clientWidth -
+        parseFloat(padding.paddingLeft) -
+        parseFloat(padding.paddingRight);
+      return el.clientWidth / contentWidth;
     });
-    expect(widthRatio, 'the sheet primary button spans the pane').toBeGreaterThan(0.9);
+    expect(contentRatio, 'the sheet primary button spans the pane content width').toBeGreaterThan(
+      0.95,
+    );
 
     // The same offer content as the dialog form, and the consent still works.
     await expect(dialog.locator('.title')).toContainText('Fix 4 issues before importing?');
