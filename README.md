@@ -60,13 +60,14 @@ The editor mirrors SillyTavern's World Info fields one-to-one, so nothing is los
 
 ### Import & export
 
-- **Import** auto-detects the format: native SillyTavern world-info exports, bare V2-spec Character Book JSON, or LoreStitch `.stproj` project archives. Unknown fields are preserved so imports round-trip untouched.
+- **Import** auto-detects the format: native SillyTavern world-info exports, bare V2-spec Character Book JSON, LoreStitch `.stproj` project archives, or character cards (V2/V3 card JSON and card PNGs — the embedded lorebook becomes the project). Unknown fields are preserved so imports round-trip untouched.
 - **Merge** another lorebook into the current project through a merge resolver: for every incoming entry you choose to import it, overwrite the local version, or skip it, with diff previews of the clashes.
-- **Export** in four flavors:
+- **Export** in four flavors (plus the original character card for projects imported from one):
   - _World Info JSON_ — native SillyTavern format, importable via the World Info panel.
   - _Project archive (`.stproj`)_ — full backup including the entire commit history, reopenable in LoreStitch. Version history lives in the browser's IndexedDB, so export a `.stproj` regularly to keep a durable backup (the history drawer reminds you and has a one-click export).
   - _Character Book JSON_ — standard V2-spec `character_book` format (for character cards and third-party frontends).
   - _Proofread digest (Markdown)_ — all entries rendered as readable text with order, keys, and a rough token estimate, handy for review or sharing.
+  - _Character card (PNG / JSON)_ — for a project imported from a character card, the edited book goes back into the original card image or JSON under its original name; the rest of the card rides along untouched.
 
 ### Batch tools
 

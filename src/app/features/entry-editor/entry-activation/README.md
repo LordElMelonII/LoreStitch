@@ -1,6 +1,6 @@
 # entry-editor/entry-activation/
 
-Activation pane: enable/disable, tri-state trigger strategy (normal 🟢 / constant 🔵 / vectorized 🔗), insertion order, priority, scan depth, probability, generation-type triggers, and the character activation filter.
+Activation pane: execution-modifier chips (case sensitivity, ignore budget), scan depth, probability, generation-type triggers, the character activation filter, and the Quick Replies automation id. (The enable toggle, trigger strategy, and insertion order live in the options accordion — its trigger strip on desktop, the strategy section above this pane on mobile; priority lives in the placement pane.)
 
 **Hints**
 

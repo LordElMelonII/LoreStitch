@@ -1,6 +1,6 @@
 # Archive — Completed Task Plans
 
-Plans for finished tasks, moved out of the active folder on 2026-09-20 so
+Plans for finished tasks, moved out of the active folder (first on 2026-09-20) so
 `next_tasks/` holds only pending work. They remain the authoritative record of
 each task's design decisions, phase breakdowns, and landing history.
 
@@ -14,6 +14,7 @@ each task's design decisions, phase breakdowns, and landing history.
 | 07 | [search-responsiveness.md](./07-search-responsiveness.md) | 2026-09-20 | `8d32256`..`0b7f9a4`, ff-merged to `develop` 2026-09-21 after user go-ahead | `debouncedSignal` primitive + haystack pre-fold + debounced S&R preview (results byte-identical); §3.3 single-pass stretch REJECTED by review (GetSubstitution reimplementation risks silent corruption); perf trace 2421ms→71ms blocked @4× throttle; P3 fixed the append-reveal flush no-op |
 | 06 | [mobile-bottom-bar-docked-swap.md](./06-mobile-bottom-bar-docked-swap.md) | 2026-09-21 | `f15b2f6`..`f9b4615` on `feature/06-mobile-bar-docked-swap`, ff-merged to `develop` 2026-09-21 (`1041a45`) | Always-docked bar + `barState` (normal/backgrounded/batch) + phone pane-focus policy; batch swap transplant (design gate 06-1 closed on A2 — tonal top edge); P3 added switch-exhaustiveness guards + cancelled-delete recovery guard. Open follow-up: batch-APPLY focus handoff outside §3.2's recovery contract. Screenshots `__screenshots__/06-mobile-bar-swap/` |
 | 08 | [test-keys-trigger-verdict.md](./08-test-keys-trigger-verdict.md) | 2026-09-21 | `1df3007`..`7fee7c5` on `feature/08-test-keys-trigger-verdict`, ff-merged to `develop` 2026-09-21 (`994a696`) | Pure `st-trigger` verdict module mirroring the vendored `world-info.js` (47 truth-table tests incl. the user-report NOT-Any repro) + panel verdict banner; design gate 08-1 closed on treatment 1 ("(blocks activation)" suffix); probabilistic branch pinned e2e via the real `Probability %` field. Known pre-existing flake: entry-editor 5s `whenStable` under parallel load. Screenshots `__screenshots__/08-test-keys-verdict/` |
+| 15 | [character-card-round-trip.md](./15-character-card-round-trip.md) | 2026-09-23 | `94f9148`..`2c2b7f0` | Character-card round-trip: bare `core/models/character-card.ts` (PNG chunk codec, CRC-checked `tEXt` `chara`/`ccv3`), card PNG/JSON import through the same pipeline as plain books, card export flavors with the approved per-reason refusal copy (checkpoint 15-1), e2e `character-card.spec.ts`; shipped as v1.5.0 |
 
 Grounding SHAs of the original audits: 01/02 at `4120bb9`, 03 re-grounded
 at `329509b`, 04 re-grounded at `af244ba` (plan HEAD `1955a9e`), 05 at `c003bce`;

@@ -1,6 +1,6 @@
 # core/services/
 
-UI-framework-free services: `workspace.service` (project state chokepoint → immutable replace → debounced IndexedDB save), `storage.service` (IndexedDB via `idb`), `vcs.service` (SHA-256 content-addressed commits), `import-export.service` (3 import formats, 4 export flavors), `theme.service`, plus pure analysis modules `sha256.ts`, `token-estimator.ts`, `linter.ts`.
+UI-framework-free services: `workspace.service` (project state chokepoint → immutable replace → debounced IndexedDB save), `storage.service` (IndexedDB via `idb`), `vcs.service` (SHA-256 content-addressed commits), `import-export.service` (5 import formats, 6 export flavors), `theme.service`, plus pure analysis modules `sha256.ts`, `token-estimator.ts`, `linter.ts`.
 
 **Hints**
 
