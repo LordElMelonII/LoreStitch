@@ -97,3 +97,57 @@ is the planner's actual output, not an illustration.
 import wiring in `features/shell/project-actions.service.ts`, export surfacing,
 `WorkspaceService.applyBookRepair`; before/after screenshots under
 `__screenshots__/09-book-repair/{before,after}/`.
+
+## Phase P2 — Repair dialog + surfaces (ui-specialist)
+
+**Status**: ✅ complete — commit `d7cd74f` `feat(shell): import and export repair dialogs`
+
+**Landed**:
+- NEW `src/app/shared/components/book-repair-dialog/` — `book-repair-dialog.ts`
+  (standalone dual-container pane, inline template/styles, ConfirmDialog
+  contract: closes truthy only on the primary action), `book-repair-dialog.model.ts`
+  (`BookRepairDialogData { context, repair, defects, source?, bookTitle }`;
+  `repair: null` selects the hard-block variant), `book-repair-dialog.spec.ts`
+  (9 tests). Opened only via `openResponsive` (`sheetPanelClass: 'app-repair-sheet'`).
+- `features/shell/project-actions.service.ts` — import wiring (both modes) at
+  the shared post-parse/post-normalize point: repair offered on the incoming
+  book before it enters the workspace (merge: before `openMergeDialog`); export
+  surfacing for all four book-carrying exports (dialog on fixable; hard-block
+  with `source` line on snapshot defects; re-export after consent); `console.warn`
+  full detail at open (plan §7.5).
+- `core/services/workspace.service.ts` — `applyBookRepair(repair, selection?)`
+  mutator through `mutateProject`: wholesale activeBook replace, or (split
+  export) per-field patch of the mapped parent entries. Snapshots untouched.
+- `styles.scss` — `.app-repair-dialog` + `.app-repair-sheet` (28px top radius,
+  content-hugging, max-height 88dvh).
+- Spec migrations (async export wrappers): `topbar.spec.ts`,
+  `mobile-bottom-bar.spec.ts`; +5 tests `project-actions.service.spec.ts`,
+  +2 `workspace.service.spec.ts`.
+- Visual baseline: `__screenshots__/09-book-repair/capture.mjs` (before/after
+  modes, pinned chromium/light/3 viewports/one fixture); 6 before + 6 after
+  shots. After-set verified against the approved mock by the orchestrator:
+  desktop dialog and phone sheet both match.
+
+**Gates** (orchestrator re-ran all): test+coverage → 60 files / 1264 tests
+passed, thresholds green (dialog 100% stmts/lines, 97.95% branches — one
+defensive fallback branch) · build green · lint green · typecheck:e2e green.
+
+**Decisions/deviations**:
+1. Split-export repair application (plan §3.5 gap, decided by orchestrator):
+   the sub-book repair folds back onto the PARENT entries — sub-book entry i ↦
+   i-th id-bearing parent entry in book order (`extractSubBook`'s filter
+   order) — patching only the planner's three fields; unit-pinned (unselected
+   entry keeps object identity; vendor keys preserved).
+2. Import dialog backdrop is the welcome screen (the offer blocks before the
+   book enters the workspace) — correct per plan, differs from the mock's
+   injected-over-workspace backdrop only in backdrop.
+3. Before-set export shot pins the silent no-download state (P1 was already
+   landed, so even "before" swallows defective exports — documented in
+   `capture.mjs`).
+4. Change/block lists scroll (`max-height: min(42dvh, 380px)`) per §75 flood
+   mitigation; invisible at the 4-row baseline.
+5. `.stproj`-import repair offer deliberately NOT added (plan scopes import
+   wiring to book imports) — archive-import gap noted as a potential follow-up.
+
+**Next**: P3 (ts-reviewer) — all touched files: discriminated defect/change
+unions, no-any, dialog data typing, lint.
