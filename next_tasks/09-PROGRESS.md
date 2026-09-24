@@ -151,3 +151,37 @@ defensive fallback branch) · build green · lint green · typecheck:e2e green.
 
 **Next**: P3 (ts-reviewer) — all touched files: discriminated defect/change
 unions, no-any, dialog data typing, lint.
+
+## Phase P3 — Typing/lint review (ts-reviewer)
+
+**Status**: ✅ complete — commit `9251f68` `refactor(core): state the keep-key
+invariant locally instead of casting`
+
+**Review outcome** (full diff `7089cc0..HEAD`, 19 files):
+- Discriminated unions: confirmed — every consumer narrows on the `ok`
+  discriminant; kind maps are total `Record<Kind, string>` (compiler-enforced
+  exhaustiveness); block-variant template narrows via `@if (repair; as plan)`.
+- No `any` / no non-null assertions / no ts-ignore across touched files;
+  defensive `unknown` reads all go through `isJsonObject`/`typeof` guards;
+  explicit return types on all public methods.
+- Dialog data typing: all `BookRepairDialogData` fields consumed, optionals
+  guarded, boolean result typed end-to-end through `openResponsive`.
+- House invariants: no `::ng-deep`; models import nothing Angular; dialog
+  opened only via `openResponsive`; writes only through `applyBookRepair` →
+  `mutateProject`; no RxJS state; no dangling promise/subscription chains.
+- One fix applied (zero behavior change): `book-repair.ts:198` — cross-closure
+  `as string` cast replaced with a local `key !== null` guard.
+
+**Findings flagged (informational, no action)**: F1 — dialog dismissal
+(ESC/backdrop) resolves falsy = "Import as-is" / no download (safe defaults,
+consistent with the ConfirmDialog contract); F2 — `exportSelectedBook`
+double-validates (sub-book + delegate) — idempotent, cheap, uniform contracts;
+F3 — pre-existing `downloadBytes` cast (plan 15) out of scope.
+
+**Gates** (reviewer ran on final tree; orchestrator re-ran test+lint): lint
+green · 60 files / 1264 tests green · build green.
+
+**Next**: P4 (qa-auditor) — author `e2e/repair.spec.ts` per plan §3.6 (incl.
+the anti-collapse pin), per-task Playwright gate (desktop-chrome on repair +
+round-trip; one mobile project on repair only — bottom-sheet pin), per-file
+coverage diff vs phase-start baseline.
