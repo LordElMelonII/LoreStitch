@@ -45,7 +45,7 @@ guard in `project.model.ts` — plus a hardening pass (`normalizeImportedBook`
 |---|---|---|
 | Character Book V2 | `import-export.service.ts:314` → `toSpecCompliantBook` (`lorebook.model.ts:396`) | none — normalization (position collapse), not a check |
 | ST World Info (v1) | `import-export.service.ts:319` → `characterBookToStNative` (`lorebook.model.ts:1204`) | none |
-| `.stproj` archive | `import-export.service.ts:342` (workspace verbatim) | none |
+| `.stproj` archive | `import-export.service.ts:342` (workspace via `serializeWorkspaceForArchive`, `project.model.ts:250` — verbatim except card-shell `pngBytes` re-encoded base64) | none |
 | Split export | `import-export.service.ts:327` → `extractSubBook` (`lorebook.model.ts:863`) then the two above | none |
 | Markdown digest | `import-export.service.ts:433` | n/a — proofreading artifact, never an ST input (stays unvalidated by design) |
 
@@ -53,7 +53,7 @@ The concrete malformed structures that survive import today all trace to the
 **id field**:
 
 1. **Non-numeric / missing-after-parse ids**: `isCharacterBook` checks only
-   `content` + `keys` per entry (`:704-707`); `normalizeImportedBook:741`
+   `content` + `keys` per entry (`:700-703`); `normalizeImportedBook:741`
    assigns ids only when `entry.id` is `undefined` — a string id (`"7"`) or
    `NaN` rides through and is written as V2 `id` / ST `uid`.
 2. **Duplicate ids**: nothing checks uniqueness. The ST native export is a
@@ -70,7 +70,8 @@ The concrete malformed structures that survive import today all trace to the
 reachability chain ends in a dead end. Defects enter via third-party files →
 the UI cannot author them, and the UI **also cannot repair them** — entry ids
 have no editor (`addEntry`/`duplicateEntry` allocate `max+1`,
-`workspace.service.ts:395`, and nothing else ever writes an id). "Fix entry
+`workspace.service.ts:260/:275` via the `nextEntryId` helper `:395`, and
+nothing else ever writes an id). "Fix entry
 ids before exporting" instructs an action that does not exist; the only
 workaround is deleting and recreating entries (data loss by hand). Blocking
 must therefore come with the fix, or not at all.
@@ -185,7 +186,7 @@ and context-dependent actions — import context: **Fix & import** (primary) /
 When `planBookRepair` returned `null` but unfixable defects exist, export
 falls back to a plain block dialog (list + single **Close**) — no download.
 
-### 3.4 Import wiring (primary surface) — `project-actions.service.ts`
+### 3.4 Import wiring (primary surface) — `features/shell/project-actions.service.ts`
 
 Both import modes (`replace` at `:116`, `merge` at `:124` → private
 `importFile` at `:148`) gain the same step after parse + guards +
@@ -210,8 +211,9 @@ export type ExportResult =
 
 Surfacing lives in `ProjectActionsService` (topbar and mobile bar both route
 through it — one home per export, the import-failure snackbar precedent
-`:164-184` gives the fallback copy shape). Fixable defects open the repair
-dialog; **Fix & export** applies `repair.book` through a new narrow
+(`:164-191`, `:206-232`; approved copy map `CARD_FAILURE_COPY` in
+`project-actions.constants.ts:19`) gives the fallback copy shape). Fixable
+defects open the repair dialog; **Fix & export** applies `repair.book` through a new narrow
 `WorkspaceService` mutator (`applyBookRepair` — routed through the private
 `mutateProject` chokepoint `:452` → immutable replace → debounced save, so
 the repair persists, marks the tree dirty, and is committable like any edit)
