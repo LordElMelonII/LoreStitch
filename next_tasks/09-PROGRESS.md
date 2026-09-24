@@ -69,3 +69,31 @@ real app (`__screenshots__/*/[mock-]*.mjs` precedent) seeded with a defective
 book, presents (a) repair policies §3.2, (b) mock with exemplar citations §3.3,
 (c) final copy, and the renumbered-uid byte-change sign-off; STOP until the
 user answers. Then P2 (ui-specialist).
+
+## Checkpoint 09-1 — user sign-off
+
+**Status**: ✅ approved 2026-09-24 — all four facets answered explicitly:
+1. **Repair policies (§3.2)**: approved as planned (first-occurrence-keeps,
+   renumber from max+1, coerce-when-free, order→100, priority→unset).
+2. **Dialog design**: approved as mocked — ConfirmDialog exemplar anatomy,
+   desktop/tablet centered dialog + phone bottom sheet (drag handle, stacked
+   full-width buttons).
+3. **Copy**: approved as written ("Fix 4 issues before importing?/exporting?",
+   kind labels "Id corrected / Id renumbered / Insertion order set / Priority
+   unset", "Fix 4 issues & import"+"Import as-is", "Fix 4 issues &
+   export"+"Cancel", hard block "This book can't be exported yet" + Close).
+4. **Renumbered-uid byte change (§7.2)**: signed off (policy class approved;
+   per-instance consent stays in the dialog).
+
+**Evidence**: mock driver `__screenshots__/09-book-repair/mock-repair-dialog.mjs`
+(real app, seeded with `defective-book.json`; change list verified against the
+shipped P1 planner via `.verify-trace.mjs`) — five mocks:
+`desktop-1280x800-mock-{import-repair,export-repair,hard-block}.png`,
+`mobile-390x844-mock-{import-repair,export-repair}-sheet.png`. The change list
+shown (Tavern `"7"`→7; River dock 2→4 + order ∞→100; Old forest priority ∞→unset)
+is the planner's actual output, not an illustration.
+
+**Next**: P2 (ui-specialist) — `shared/components/book-repair-dialog/`,
+import wiring in `features/shell/project-actions.service.ts`, export surfacing,
+`WorkspaceService.applyBookRepair`; before/after screenshots under
+`__screenshots__/09-book-repair/{before,after}/`.
