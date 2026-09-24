@@ -8,7 +8,9 @@ Completed plans live in [archive/](./archive/).
 ## Pending
 
 Grounded at `develop` @ `ddc9f04` (2026-09-22 roadmap evaluation; see the
-evaluation notes below).
+evaluation notes below). Task 15 (character-card round-trip), planned from the
+same review, was completed and archived 2026-09-23 (shipped as v1.5.0) — the
+pending queue below is unchanged.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
@@ -86,7 +88,7 @@ Urgent bug reports still preempt this queue (intake convention below).
 - **Agents & routing**: follow the persona directory in `AGENTS.md` (`.agents/*.md`); the orchestrator dispatches the `core-engine`, `ui-specialist`, `qa-auditor`, and `ts-reviewer` subagents via the Agent tool. All four are registered agent types, and every skill they cite (`angular-developer`, `material-3`, `typescript-advanced-types`, `playwright-cli`, `frontend-design`) exists in `.agents/skills/` and `.zcode/skills/`. **Skill precedence**: workspace copies win — user-level `~/.agents/skills/` is a fallback only; when a user-level original changes, refresh the vendored copies (`frontend-design` was vendored 2026-09-19).
 - **MCP availability**: `AngularMCP` (`angular-cli`) is configured in `.zcode/config.json` but may not be connected when a session starts. The orchestrator must confirm its tools are live before directing a subagent to it; otherwise the subagent falls back to the `angular-developer` skill plus installed typings under `node_modules/@angular/*`. qa-auditor browser work runs through the `playwright` MCP / `playwright-cli` skill.
 - **Parallel dispatch**: concurrent subagent runs are allowed only on disjoint file sets; the orchestrator serializes their commits (single working tree) and runs verification gates between dispatches.
-- **Review before QA**: in every pipeline, `ts-reviewer` fires before `qa-auditor` — typing/lint review and any refactor it triggers land before the expensive E2E/coverage runs, and `qa-auditor`'s pre-handoff checklist is the final gate. (Tasks 01–02 ran the older qa-first order.) Residual seam: E2E specs written in the qa phase get no dedicated `ts-reviewer` pass — `qa-auditor`'s closing lint/type gate covers them mechanically.
+- **Review before QA**: in every pipeline, `ts-reviewer` fires before `qa-auditor` — typing/lint review and any refactor it triggers land before the coverage-enforced QA gate. (Tasks 01–02 ran the older qa-first order.) The full E2E matrix is **not** part of the per-task gate: per `AGENTS.md`, qa smokes touched e2e specs on `desktop-chrome` only in-task, and the three-project `npx playwright test` sweep runs once per task branch at its close (branch-final). Residual seam: E2E specs written in the qa phase get no dedicated `ts-reviewer` pass — `qa-auditor`'s closing lint/type gate covers them mechanically.
 - **Progress ledger (crash resilience)**: during execution each task keeps
   `next_tasks/<nn>-PROGRESS.md`. After **every** phase it records what landed
   (files + commit SHA), gates run with results, decisions and deviations from the
@@ -101,6 +103,6 @@ Urgent bug reports still preempt this queue (intake convention below).
 - **Re-grounding**: plans are point-in-time audits. Before dispatching a task, re-check its file list at current HEAD (directly or via a read-only `Explore` agent) and refresh any drifted section of the plan before phase 1 starts.
 - **Visual-feature baseline**: any task that adds or reshapes UI captures before/after screenshots (`__screenshots__/<task>/{before,after}/`, gitignored) under identical pinned conditions — same browser, fixed viewports, one explicit theme, same seeded project, settled rendering — and posts the comparison to the user with the phase report (protocol template: archived 03 §3.5, adopted 2026-09-19).
 - **Invariants**: never drop unknown vendor keys; no `::ng-deep`; Signals over RxJS; core services stay UI-framework-free.
-- **Verification gates** (per `AGENTS.md`): `npm run build`, `npm test`, `ng test --coverage`, `npx playwright test`, `npm run lint`.
+- **Verification gates** (per `AGENTS.md`): per task — `npm run build`, `npm test`, `ng test --coverage`, `npm run lint` (+ `npm run typecheck:e2e` and a `desktop-chrome`-only smoke of touched e2e specs); branch-final — the full three-project `npx playwright test` sweep, run per project, plus a closing `npm test --coverage` and `npm run lint`.
 - **Commit per phase**: each subagent deliverable lands as its own atomic conventional commit (`feat: ...`, `fix: ...`, `test: ...`, `refactor: ...`); task completion adds a `docs(next_tasks): ...` status commit (matches Task 01's history).
 - **Test helpers**: new specs reuse the shared fixtures instead of copy-pasting helpers — unit specs pull from `src/testing/` (`projectOf`, `severityFixture`, `installMatchMediaStub`) and e2e specs from `e2e/helpers.ts` (`importLorebook`, `exportWorldInfo`, `selectFirstTwoRows`); the 2026-09-19 suite audit (root `TEST-REPORT.md`) traced ~150 lines of drift-prone duplication to copy-pasted helpers.
