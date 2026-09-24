@@ -198,7 +198,12 @@ export function planBookRepair(
     const takenKeys = new Set<string>();
     records.forEach((record, index) => {
       if (record && idClasses[index] === 'keep' && !reassignBound.has(index)) {
-        takenKeys.add(canonicalIdKey(record['id']) as string);
+        // 'keep' classifies the id as a finite number, so the key is never
+        // null — the guard states that invariant locally instead of casting.
+        const key = canonicalIdKey(record['id']);
+        if (key !== null) {
+          takenKeys.add(key);
+        }
       }
     });
     records.forEach((record, index) => {
