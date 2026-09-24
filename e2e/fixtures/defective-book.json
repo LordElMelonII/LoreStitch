@@ -1,0 +1,61 @@
+{
+  "name": "Fuyuki Grail War — community supplement",
+  "vendor_extra": { "pack_version": "2.1.0", "source": "community-pack" },
+  "entries": [
+    {
+      "id": 1,
+      "keys": ["castle"],
+      "secondary_keys": [],
+      "comment": "Castle gates",
+      "content": "The great gates of Einzbern castle stand wrought in silver.",
+      "insertion_order": 10,
+      "enabled": true,
+      "position": "before_char",
+      "extensions": { "availability": 100 }
+    },
+    {
+      "id": 2,
+      "keys": ["gatehouse"],
+      "secondary_keys": [],
+      "comment": "Gate house",
+      "content": "A fortified gatehouse guards the only road up the hill.",
+      "insertion_order": 20,
+      "enabled": true,
+      "position": "before_char",
+      "extensions": {},
+      "plugin_note": "hand-edited"
+    },
+    {
+      "id": "7",
+      "keys": ["tavern"],
+      "secondary_keys": [],
+      "comment": "Tavern",
+      "content": "The Gilded Chalice tavern never closes its doors.",
+      "insertion_order": 30,
+      "enabled": true,
+      "position": "before_char"
+    },
+    {
+      "id": 2,
+      "keys": ["dock", "river"],
+      "secondary_keys": [],
+      "comment": "River dock",
+      "content": "Fishermen moor their boats at the crooked wooden dock.",
+      "insertion_order": 1e999,
+      "enabled": true,
+      "position": "before_char"
+    },
+    {
+      "id": 3,
+      "keys": ["forest"],
+      "secondary_keys": [],
+      "comment": "Old forest",
+      "content": "The old forest swallows the moonlight whole.",
+      "insertion_order": 50,
+      "priority": 1e999,
+      "enabled": true,
+      "position": "before_char",
+      "extensions": { "probability": 100 }
+    }
+  ]
+}

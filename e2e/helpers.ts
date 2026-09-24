@@ -18,6 +18,26 @@ export const FATE_PATH = join(
 );
 
 /**
+ * A committed hand-crafted book carrying exactly the four fixable id/value
+ * defects the repair dialog's approved copy was verified against (plan 09,
+ * checkpoint 09-1): a duplicate id 2 ("Gate house" / "River dock"), a string
+ * id "7" ("Tavern"), an Infinity insertion_order ("River dock", via 1e999)
+ * and an Infinity priority ("Old forest", via 1e999). Lives under `e2e/` —
+ * never the gitignored `__screenshots__` working copy.
+ */
+export const DEFECTIVE_BOOK_PATH = join(process.cwd(), 'e2e', 'fixtures', 'defective-book.json');
+
+/**
+ * The bundled clean ST-native fixture (plan 09 §3.6): two finite, well-formed
+ * entries — the never-false-positive control for the repair offers.
+ */
+export const EXAMPLE_TEST_LOREBOOK_PATH = join(
+  process.cwd(),
+  'example_card',
+  'Example test lorebook.json',
+);
+
+/**
  * The user-provided character-card fixtures (plan 15 §3.7) — imported through
  * the same helpers as the lorebook fixtures, never modified by a spec.
  */
@@ -30,6 +50,19 @@ export const EXAMPLE_CARD_JSON = join(process.cwd(), 'example_card', 'example_ca
 export type CardExportTitle = 'Character card (PNG)' | 'Character card (JSON)';
 
 /**
+ * Asserts the project-open shell appeared: the top bar's More-actions trigger
+ * plus an attached entries sidenav. The welcome state also renders a sidenav,
+ * so the top bar (not merely an attached sidenav) is the discriminator — a
+ * silently failed import would otherwise slip through and every later editor
+ * interaction would time out. importLorebook's tail, shared with the repair
+ * consent flows (plan 09) which open the workspace only after the dialog.
+ */
+export async function expectProjectOpen(page: Page): Promise<void> {
+  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
+  await expect(page.locator('.entries-sidenav')).toBeAttached();
+}
+
+/**
  * Imports a lorebook file through the welcome screen, replacing the project.
  * The caller is responsible for navigating to `/` first.
  */
@@ -37,24 +70,77 @@ export async function importLorebook(page: Page, path: string): Promise<void> {
   const importChooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Import lorebook or character card' }).click();
   await (await importChooser).setFiles(path);
-  // Assert the project-open top bar, not merely an attached sidenav: the
-  // welcome state also renders a sidenav, so a silently failed import would
-  // otherwise slip through and every later editor interaction would time out.
-  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
-  await expect(page.locator('.entries-sidenav')).toBeAttached();
+  await expectProjectOpen(page);
+}
+
+/**
+ * The guided book-repair pane (plan 09 §3.3): a centered dialog on
+ * tablet/desktop, a bottom sheet on phones — both containers carry
+ * `role="dialog"` + the `aria-label` the opener sets, so one locator resolves
+ * the pane in either form. Scope button/row assertions to this locator.
+ */
+export function repairDialog(page: Page): Locator {
+  return page.getByRole('dialog', { name: 'Book repair' });
+}
+
+/**
+ * Imports a book that carries fixable defects (plan 09 §3.4): the repair
+ * offer blocks the import BEFORE the book enters the workspace, so the
+ * shell-open assertions of `importLorebook` would hang — this variant waits
+ * for the repair dialog (import context, over the welcome-screen backdrop)
+ * instead and returns it for the caller to consent or decline.
+ */
+export async function importLorebookOfferingRepair(
+  page: Page,
+  path: string,
+): Promise<Locator> {
+  const importChooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Import lorebook or character card' }).click();
+  await (await importChooser).setFiles(path);
+  const dialog = repairDialog(page);
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+/**
+ * Exports World Info JSON through the viewport-aware export menu
+ * (`openExportMenu`: topbar trigger on tablets/desktops, mobile bottom bar on
+ * phones); resolves with the parsed JSON and its file. The repaired-book
+ * export flows of plan 09 must run on both form factors, so they share this
+ * instead of `exportWorldInfo`'s former desktop-only topbar click.
+ */
+export async function exportWorldInfoViewportAware(
+  page: Page,
+): Promise<{ json: Record<string, unknown>; download: Download }> {
+  const panel = await openExportMenu(page);
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    panel.getByText('World Info JSON').first().click(),
+  ]);
+  const json = JSON.parse(readFileSync(await download.path(), 'utf8')) as Record<string, unknown>;
+  return { json, download };
 }
 
 /** Exports via the top bar menu; resolves with the parsed JSON and its file. */
 export async function exportWorldInfo(
   page: Page,
 ): Promise<{ json: Record<string, unknown>; download: Download }> {
-  await page.locator('[aria-label="Export menu"]').click();
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.getByText('World Info JSON').first().click(),
-  ]);
-  const json = JSON.parse(readFileSync(await download.path(), 'utf8')) as Record<string, unknown>;
-  return { json, download };
+  return exportWorldInfoViewportAware(page);
+}
+
+/**
+ * Clicks "World Info JSON" in the viewport-aware export menu and waits for
+ * the export repair offer INSTEAD of a download (plan 09 §3.5 backstop: a
+ * defective book validates before any byte is written). Returns the repair
+ * dialog in its export context — no download can fire while it is open; the
+ * caller consents ("Fix N issues & export") or declines ("Cancel").
+ */
+export async function exportWorldInfoOfferingRepair(page: Page): Promise<Locator> {
+  const panel = await openExportMenu(page);
+  await panel.getByText('World Info JSON').first().click();
+  const dialog = repairDialog(page);
+  await expect(dialog).toBeVisible();
+  return dialog;
 }
 
 /**
