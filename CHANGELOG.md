@@ -3,6 +3,30 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.6.0 — September 25, 2026
+
+The safe-hands release. Lorebooks picked up from elsewhere — a community
+pack, a hand-edited file, an export from another tool — can carry broken
+entry ids that silently lose entries when SillyTavern reads the file back.
+LoreStitch now checks every book it opens or writes, and when it finds
+something broken it offers the fix instead of leaving the damage to travel.
+
+### Highlights
+
+- **Broken ids get a one-click fix** — importing a book with duplicate, text,
+  or missing entry ids shows exactly what would change, entry by entry
+  ("Tavern: id "7" → 7"), before anything happens. Apply the fixes and
+  import, or bring the file in exactly as it is — your call, in plain
+  language.
+- **No more vanishing entries** — SillyTavern's format stores entries under
+  their id, so two entries sharing one id meant one of them quietly
+  disappeared on the way back in. Every export now checks first; a repaired
+  book keeps every entry, each under its own unique id.
+- **Exports can't carry broken data** — if something can't be fixed
+  automatically, the export stops and tells you what and where instead of
+  writing a file that loses entries. Clean books export exactly as before,
+  byte for byte.
+
 ## 1.5.0 — September 23, 2026
 
 The character-card release. Lorebooks mostly travel as SillyTavern character
