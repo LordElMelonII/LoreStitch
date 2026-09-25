@@ -9,13 +9,13 @@ Completed plans live in [archive/](./archive/).
 
 Grounded at `develop` @ `ddc9f04` (2026-09-22 roadmap evaluation; see the
 evaluation notes below). Task 15 (character-card round-trip), planned from the
-same review, was completed and archived 2026-09-23 (shipped as v1.5.0) — the
-pending queue below is unchanged.
+same review, was completed and archived 2026-09-23 (shipped as v1.5.0). Task
+09 (book schema validation & guided repair) was completed and archived
+2026-09-25 (shipped as v1.6.0) — the pending queue below is unchanged.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
-| 09 | [09-export-pre-flight-validation.md](./09-export-pre-flight-validation.md) | Enforce the ROADMAP critical gate "pre-flight schema validation must run before file export" — validation + a guided **repair dialog** (duplicate/non-numeric entry ids are the reachable hole; the block-only draft told users to fix ids the UI cannot edit — reworked 2026-09-24) | ✅ Ready (checkpoint 09-1 after P1) |
 | 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
 
 ### Queue (sketched during evaluation; planned when their turn comes)
