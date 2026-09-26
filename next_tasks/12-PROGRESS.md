@@ -58,3 +58,44 @@ Plan: `next_tasks/12-delimiters-selection-and-markdown.md` (D1–D10 locked)
   strips detected header (rewrap convergence; D7 gate governs the
   `expectedNames` path the dialog uses).
 - **Next**: Checkpoint 12-1 (blocking, user) → P2 `ui-specialist`.
+
+---
+
+## Checkpoint 12-1 — ✅ APPROVED by user
+
+The two §4.4 detection-order effects (badge `---`→`## Name`;
+`# Header` payload→wrapper) accepted with the minimal repros. P2 unlocked.
+
+---
+
+## P2 — UI: responsive pane + selection + markdown controls (ui-specialist)
+
+- **Status**: ✅ done — commit (a) `3f63014`
+  `feat(delimiters): apply to the checked selection via the batch toolbar`;
+  commit (b) `c8fe23a` `feat(delimiters): markdown style controls in the pane`
+- **Landed (a)**: dual-container `DelimiterDialog` (optional dialog/sheet refs +
+  both DATA tokens, `close()` routes to whichever ref); `app-delimiters-sheet`
+  added to styles.scss on the `app-batch-sheet` recipe; `DelimiterDialogData`
+  gained `entryIds?`; selection mode (locked targets, "Delimiters — N entries"
+  header, no Apply-to select, no hint); `EntryList.openDelimiters()` mirroring
+  `openBatchOperations` (guard → openResponsive → paneResult → clearSelection
+  on applied); desktop toolbar labeled `code` button "Apply delimiters to
+  selection" after Batch edit; mobile strip gained labeled Delimiters button
+  (`'delimiters-selection'` in `BatchBarAction`, routed in `app.ts`).
+- **Landed (b)**: markdown level select (`# — H1`…`###### — H6`, default `##`),
+  "Add trailing ---" checkbox (default off), live example card, options through
+  preview+apply (preview-is-what-is-written), chips `empty header` /
+  `missing space` + banner + repair; hint copy = plan's, verbatim.
+- **Orchestrator gates**: lint ✅ · build ✅ · unit ✅ (60 files / 1323 tests).
+- **Deviations (reported, for 12-2 review)**: pane self-paints
+  `.pane-header/.pane-body/.pane-footer` (BatchOperationsDialog recipe) instead
+  of `mat-dialog-*` sections; `.batch-bar .bar-item` flex-basis changed
+  `1 1 0`→`1 1 auto` (measurement-mandated: equal flex ellipsized labels once
+  the 6th item landed; re-measured zero ellipsized at 2 and 70 selected);
+  labeled mobile Delimiters button FITS at 390px (no §9.6 icon-only fallback).
+- **Pin migrations (unit)**: mobile-bottom-bar strip counts 5→6, app.spec
+  routing walks ten members, delimiter-dialog spec dual-token providers +
+  `.pane-footer` selectors, entry-content-field opener spy → openResponsive.
+- **Known red until P4**: `e2e/delimiters.spec.ts` 390×844 suite still pins the
+  full-screen dialog on mobile projects (migrates in P4 per plan §6).
+- **Next**: after-set capture + checkpoint 12-2 (blocking) → P3 `ts-reviewer`.
