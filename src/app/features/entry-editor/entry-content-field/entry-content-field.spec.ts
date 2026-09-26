@@ -108,6 +108,23 @@ describe('EntryContentField', () => {
     expect(text()).toContain('click the code button to change');
   });
 
+  it('badges a detected markdown wrapper with its heading label', async () => {
+    await createPane({ content: '## London\n\nbody text' });
+
+    // Task 12 §4.4: header-led content classifies markdown (detection order
+    // tag → bracket → markdown → separator), and the badge reads `## London`.
+    expect(text()).toContain('## London');
+    expect(text()).toContain('click the code button to change');
+
+    // A broken ATX header rides the malformed hint instead (`## ?`).
+    await type('##\n\nlore');
+    rebind();
+    const hint = (fixture.nativeElement as HTMLElement).querySelector('.malformed-hint');
+    assert(hint);
+    expect(hint.textContent).toContain('## ?');
+    expect(hint.textContent).toContain('click the code button to fix');
+  });
+
   it('opens the delimiter pane through the responsive overlay for the entry under edit', async () => {
     await createPane({ content: 'plain lore text' });
 

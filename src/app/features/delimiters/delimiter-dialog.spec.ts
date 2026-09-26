@@ -865,4 +865,155 @@ describe('DelimiterDialog', () => {
     expect(closeSpy).not.toHaveBeenCalled();
     expect(entryOf(0).content).toBe('<London>\nLondon is a city.\n</London>');
   });
+
+  it('renders markdown controls with the default level and toggle, and the live example card', async () => {
+    const dialog = await createDialog([entry(0, { comment: 'London', content: 'London is a city.' })]);
+    await pickStyle('Markdown');
+
+    // Markdown needs a name and defaults to `##`, toggle off (D5/D6).
+    expect(dialog['needsName']()).toBe(true);
+    expect(dialog['markdownLevel']()).toBe(2);
+    expect(dialog['markdownSeparator']()).toBe(false);
+
+    assert(fixture);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.example-text')?.textContent).toBe('## London\n\nEntry content…');
+    expect(el.querySelector('input[aria-label="Wrapper name"]')).toBeTruthy();
+    expect(el.textContent).toContain('Add trailing ---');
+
+    // The level picker offers #–###### (H1–H6); the value starts at H2.
+    const selects = fixture.debugElement.queryAll(By.css('mat-select'));
+    expect(selects).toHaveLength(3); // scope, style, heading level
+    const levelSelect = selects[2];
+    assert(levelSelect);
+    expect(levelSelect.componentInstance.value).toBe(2);
+    levelSelect.componentInstance.open();
+    fixture.detectChanges();
+    // Scope to the freshly opened panel: pickStyle's closed style-select
+    // panel can linger in the overlay DOM within one test's lifetime.
+    const panels = document.querySelectorAll('.mat-mdc-select-panel');
+    const panel = panels[panels.length - 1];
+    assert(panel);
+    const options = [...panel.querySelectorAll('mat-option')].map((o) => o.textContent?.trim());
+    expect(options).toEqual([
+      '# — H1',
+      '## — H2',
+      '### — H3',
+      '#### — H4',
+      '##### — H5',
+      '###### — H6',
+    ]);
+    const current = options.findIndex((label) => label === '## — H2');
+    assert(current >= 0);
+    (panel.querySelectorAll('mat-option')[current] as HTMLElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+  });
+
+  it('updates the example card from the level picker and the trailing-separator toggle', async () => {
+    const dialog = await createDialog([entry(0, { comment: 'London', content: 'London is a city.' })]);
+    await pickStyle('Markdown');
+
+    dialog['setMarkdownLevel'](4);
+    dialog['setMarkdownSeparator'](true);
+    assert(fixture);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.example-text')?.textContent).toBe(
+      '#### London\n\nEntry content…\n\n---',
+    );
+
+    dialog['setMarkdownLevel'](1);
+    dialog['setMarkdownSeparator'](false);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.example-text')?.textContent).toBe(
+      '# London\n\nEntry content…',
+    );
+  });
+
+  it('previews and applies markdown with the picked options, replacing a name-matched header', async () => {
+    const dialog = await createDialog([entry(0, { comment: 'Old', content: '## Old\n\nbody' })]);
+    await pickStyle('Markdown');
+    dialog['setMarkdownLevel'](3);
+    dialog['setMarkdownSeparator'](true);
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    // The detected wrapper's compact label rides the existing replacement
+    // hint (§5.3): the header matches the entry chain, so it is replaced.
+    expect(previews[0].replacedDelimiter).toBe('## Old');
+    expect(previews[0].next).toBe('### Old\n\nbody\n\n---');
+
+    // Flush the option setters through the zoneless CD before querying rows.
+    assert(fixture);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const hint = (fixture.nativeElement as HTMLElement).querySelector('.row-hint');
+    assert(hint);
+    expect(hint.textContent).toContain('Will replace the existing ## Old delimiter');
+
+    // Preview-is-what-is-written, options included.
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('### Old\n\nbody\n\n---');
+  });
+
+  it('keeps a foreign-named markdown header as payload under every target', async () => {
+    const dialog = await createDialog([entry(0, { comment: 'New', content: '## Old\n\nbody' })]);
+    await pickStyle('Tag');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    // D7: the foreign header never enters the accepted chain — the row wraps
+    // the whole content and shows no replacement hint for the header.
+    expect(previews[0].replacedDelimiter).toBeNull();
+    expect(previews[0].next).toBe('<New>\n## Old\n\nbody\n</New>');
+    assert(fixture);
+    expect((fixture.nativeElement as HTMLElement).querySelector('.row-hint')).toBeNull();
+
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('<New>\n## Old\n\nbody\n</New>');
+  });
+
+  it('chips broken markdown headers as empty header / missing space and repairs them', async () => {
+    const dialog = await createDialog([
+      entry(0, { comment: 'New', content: '##\n\nlore' }),
+      entry(1, { comment: 'glitch', content: '#glitch\ntale' }),
+    ]);
+    dialog['setScope']('all');
+
+    const previews = dialog['previews']();
+    assert(previews[0]);
+    assert(previews[1]);
+    // The empty header fires un-hinted; the glue-typed one via the entry name.
+    expect(previews[0].malformed).toEqual({ kind: 'empty-header', level: 2 });
+    expect(previews[1].malformed).toEqual({ kind: 'no-space-header', name: 'glitch' });
+
+    assert(fixture);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const chips = el.querySelectorAll('.row-chip.malformed-chip');
+    expect(chips).toHaveLength(2);
+    expect(chips[0]?.textContent?.trim()).toBe('empty header');
+    expect(chips[1]?.textContent?.trim()).toBe('missing space');
+    expect(el.querySelector('.malformed-banner')?.textContent).toContain(
+      '2 entries have malformed delimiters',
+    );
+    const hints = el.querySelectorAll('.row-hint');
+    expect(hints[0]?.textContent).toContain('Will replace the empty ## heading (no header text)');
+    expect(hints[1]?.textContent).toContain('Will replace the unspaced #glitch heading');
+
+    // Applying strips the shells and writes one clean wrapper per entry.
+    dialog['apply']();
+    expect(entryOf(0).content).toBe('<New>\nlore\n</New>');
+    expect(entryOf(1).content).toBe('<glitch>\ntale\n</glitch>');
+  });
+
+  it('renders the separator example card', async () => {
+    await createDialog([entry(0, { comment: 'New', content: 'prose' })]);
+    await pickStyle('Separator');
+
+    assert(fixture);
+    expect((fixture.nativeElement as HTMLElement).querySelector('.example-text')?.textContent).toBe(
+      'Entry content…\n\n---',
+    );
+  });
 });

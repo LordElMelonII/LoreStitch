@@ -14,6 +14,7 @@ import {
   DELIMITER_STYLE_OPTIONS,
   DelimiterStyle,
   delimiterLabel,
+  delimiterNameMatches,
   detectDelimiter,
   detectMalformedWrapper,
   entryDelimiterName,
@@ -22,6 +23,8 @@ import {
   sanitizeDelimiterName,
   stripMalformedWrapper,
   type DetectedDelimiter,
+  type MarkdownHeadingLevel,
+  type MarkdownWrapOptions,
   type MalformedWrapper,
 } from '../../core/models/delimiters';
 import { CharacterBookEntry, entryTitle } from '../../core/models/lorebook.model';
@@ -43,6 +46,10 @@ interface DelimiterFormModel {
   useEachName: boolean;
   /** Wrap with the entry's first primary key instead of its name. */
   usePrimaryKey: boolean;
+  /** ATX heading level of the markdown style (Task 12 §5.3, default 2). */
+  markdownLevel: MarkdownHeadingLevel;
+  /** Whether the markdown style appends its trailing `---` toggle marker. */
+  markdownSeparator: boolean;
 }
 
 /** Direction class used to color a token delta (`up` = more tokens). */
@@ -76,7 +83,7 @@ function isNamedWrapper(detected: DetectedDelimiter): boolean {
 /**
  * Recognizes, adds, changes, and removes content delimiters — for the active
  * entry, the whole book, or the checked selection — with a live diff preview
- * before applying. The four controls share one Signal Form model; the
+ * before applying. The controls share one Signal Form model; the
  * Material select / checkbox write into it from their change events (they are
  * CVA components, so only the name input binds `[formField]` directly).
  *
@@ -144,6 +151,8 @@ export class DelimiterDialog {
     scope: this.selectionMode ? 'all' : 'entry',
     useEachName: true,
     usePrimaryKey: false,
+    markdownLevel: 2,
+    markdownSeparator: false,
   });
 
   protected readonly delimiterForm = form(this.model, (s) => {
@@ -177,9 +186,45 @@ export class DelimiterDialog {
     this.model.update((m) => ({ ...m, usePrimaryKey }));
   }
 
+  protected setMarkdownLevel(level: MarkdownHeadingLevel): void {
+    this.model.update((m) => ({ ...m, markdownLevel: level }));
+  }
+
+  protected setMarkdownSeparator(separator: boolean): void {
+    this.model.update((m) => ({ ...m, markdownSeparator: separator }));
+  }
+
   protected readonly needsName = computed(
-    () => this.style() === 'tag' || this.style() === 'bracket',
+    () =>
+      this.style() === 'tag' || this.style() === 'bracket' || this.style() === 'markdown',
   );
+
+  /** Whether the markdown option row renders (§5.3: level + trailing `---`). */
+  protected readonly isMarkdown = computed(() => this.style() === 'markdown');
+
+  /** Heading levels offered by the markdown level picker (§5.3, D6). */
+  protected readonly markdownLevels: readonly MarkdownHeadingLevel[] = [1, 2, 3, 4, 5, 6];
+
+  protected readonly markdownLevel = computed(() => this.model().markdownLevel);
+
+  protected readonly markdownSeparator = computed(() => this.model().markdownSeparator);
+
+  /** Compact trigger/option label for a heading level (`## — H2`). */
+  protected headingLevelLabel(level: MarkdownHeadingLevel): string {
+    return `${'#'.repeat(level)} — H${level}`;
+  }
+
+  /**
+   * The markdown options every wrap/rewrap composes with — preview and apply
+   * read this ONE accessor, so what is previewed is exactly what is written
+   * (D5/D6: level normalization and the trailing `---` toggle ride along).
+   * Every other style ignores the options entirely.
+   */
+  private markdownOptions(): MarkdownWrapOptions | undefined {
+    return this.style() === 'markdown'
+      ? { level: this.model().markdownLevel, trailingSeparator: this.model().markdownSeparator }
+      : undefined;
+  }
 
   /** The fixed typed name is skipped when every entry supplies its own. */
   protected readonly nameResolvedFromEntries = computed(
@@ -285,18 +330,24 @@ export class DelimiterDialog {
       // points at that name; mismatched pairs need no hints.
       const malformed = detectMalformedWrapper(current, expectedNames);
       // Same composition the write path uses (see `stripClassifiedShell`):
-      // the previewed bytes are the written bytes by construction.
+      // the previewed bytes are the written bytes by construction — markdown
+      // options included.
       const next = rewrapContent(
         this.stripClassifiedShell(entry),
         style,
         this.resolveName(entry),
         expectedNames,
+        this.markdownOptions(),
       );
       const detected = detectDelimiter(current);
-      // A detected whole-content wrapper is always stripped (its own name is
-      // in the accepted set); a trailing `---` only by the `none` target.
+      // A detected whole-content tag/bracket wrapper is always stripped (its
+      // own name is in the accepted set); a markdown wrapper only when its
+      // header matches the accepted chain (D7 — foreign headers stay
+      // payload); a trailing `---` only by the `none` target.
       const stripped =
-        isNamedWrapper(detected) || (detected.style === 'separator' && style === 'none');
+        isNamedWrapper(detected) ||
+        (detected.style === 'markdown' && delimiterNameMatches(detected.name, expectedNames)) ||
+        (detected.style === 'separator' && style === 'none');
       return {
         entryId: entry.id ?? -1,
         title: entryTitle(entry),
@@ -370,9 +421,7 @@ export class DelimiterDialog {
       case 'orphan-close':
         return `Will ${verb} the unclosed </${malformed.name}> delimiter`;
       case 'empty-header':
-        return (
-          `Will ${verb} the empty ${'#'.repeat(malformed.level)} heading` + ` (no header text)`
-        );
+        return `Will ${verb} the empty ${'#'.repeat(malformed.level)} heading (no header text)`;
       case 'no-space-header':
         return `Will ${verb} the unspaced #${malformed.name} heading`;
     }
@@ -380,9 +429,11 @@ export class DelimiterDialog {
 
   /**
    * Row-chip label for a classified malformed shell: mismatched pairs read
-   * `mismatched`, both orphan kinds read `unclosed`. Exhaustive over
-   * `MalformedWrapper` (no default) so a future kind is a compile error here,
-   * not a silently mislabeled chip.
+   * `mismatched`, both orphan kinds read `unclosed`, an empty ATX header
+   * reads `empty header`, and a glue-typed header reads `missing space`
+   * (Task 12 §5.3 chip copy). Exhaustive over `MalformedWrapper` (no
+   * default) so a future kind is a compile error here, not a silently
+   * mislabeled chip.
    */
   protected malformedChipLabel(malformed: MalformedWrapper): string {
     switch (malformed.kind) {
@@ -392,8 +443,9 @@ export class DelimiterDialog {
       case 'orphan-close':
         return 'unclosed';
       case 'empty-header':
+        return 'empty header';
       case 'no-space-header':
-        return 'malformed';
+        return 'missing space';
     }
   }
 
@@ -422,6 +474,12 @@ export class DelimiterDialog {
         return [`<${name}>`, 'Entry content…', `</${name}>`];
       case 'bracket':
         return [`[${name}=`, 'Entry content…', ']'];
+      case 'markdown': {
+        // The live emitted shape (D5/D6): `#{level} name`, one structural
+        // blank line, the payload — plus the toggle marker when asked.
+        const lines = [`${'#'.repeat(this.markdownLevel())} ${name}`, '', 'Entry content…'];
+        return this.markdownSeparator() ? [...lines, '', '---'] : lines;
+      }
       case 'separator':
         return ['Entry content…', '', '---'];
       default:
@@ -452,6 +510,7 @@ export class DelimiterDialog {
         style,
         this.resolveName(entry),
         this.resolveExpectedNames(entry),
+        this.markdownOptions(),
       ),
     }));
     this.snackBar.open(

@@ -113,6 +113,13 @@
     flex: 1;
     min-width: 220px;
   }
+
+  // The markdown heading-level picker: compact, never competes with the
+  // wrapper-name field it sits next to.
+  .level-field {
+    flex: none;
+    width: 170px;
+  }
 }
 
 .pattern-error {

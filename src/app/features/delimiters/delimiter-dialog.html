@@ -112,6 +112,31 @@
       </div>
     }
 
+    @if (isMarkdown()) {
+      <!-- Markdown options (Task 12 §5.3, D5/D6): heading level + the
+           trailing-separator toggle. The checkbox mirrors this pane's
+           "Use first primary key" exemplar; the select mirrors the
+           batch pane's evaluation-strategy pickers. -->
+      <div class="controls name-row">
+        <mat-form-field class="level-field" subscriptSizing="dynamic" appearance="fill">
+          <mat-label>Heading level</mat-label>
+          <mat-select [value]="markdownLevel()" (selectionChange)="setMarkdownLevel($event.value)">
+            @for (level of markdownLevels; track level) {
+              <mat-option [value]="level">{{ headingLevelLabel(level) }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <mat-checkbox
+          [checked]="markdownSeparator()"
+          (change)="setMarkdownSeparator($event.checked)"
+          matTooltip="Append the style's trailing --- marker after the content"
+        >
+          Add trailing ---
+        </mat-checkbox>
+      </div>
+    }
+
     <div class="example-card" aria-label="Format example">
       <span class="example-label">Format</span>
       <pre class="example-text">{{ example().join('\n') }}</pre>
@@ -125,10 +150,10 @@
             {{ malformedCount() }}
             {{ malformedCount() === 1 ? 'entry has' : 'entries have' }} malformed delimiters
           </span>
-          <p class="banner-body">
-            Mismatched or unclosed pairs such as &lt;test&gt; … &lt;/universe&gt;. Applying a style
-            replaces them; None removes them.
-          </p>
+        <p class="banner-body">
+          Mismatched or unclosed pairs such as &lt;test&gt; … &lt;/universe&gt;, or a broken ATX
+          heading such as ## with no title. Applying a style replaces them; None removes them.
+        </p>
         </div>
       </div>
     }
