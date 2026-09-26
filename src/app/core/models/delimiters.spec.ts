@@ -30,10 +30,10 @@ import {
 const LONDON = 'London is a city full of people.';
 
 /** Styles that emit a wrapper. */
-const WRAPPING_STYLES = ['tag', 'bracket', 'separator'] as const;
+const WRAPPING_STYLES = ['tag', 'bracket', 'markdown', 'separator'] as const;
 
 /** Every style, including the strip-only `'none'`. */
-const ALL_STYLES: readonly DelimiterStyle[] = ['tag', 'bracket', 'separator', 'none'];
+const ALL_STYLES: readonly DelimiterStyle[] = ['tag', 'bracket', 'markdown', 'separator', 'none'];
 
 /** Inputs a blank-payload no-op must return unchanged. */
 const BLANK_INPUTS: readonly string[] = ['', '   ', '\n', '\r\n \t'];
@@ -77,6 +77,11 @@ const IDEMPOTENCE_INPUTS: readonly string[] = [
   '<Old>\nprose\n</Old>',
   '<foo>x</bar>',
   '<tag>unclosed',
+  '## N\n\nprose',
+  '## N\nprose',
+  '## N\n\nprose\n\n---',
+  '## Old\n\nprose',
+  '## Old\n\nprose\n\n---',
 ];
 
 describe('delimiters', () => {
@@ -125,6 +130,100 @@ describe('delimiters', () => {
     it('does not detect mismatched or unclosed tags', () => {
       expect(detectDelimiter('<foo>x</bar>')).toEqual({ style: 'none', name: '' });
       expect(detectDelimiter('<tag>unclosed')).toEqual({ style: 'none', name: '' });
+    });
+
+    // --- Task-01 deferral migration -------------------------------------
+    // Task 01 deferred the markdown style and treated header-led content as
+    // ordinary payload under the nested-collisions rules
+    // (next_tasks/archive/01-delimiters-edge-cases.md §3.1). These pins
+    // migrate that deferral to the §4.2 contract: a well-formed ATX header
+    // classifies `markdown` instead of `none`, and header-led content with a
+    // trailing `---` classifies `markdown` instead of `separator`.
+
+    it('recognizes a canonical ## heading wrapper', () => {
+      // Old (task-01 deferral): `{ style: 'none', name: '' }`, label `''`.
+      expect(detectDelimiter(`## London\n\n${LONDON}`)).toEqual({
+        style: 'markdown',
+        name: 'London',
+        level: 2,
+      });
+    });
+
+    it('recognizes a tight heading wrapper (no structural blank line)', () => {
+      expect(detectDelimiter(`## London\n${LONDON}`)).toEqual({
+        style: 'markdown',
+        name: 'London',
+        level: 2,
+      });
+    });
+
+    it('recognizes CRLF heading wrappers like LF ones', () => {
+      expect(detectDelimiter(`## London\r\n\r\n${LONDON}`)).toEqual({
+        style: 'markdown',
+        name: 'London',
+        level: 2,
+      });
+    });
+
+    it('recognizes every heading level 1-6', () => {
+      for (const level of [1, 2, 3, 4, 5, 6] as const) {
+        const hashes = '#'.repeat(level);
+        expect(detectDelimiter(`${hashes} London\n\n${LONDON}`)).toEqual({
+          style: 'markdown',
+          name: 'London',
+          level,
+        });
+      }
+    });
+
+    it('classifies header-led content with a trailing --- as markdown (order pin)', () => {
+      // Old: `{ style: 'separator', name: '' }`, label `---` — checkpoint
+      // 12-1(a): the badge now reads the header instead of the marker.
+      expect(detectDelimiter(`## London\n\n${LONDON}\n\n---`)).toEqual({
+        style: 'markdown',
+        name: 'London',
+        level: 2,
+      });
+    });
+
+    it('classifies `## Name\\n\\n---` alone as a separator, not markdown', () => {
+      // Blank payload: the header is the marker's payload. The markdown
+      // check runs before `separator`, so a toggled markdown wrapper stays
+      // markdown while a marker with nothing under it stays a separator.
+      expect(detectDelimiter('## London\n\n---')).toEqual({ style: 'separator', name: '' });
+    });
+
+    it('keeps a 7+ hash line as payload', () => {
+      expect(detectDelimiter(`####### London\n\n${LONDON}`)).toEqual({ style: 'none', name: '' });
+    });
+
+    it('does not detect a glue-typed #Name header (hint-gated malformed)', () => {
+      expect(detectDelimiter(`#London\n\n${LONDON}`)).toEqual({ style: 'none', name: '' });
+    });
+
+    it('does not detect a header on any line but the first', () => {
+      expect(detectDelimiter(`Intro text\n## London\n\n${LONDON}`)).toEqual({
+        style: 'none',
+        name: '',
+      });
+    });
+
+    it('does not detect an empty header text or a lone header line', () => {
+      expect(detectDelimiter(`##\n\n${LONDON}`)).toEqual({ style: 'none', name: '' });
+      expect(detectDelimiter('## London')).toEqual({ style: 'none', name: '' });
+    });
+
+    it('rejects header text over 80 code points', () => {
+      expect(detectDelimiter(`## ${'a'.repeat(81)}\n\n${LONDON}`)).toEqual({
+        style: 'none',
+        name: '',
+      });
+      expect(detectDelimiter(`## ${'a'.repeat(80)}\n\n${LONDON}`).style).toBe('markdown');
+    });
+
+    it('caps the header text by code points, not UTF-16 units', () => {
+      expect(detectDelimiter(`## ${'😀'.repeat(80)}\n\n${LONDON}`).style).toBe('markdown');
+      expect(detectDelimiter(`## ${'😀'.repeat(81)}\n\n${LONDON}`).style).toBe('none');
     });
   });
 
@@ -214,6 +313,40 @@ describe('delimiters', () => {
     it('treats comment-only prose as payload', () => {
       expect(wrapContent('<!-- lore -->', 'tag', 'N')).toBe('<N>\n<!-- lore -->\n</N>');
     });
+
+    it('wraps in a markdown heading at every level 1-6', () => {
+      for (const level of [1, 2, 3, 4, 5, 6] as const) {
+        const hashes = '#'.repeat(level);
+        const wrapped = wrapContent(LONDON, 'markdown', 'London', { level });
+        expect(wrapped).toBe(`${hashes} London\n\n${LONDON}`);
+        expect(unwrapContent(wrapped, { expectedNames: ['London'] })).toBe(LONDON);
+      }
+    });
+
+    it('defaults the markdown level to ## and omits the toggle marker', () => {
+      expect(wrapContent(LONDON, 'markdown', 'London')).toBe(`## London\n\n${LONDON}`);
+    });
+
+    it('appends exactly one --- when the markdown toggle is on', () => {
+      expect(wrapContent(LONDON, 'markdown', 'London', { trailingSeparator: true })).toBe(
+        `## London\n\n${LONDON}\n\n---`,
+      );
+    });
+
+    it('keeps spaces in markdown header text (header text is prose)', () => {
+      expect(wrapContent(LONDON, 'markdown', 'River Thames')).toBe(`## River Thames\n\n${LONDON}`);
+    });
+
+    it('sanitizes markdown header text and falls back to entry', () => {
+      expect(wrapContent(LONDON, 'markdown', 'a\nb')).toBe(`## a b\n\n${LONDON}`);
+      expect(wrapContent(LONDON, 'markdown', '')).toBe(`## entry\n\n${LONDON}`);
+    });
+
+    it('keeps a bare --- marker unchanged for markdown (D1 family)', () => {
+      // Heading it would emit `## N\n\n---`, which classifies as a separator
+      // with the header as payload and would double the header on re-apply.
+      expect(wrapContent('---', 'markdown', 'N')).toBe('---');
+    });
   });
 
   describe('unwrapContent', () => {
@@ -286,6 +419,47 @@ describe('delimiters', () => {
       expect(unwrapContent('<N>\nprose\n\n---\n</N>', { expectedNames: ['N'] })).toBe(
         'prose\n\n---',
       );
+    });
+
+    it('strips a markdown header only when the name matches (D7)', () => {
+      expect(unwrapContent('## N\n\nprose', { expectedNames: ['N'] })).toBe('prose');
+      expect(unwrapContent('## n\n\nprose', { expectedNames: ['N'] })).toBe('prose');
+      expect(unwrapContent('## a=b\n\nprose', { expectedNames: ['a[b'] })).toBe('prose');
+      expect(unwrapContent('## Old\n\nprose', { expectedNames: ['N'] })).toBe('## Old\n\nprose');
+    });
+
+    it('strips a detected markdown header in the legacy path (no names)', () => {
+      expect(unwrapContent('## N\n\nprose')).toBe('prose');
+    });
+
+    it('captures markdown payload verbatim through a name-matched strip', () => {
+      for (const input of ['  padded  ', 'line\nbreak', 'crlf\r\nline', '\tlead', 'trailing\n\n']) {
+        expect(unwrapContent(wrapContent(input, 'markdown', 'N'), { expectedNames: ['N'] })).toBe(
+          input,
+        );
+      }
+    });
+
+    it('falls back to separator handling when the markdown name gate fails (§4.3)', () => {
+      // Regression-critical: without the fallback, re-wrapping foreign-header
+      // content that already ends in `---` to `separator` would emit a second
+      // marker (today that re-apply is idempotent).
+      expect(
+        unwrapContent('## Old\n\nprose\n\n---', { expectedNames: ['N'], stripSeparator: true }),
+      ).toBe('## Old\n\nprose');
+      expect(unwrapContent('## Old\n\nprose\n\n---', { expectedNames: ['N'] })).toBe(
+        '## Old\n\nprose\n\n---',
+      );
+    });
+
+    it('does not claim a byte round-trip when a markdown payload ends in ---', () => {
+      // Same documented ambiguity as `separator`: a payload ending in a
+      // marker line is indistinguishable from the toggle marker. The legacy
+      // strip consumes it; the name-matched strip keeps it verbatim.
+      expect(unwrapContent(wrapContent('prose\n\n---', 'markdown', 'N'))).toBe('prose');
+      expect(
+        unwrapContent(wrapContent('prose\n\n---', 'markdown', 'N'), { expectedNames: ['N'] }),
+      ).toBe('prose\n\n---');
     });
   });
 
@@ -371,6 +545,62 @@ describe('delimiters', () => {
     it('preserves a trailing separator as payload when wrapping', () => {
       expect(rewrapContent('prose\n\n---', 'tag', 'N', ['N'])).toBe('<N>\nprose\n\n---\n</N>');
       expect(rewrapContent('prose\n\n---', 'bracket', 'N', ['N'])).toBe('[N=\nprose\n\n---]');
+    });
+
+    it('normalizes markdown level and spacing on re-apply (never nests)', () => {
+      expect(rewrapContent('#### London\n\nlore', 'markdown', 'London', ['London'])).toBe(
+        '## London\n\nlore',
+      );
+      expect(rewrapContent('## London\nlore', 'markdown', 'London', ['London'])).toBe(
+        '## London\n\nlore',
+      );
+      expect(
+        rewrapContent('## London\n\nlore', 'markdown', 'London', ['London'], { level: 3 }),
+      ).toBe('### London\n\nlore');
+    });
+
+    it('consumes the old toggle marker: off removes it, on re-emits one', () => {
+      const toggled = '## N\n\nprose\n\n---';
+      expect(rewrapContent(toggled, 'markdown', 'N', ['N'])).toBe('## N\n\nprose');
+      expect(rewrapContent(toggled, 'markdown', 'N', ['N'], { trailingSeparator: true })).toBe(
+        '## N\n\nprose\n\n---',
+      );
+      expect(
+        rewrapContent('## N\n\nprose', 'markdown', 'N', ['N'], { trailingSeparator: true }),
+      ).toBe('## N\n\nprose\n\n---');
+    });
+
+    it('consumes a marker surfacing from a stripped tag wrapper for markdown', () => {
+      // §4.4: a markdown target consumes a trailing `---` in both toggle
+      // states; re-applying stays a fixed point instead of shuffling markers.
+      const once = rewrapContent('<N>\nprose\n\n---\n</N>', 'markdown', 'N', ['N']);
+      expect(once).toBe('## N\n\nprose');
+      expect(rewrapContent(once, 'markdown', 'N', ['N'], { trailingSeparator: true })).toBe(
+        '## N\n\nprose\n\n---',
+      );
+    });
+
+    it('keeps a trailing --- as payload when re-wrapping markdown to tag', () => {
+      expect(rewrapContent('## N\n\nprose\n\n---', 'tag', 'N', ['N'])).toBe(
+        '<N>\nprose\n\n---\n</N>',
+      );
+    });
+
+    it('wraps additively around a foreign-named markdown header (D4)', () => {
+      expect(rewrapContent('## Old\n\nprose', 'markdown', 'N', ['N'])).toBe(
+        '## N\n\n## Old\n\nprose',
+      );
+    });
+
+    it('never emits a second --- after a foreign-named markdown header (§4.3)', () => {
+      const foreign = '## Old\n\nprose\n\n---';
+      const once = rewrapContent(foreign, 'separator', 'N', ['N']);
+      expect(once).toBe(foreign);
+      expect(rewrapContent(once, 'separator', 'N', ['N'])).toBe(once);
+    });
+
+    it('strips a matching markdown header and its marker for none', () => {
+      expect(rewrapContent('## N\n\nprose\n\n---', 'none', 'N', ['N'])).toBe('prose');
     });
 
     it('wraps malformed markup additively without truncating', () => {
@@ -608,14 +838,21 @@ describe('delimiters', () => {
     it('labels detected delimiters for badges', () => {
       expect(delimiterLabel({ style: 'tag', name: 'London' })).toBe('<London>');
       expect(delimiterLabel({ style: 'bracket', name: 'London' })).toBe('[London=…]');
+      // Checkpoint 12-1: header-led content that used to read `---` (or no
+      // badge at all) now reads the header text.
+      expect(delimiterLabel({ style: 'markdown', name: 'London', level: 2 })).toBe('## London');
+      expect(delimiterLabel({ style: 'markdown', name: 'London', level: 3 })).toBe('### London');
       expect(delimiterLabel({ style: 'separator', name: '' })).toBe('---');
       expect(delimiterLabel({ style: 'none', name: '' })).toBe('');
     });
 
     it('exposes every style as a selectable option', () => {
+      // Migrated pin: 'markdown' slots in after 'bracket' (named-wrapper
+      // family), before 'separator' — §4.1.
       expect(DELIMITER_STYLE_OPTIONS.map((o) => o.value)).toEqual([
         'tag',
         'bracket',
+        'markdown',
         'separator',
         'none',
       ]);
@@ -787,6 +1024,71 @@ describe('detectMalformedWrapper', () => {
       expect(detectMalformedWrapper('[Name=\nlore]', ['Name'])).toBeNull();
     });
   });
+
+  describe('empty and glue-typed markdown headers', () => {
+    it('fires for an empty header without hints', () => {
+      expect(detectMalformedWrapper('##\n\nlore')).toEqual({ kind: 'empty-header', level: 2 });
+      expect(detectMalformedWrapper('#\n\nlore', [])).toEqual({ kind: 'empty-header', level: 1 });
+      expect(detectMalformedWrapper('##\n\nlore', ['unrelated'])).toEqual({
+        kind: 'empty-header',
+        level: 2,
+      });
+    });
+
+    it('tolerates a tight empty header, trailing spaces and CRLF', () => {
+      expect(detectMalformedWrapper('##  \nlore')).toEqual({ kind: 'empty-header', level: 2 });
+      expect(detectMalformedWrapper('##\r\n\r\nlore')).toEqual({ kind: 'empty-header', level: 2 });
+    });
+
+    it('returns null for a blank payload or a marker-only payload below an empty header', () => {
+      expect(detectMalformedWrapper('##\n\n')).toBeNull();
+      expect(detectMalformedWrapper('##\n\n   ')).toBeNull();
+      // `##\n\n---` classifies as a separator with the header as payload.
+      expect(detectMalformedWrapper('##\n\n---')).toBeNull();
+      expect(detectMalformedWrapper('##')).toBeNull();
+    });
+
+    it('fires for a glue-typed header only with a matching hint', () => {
+      expect(detectMalformedWrapper('#London\n\nlore')).toBeNull();
+      expect(detectMalformedWrapper('#London\n\nlore', [])).toBeNull();
+      expect(detectMalformedWrapper('#London\n\nlore', ['London'])).toEqual({
+        kind: 'no-space-header',
+        name: 'London',
+      });
+      expect(detectMalformedWrapper('#London\n\nlore', ['LONDON'])).toEqual({
+        kind: 'no-space-header',
+        name: 'London',
+      });
+    });
+
+    it('matches glue-typed names after sanitization', () => {
+      expect(detectMalformedWrapper('#a=b\n\nlore', ['a[b'])).toEqual({
+        kind: 'no-space-header',
+        name: 'a=b',
+      });
+    });
+
+    it('keeps a #hashtag line in prose as payload', () => {
+      expect(detectMalformedWrapper('#hashtag\n\nlore', ['London'])).toBeNull();
+    });
+
+    it('keeps a 7+ hash line as payload even with a matching hint', () => {
+      expect(detectMalformedWrapper('####### London\n\nlore', ['London'])).toBeNull();
+    });
+
+    it('returns null for well-formed markdown and header-only content', () => {
+      expect(detectMalformedWrapper(`## London\n\n${LONDON}`, ['London'])).toBeNull();
+      expect(detectMalformedWrapper(`## London\n\n${LONDON}\n\n---`, ['London'])).toBeNull();
+      expect(detectMalformedWrapper('#London', ['London'])).toBeNull();
+    });
+
+    it('returns null when a glue-typed capture is unstrippable', () => {
+      // Marker-only payload below the header: the shell has nothing to free.
+      expect(detectMalformedWrapper('#Name\n\n---', ['Name'])).toBeNull();
+      // Header text over the 80-code-point cap.
+      expect(detectMalformedWrapper(`#${'a'.repeat(81)}\n\nlore`, ['aaa'])).toBeNull();
+    });
+  });
 });
 
 describe('malformedWrapperLabel', () => {
@@ -801,9 +1103,16 @@ describe('malformedWrapperLabel', () => {
   });
 
   it('labels an orphan closer with its name', () => {
-    expect(malformedWrapperLabel({ kind: 'orphan-close', name: 'universe' })).toBe(
-      '? </universe>',
-    );
+    expect(malformedWrapperLabel({ kind: 'orphan-close', name: 'universe' })).toBe('? </universe>');
+  });
+
+  it('labels an empty header with its heading level', () => {
+    expect(malformedWrapperLabel({ kind: 'empty-header', level: 2 })).toBe('## ?');
+    expect(malformedWrapperLabel({ kind: 'empty-header', level: 1 })).toBe('# ?');
+  });
+
+  it('labels a glue-typed header with its name', () => {
+    expect(malformedWrapperLabel({ kind: 'no-space-header', name: 'London' })).toBe('#London ?');
   });
 });
 
@@ -836,6 +1145,30 @@ describe('stripMalformedWrapper', () => {
     expect(stripMalformedWrapper('  lore  \n  </universe>  ')).toBe('  lore  ');
   });
 
+  it('strips markdown shells: first line plus one structural blank line', () => {
+    expect(stripMalformedWrapper('##\n\n  lore  ')).toBe('  lore  ');
+    expect(stripMalformedWrapper('#Name\n\nlore')).toBe('lore');
+    // Tight form: the single newline is the structural one.
+    expect(stripMalformedWrapper('#Name\nlore')).toBe('lore');
+    // Detection without hints returns null, but stripping is hint-free by
+    // design: callers strip only rows that classified.
+    expect(detectMalformedWrapper('#Name\n\nlore')).toBeNull();
+    expect(stripMalformedWrapper('#Name\n\nlore')).toBe('lore');
+  });
+
+  it('removes only the outer markdown shell around a nested wrapper', () => {
+    const stripped = stripMalformedWrapper('##\n\n## London\n\nlore');
+    expect(stripped).toBe('## London\n\nlore');
+    expect(detectDelimiter(stripped)).toEqual({ style: 'markdown', name: 'London', level: 2 });
+  });
+
+  it('is identity for well-formed markdown wrappers', () => {
+    expect(stripMalformedWrapper(`## London\n\n${LONDON}`)).toBe(`## London\n\n${LONDON}`);
+    expect(stripMalformedWrapper(`## London\n\n${LONDON}\n\n---`)).toBe(
+      `## London\n\n${LONDON}\n\n---`,
+    );
+  });
+
   it('removes only the outer shell around a nested well-formed wrapper', () => {
     const stripped = stripMalformedWrapper('<test>\n<Universe>\nlore\n</Universe>\n</universe>');
     expect(stripped).toBe('<Universe>\nlore\n</Universe>');
@@ -850,6 +1183,8 @@ describe('stripMalformedWrapper', () => {
       '<universe>\nlore',
       'lore\n</universe>',
       '[Name=\nlore',
+      '##\n\nlore',
+      '#Name\nlore',
       '<test>\n<Universe>\nlore\n</Universe>\n</universe>',
     ];
     for (const input of CASES) {

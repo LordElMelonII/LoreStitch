@@ -332,6 +332,12 @@ export class DelimiterDialog {
         return `Will ${verb} the unclosed <${malformed.name}> delimiter`;
       case 'orphan-close':
         return `Will ${verb} the unclosed </${malformed.name}> delimiter`;
+      case 'empty-header':
+        return (
+          `Will ${verb} the empty ${'#'.repeat(malformed.level)} heading` + ` (no header text)`
+        );
+      case 'no-space-header':
+        return `Will ${verb} the unspaced #${malformed.name} heading`;
     }
   }
 
@@ -348,6 +354,9 @@ export class DelimiterDialog {
       case 'orphan-open':
       case 'orphan-close':
         return 'unclosed';
+      case 'empty-header':
+      case 'no-space-header':
+        return 'malformed';
     }
   }
 
