@@ -99,3 +99,24 @@ The two §4.4 detection-order effects (badge `---`→`## Name`;
 - **Known red until P4**: `e2e/delimiters.spec.ts` 390×844 suite still pins the
   full-screen dialog on mobile projects (migrates in P4 per plan §6).
 - **Next**: after-set capture + checkpoint 12-2 (blocking) → P3 `ts-reviewer`.
+
+---
+
+## After-set capture (orchestrator, checkpoint 12-2 evidence)
+
+- **Status**: ✅ done — `__screenshots__/12/after/` (12 shots: the 6 base
+  targets re-captured by the IDENTICAL script + 6 after-only new-feature
+  shots) and `__screenshots__/12/compare/` (4 before|after composites).
+- **After-only shots**: desktop/tablet `03-delimiters-selection-pane`
+  (locked "Delimiters — 2 entries", per-entry naming), desktop/tablet
+  `04-markdown-controls` (level select + toggle + live format card + diff),
+  mobile `03-delimiters-selection-sheet`, mobile `04-delimiters-markdown-sheet`.
+- **Capture-hygiene deviations (logged)**: Material hover tooltips raced the
+  pointer during select-overlay picks and stuck visible mid-animation,
+  photobombing the markdown shots; the after set suppresses
+  `.mat-mdc-tooltip-panel` capture-side (transient UI, not part of the
+  settled pane; before set showed none). Also: post-markdown dismissal uses
+  the pane's own close button (Escape is flaky right after a select-overlay
+  pick — linter-capture precedent), and the mobile markdown flow re-parks the
+  editor before releasing the drawer (addEntryOnPhone choreography). No pinned
+  condition (viewport/theme/fixture/settle) changed.
