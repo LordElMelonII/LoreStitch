@@ -482,7 +482,9 @@ export class DelimiterDialog {
       }
       case 'separator':
         return ['Entry content…', '', '---'];
-      default:
+      // Cased, not `default`: a future `DelimiterStyle` without an arm is a
+      // compile error, never a silent fallthrough to the bare-content card.
+      case 'none':
         return ['Entry content…'];
     }
   });

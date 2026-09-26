@@ -272,7 +272,10 @@ export function unwrapContent(content: string, options: UnwrapOptions = {}): str
     }
     case 'separator':
       return stripSeparator ? (SEPARATOR_RE.exec(text)?.[1] ?? text) : text;
-    default:
+    // Cased, not `default`: with every member handled, a future `DelimiterStyle`
+    // added without an arm here is a compile error (strict return checking),
+    // never a silent fallthrough to identity.
+    case 'none':
       return text;
   }
 }
@@ -603,7 +606,9 @@ export function delimiterLabel(detected: DetectedDelimiter): string {
       return `${'#'.repeat(detected.level ?? 2)} ${detected.name}`;
     case 'separator':
       return '---';
-    default:
+    // Cased, not `default`: a future `DelimiterStyle` without an arm is a
+    // compile error, never a silently empty label.
+    case 'none':
       return '';
   }
 }
