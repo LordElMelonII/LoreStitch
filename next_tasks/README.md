@@ -11,16 +11,21 @@ Grounded at `develop` @ `ddc9f04` (2026-09-22 roadmap evaluation; see the
 evaluation notes below). Task 15 (character-card round-trip), planned from the
 same review, was completed and archived 2026-09-23 (shipped as v1.5.0). Task
 09 (book schema validation & guided repair) was completed and archived
-2026-09-25 (shipped as v1.6.0) — the pending queue below is unchanged.
+2026-09-25 (shipped as v1.6.0). Task 12 (delimiters selection + markdown) entered
+2026-09-26 from the user's improvements doc and **preempts 10/11** (user decision:
+"priority over every other task"); the sketch queue numbers shifted (undo → 13,
+pinned drawer → 15 — 14 stays retired).
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
+| 12 | [12-delimiters-selection-and-markdown.md](./12-delimiters-selection-and-markdown.md) | Delimiters batch action on the entry selection + Markdown wrapper style (level picker, optional trailing `---`, name-matched detection, malformed shapes) + responsive bottom-sheet migration | ✅ Ready (checkpoints 12-1 after P1, 12-2 after P2) — **preempts 10/11** |
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
 | 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
 
 ### Queue (sketched during evaluation; planned when their turn comes)
 
-- **12 — Single Linear Workspace Undo/Redo**: one workspace-global stack for
+- **13 — Single Linear Workspace Undo/Redo** (was sketch 12; renumbered when
+  task 12 took the slot): one workspace-global stack for
   macro actions (add, delete, bulk update); micro text edits stay on native
   `<textarea>` undo. Design direction from the evaluation: record at the
   `mutateProject` chokepoint as entry-level before/after diffs (never
@@ -29,7 +34,7 @@ same review, was completed and archived 2026-09-23 (shipped as v1.5.0). Task
   roadmap's stated failure mode); `updateEntry` stays unrecorded (it is the
   per-keystroke path). Wants task 10 first for the `Mod+Z`/`Mod+Shift+Z`
   chords.
-- **13 — Pinned Reference Drawer**: collapsible right-hand inspector pinning
+- **15 — Pinned Reference Drawer** (was sketch 13): collapsible right-hand inspector pinning
   any entry read-only while editing the primary one. Not a third
   `mat-sidenav` (the container hosts one end drawer and history holds it) —
   an in-editor rail under `entry-editor/` + shell affordance, phone behavior
