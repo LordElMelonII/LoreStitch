@@ -120,3 +120,31 @@ The two §4.4 detection-order effects (badge `---`→`## Name`;
   pick — linter-capture precedent), and the mobile markdown flow re-parks the
   editor before releasing the drawer (addEntryOnPhone choreography). No pinned
   condition (viewport/theme/fixture/settle) changed.
+
+---
+
+## Checkpoint 12-2 — ✅ APPROVED by user
+
+Composites, new-feature shots, exemplar reuse and the three deviations
+(self-painted pane sections, batch-strip flex fix, labeled mobile button)
+accepted. P3/P4 unlocked.
+
+---
+
+## P3 — Review: strict typing (ts-reviewer)
+
+- **Status**: ✅ done — commit `bd90d54`
+  `refactor(delimiters): tighten typing across the markdown and selection surfaces`
+- **Changed** (2 files): `unwrapContent` + `delimiterLabel` (`delimiters.ts`)
+  and the dialog `example` computed: `default:` → explicit `case 'none':` so a
+  future `DelimiterStyle` member is a compile error, not a silent fallthrough.
+  Zero behavior change.
+- **Verified clean**: all `MalformedWrapper.kind` consumers exhaustive;
+  `DelimiterDialogData` use sites honest; no new `any`/assertions; signals-only
+  state; return types present; no `$any` in touched templates.
+- **Flagged, not changed** (reviewer's judgment, accepted): dual DATA-token
+  casts byte-identical to the BatchOperationsDialog twin (shared-pattern
+  follow-up, not a drive-by); `as unknown as` mock-call idiom in new specs
+  (house idiom); pre-existing `entry.id ?? -1` sentinel.
+- **Orchestrator gates**: lint ✅ · build ✅ · unit ✅ (60 files / 1323 tests).
+- **Next**: P4 `qa-auditor` (Tier-3 e2e + branch-final sweep).
