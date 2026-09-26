@@ -3,6 +3,37 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.7.0 — September 26, 2026
+
+The batch delimiters release. Wrapping entries is no longer a one-entry-at-a-time
+chore: check the entries in the list, pick Delimiters, and wrap them all at once —
+and a new Markdown style gives model-facing blocks a heading instead of angle
+brackets.
+
+### Highlights
+
+- **Wrap a whole selection at once** — check entries in the list and the batch
+  toolbar's new Delimiters button (in the bottom bar on phones) opens the pane
+  locked to exactly those entries. Apply, and every checked entry gets the same
+  treatment, each wrapped under its own name. The selection count now rides as
+  a badge on the select-all checkbox, keeping every action on one row.
+- **A Markdown style** — alongside tags, brackets and separators, content can
+  now wear an ATX heading: "## Entry Name", at the level you pick (# through
+  ######, ## by default) with an optional trailing --- divider. Recognition is
+  careful: a heading only counts as a delimiter when it spells the entry's own
+  name, so ordinary markdown prose is never swallowed.
+- **Switching styles cleans up after the old one** — a trailing --- now reads
+  as the previous delimiter's own marker and is removed when you move to
+  another style. A scene break *inside* a wrapped entry — with content after
+  it — still stays put. The preview shows exactly what will be written, as
+  always.
+- **Broken markdown headers get flagged** — a bare "##" with no title, or a
+  "#Name" with the space glued on, is classified like every other malformed
+  shape and repairs to one clean wrapper, the text beneath untouched.
+- **The phone pane becomes a bottom sheet** — the delimiters pane joins every
+  other pane: a proper sheet on phones instead of a full-screen takeover, and
+  a hint in the editor pane points the way to the selection flow.
+
 ## 1.6.0 — September 25, 2026
 
 The safe-hands release. Lorebooks picked up from elsewhere — a community
