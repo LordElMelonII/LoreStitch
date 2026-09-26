@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormField, disabled, form } from '@angular/forms/signals';
+import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -74,10 +75,18 @@ function isNamedWrapper(detected: DetectedDelimiter): boolean {
 
 /**
  * Recognizes, adds, changes, and removes content delimiters — for the active
- * entry or the whole book — with a live diff preview before applying. The
- * four controls share one Signal Form model; the Material select / checkbox
- * write into it from their change events (they are CVA components, so only
- * the name input binds `[formField]` directly).
+ * entry, the whole book, or the checked selection — with a live diff preview
+ * before applying. The four controls share one Signal Form model; the
+ * Material select / checkbox write into it from their change events (they are
+ * CVA components, so only the name input binds `[formField]` directly).
+ *
+ * The pane is dual-container, exactly like the batch editor
+ * (`BatchOperationsDialog`): a centered `MatDialog` (tablet/desktop) and a
+ * `MatBottomSheet` (phones, `.app-delimiters-sheet`) share this template, so
+ * both refs and both data tokens are injected optionally and `close()` routes
+ * to whichever container is present. Opened through
+ * `ResponsiveOverlayService` by the entry editor (one entry / whole book) and
+ * the entry-list batch toolbar (the checked selection, scope locked — D2).
  */
 @Component({
   selector: 'app-delimiter-dialog',
@@ -98,10 +107,32 @@ function isNamedWrapper(detected: DetectedDelimiter): boolean {
   styleUrl: './delimiter-dialog.scss',
 })
 export class DelimiterDialog {
-  private readonly dialogRef = inject(MatDialogRef<DelimiterDialog, boolean>);
-  protected readonly data = inject<DelimiterDialogData>(MAT_DIALOG_DATA);
+  /** Ref of the opening container — exactly one of the two is present. */
+  private readonly dialogRef = inject(MatDialogRef<DelimiterDialog, boolean>, {
+    optional: true,
+  });
+  private readonly sheetRef = inject(MatBottomSheetRef<DelimiterDialog, boolean>, {
+    optional: true,
+  });
+
+  /** Payload from whichever container opened the pane (canonical at the caller). */
+  protected readonly data: DelimiterDialogData =
+    (inject(MAT_DIALOG_DATA, { optional: true }) as DelimiterDialogData | null) ??
+    (inject(MAT_BOTTOM_SHEET_DATA, { optional: true }) as DelimiterDialogData | null) ?? {
+      entryIds: [],
+    };
+
   protected readonly workspace = inject(WorkspaceService);
   private readonly snackBar = inject(MatSnackBar);
+
+  /**
+   * Selection mode (Task 12 §5.2, D2): opened from the batch toolbar with a
+   * non-empty `entryIds` — the Apply-to select is hidden and the targets are
+   * locked to the checked entries. The internal scope runs at `all` so the
+   * per-entry naming machinery (each checked entry wrapped with its own name
+   * by default) applies unchanged; the hidden select can never change it.
+   */
+  protected readonly selectionMode = (this.data.entryIds?.length ?? 0) > 0;
 
   protected readonly styleOptions = DELIMITER_STYLE_OPTIONS;
 
@@ -110,7 +141,7 @@ export class DelimiterDialog {
       this.workspace.entries().find((e) => e.id === this.data.activeEntryId) ?? { keys: [] },
     ),
     style: 'tag',
-    scope: 'entry',
+    scope: this.selectionMode ? 'all' : 'entry',
     useEachName: true,
     usePrimaryKey: false,
   });
@@ -184,6 +215,12 @@ export class DelimiterDialog {
 
   protected readonly targets = computed(() => {
     const entries = this.workspace.entries();
+    if (this.selectionMode) {
+      // Locked to the checked entries (D2): the selection the toolbar sent,
+      // order-preserving against the book's own list.
+      const ids = new Set(this.data.entryIds ?? []);
+      return entries.filter((e) => e.id !== undefined && ids.has(e.id));
+    }
     return this.scope() === 'entry'
       ? entries.filter((e) => e.id === this.data.activeEntryId)
       : entries;
@@ -300,7 +337,7 @@ export class DelimiterDialog {
   );
 
   /** Diff target chosen by clicking a summary row; defaults to the active entry. */
-  protected readonly selectedPreviewId = signal<number | null>(this.data.activeEntryId);
+  protected readonly selectedPreviewId = signal<number | null>(this.data.activeEntryId ?? null);
 
   protected selectPreview(entryId: number): void {
     this.selectedPreviewId.set(entryId);
@@ -396,14 +433,14 @@ export class DelimiterDialog {
     // Blank targets are a no-op by construction: never write a phantom
     // wrapper, even if a stray preview ever reported a change.
     if (this.allBlank()) {
-      this.dialogRef.close(false);
+      this.close(false);
       return;
     }
     const changedIds = this.previews()
       .filter((p) => p.changed)
       .map((p) => p.entryId);
     if (!changedIds.length) {
-      this.dialogRef.close(false);
+      this.close(false);
       return;
     }
     const style = this.style();
@@ -422,10 +459,17 @@ export class DelimiterDialog {
       'OK',
       { duration: 3500 },
     );
-    this.dialogRef.close(true);
+    this.close(true);
   }
 
-  protected close(): void {
-    this.dialogRef.close(false);
+  /**
+   * Closes whichever container opened the pane (exactly one ref is present;
+   * both optional chains, the `BatchOperationsDialog` pattern). Selection
+   * mode callers read the result off `paneResult` and clear the selection
+   * when it is truthy.
+   */
+  protected close(result = false): void {
+    this.dialogRef?.close(result);
+    this.sheetRef?.dismiss(result);
   }
 }

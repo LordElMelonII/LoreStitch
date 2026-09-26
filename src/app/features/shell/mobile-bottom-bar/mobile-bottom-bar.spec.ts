@@ -276,23 +276,25 @@ describe('MobileBottomBar', () => {
   // the entry-list batch toolbar, transplanted into the strip (variant A2).
   // -------------------------------------------------------------------------
 
-  it('swaps the five quick actions for the five batch action items in batch state', async () => {
+  it('swaps the five quick actions for the batch action items in batch state', async () => {
     await createBatchBar();
 
     // The swap is exclusive: no quick-action nav, no veil class.
     expect(host().querySelector('nav.bar')).toBeNull();
-    expect(itemButtons()).toHaveLength(5);
+    // Task 12 §5.2: the strip now carries six batch actions (Delimiters joins).
+    expect(itemButtons()).toHaveLength(6);
     expect(host().classList.contains('bar-backgrounded')).toBe(false);
 
     // The toolbar keeps the `.batch-bar` DOM contract (role/label/classes) so
     // the shared e2e helper (`getByRole('toolbar', { name: 'Batch actions' })`)
-    // and the `.batch-bar button` touch-target selectors keep working.
+    // and the `.batch-bar button` touch-target selectors keep working. Task 12
+    // §5.2 grows the strip to six actions (the Delimiters button joins).
     const toolbar = host().querySelector('.batch-bar');
     assert(toolbar);
     expect(toolbar.getAttribute('role')).toBe('toolbar');
     expect(toolbar.getAttribute('aria-label')).toBe('Batch actions');
     expect(toolbar.querySelector('.batch-count')?.textContent).toContain('2 selected');
-    expect(toolbar.querySelectorAll('button').length).toBe(5);
+    expect(toolbar.querySelectorAll('button').length).toBe(6);
     expect(toolbar.querySelector('.select-all')).toBeTruthy();
 
     // Leaving batch brings the five items back — and the veil with them.
@@ -338,13 +340,19 @@ describe('MobileBottomBar', () => {
     const click = (label: string) =>
       host().querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)?.click();
     click('Batch edit selection');
+    click('Apply delimiters to selection');
     click('Export selection as lorebook');
     // more_vert is deliberately absent: it opens the batch menu in place and
     // never emits (`more-batch-actions` is a shell-side no-op by contract).
     click('Clear selection');
     barFixture.detectChanges();
 
-    expect(emitted).toEqual(['batch-edit', 'export-selected', 'clear-selection']);
+    expect(emitted).toEqual([
+      'batch-edit',
+      'delimiters-selection',
+      'export-selected',
+      'clear-selection',
+    ]);
   });
 
   it('emits select-all-shown from the select-all button on either toggle side', async () => {

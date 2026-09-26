@@ -317,6 +317,10 @@ export class App {
       case 'batch-edit':
         void list.openBatchOperations();
         break;
+      case 'delimiters-selection':
+        // Task 12 §5.2: the delimiter pane locked to the live selection.
+        void list.openDelimiters();
+        break;
       case 'export-selected':
         list.exportSelection();
         break;
@@ -358,7 +362,7 @@ export class App {
         // Union-level exhaustiveness: with every member cased above, `action`
         // narrows to `never` here — so a new `BatchBarAction` member added
         // without a case is a COMPILE error, never a silent fallthrough to
-        // nothing (the routing test in app.spec.ts walks all nine members).
+        // nothing (the routing test in app.spec.ts walks all ten members).
         const unhandled: never = action;
         throw new Error(`Unhandled batch bar action: ${String(unhandled)}`);
       }

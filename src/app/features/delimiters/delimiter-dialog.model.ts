@@ -1,8 +1,20 @@
 import { type MalformedWrapper } from '../../core/models/delimiters';
 
-/** Payload handed to `DelimiterDialog`. */
+/**
+ * Payload handed to `DelimiterDialog`, from either container
+ * (`ResponsiveOverlayService` keeps `data` canonical across dialog/sheet).
+ *
+ * The two modes are mutually exclusive:
+ * - **Selection mode** (Task 12 §5.2, D2): non-empty `entryIds` — the pane
+ *   locks to the checked entries (no Apply-to select) and the caller clears
+ *   the selection when the pane closes truthy.
+ * - **Editor mode**: `activeEntryId` — the historical entry/all scope select.
+ */
 export interface DelimiterDialogData {
-  activeEntryId: number | null;
+  /** Selection mode: apply to exactly these checked entries. */
+  entryIds?: number[];
+  /** Editor mode: the entry under edit (`entry` scope) — `null` allowed. */
+  activeEntryId?: number | null;
 }
 
 /** Whether the delimiter operation touches one entry or the whole book. */

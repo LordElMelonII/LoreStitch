@@ -463,7 +463,8 @@ describe('App', () => {
     expect(bar.classList.contains('bar-backgrounded')).toBe(false);
     expect(bar.querySelector('.batch-bar')).toBeTruthy();
     expect(bar.querySelector('nav.bar')).toBeNull();
-    expect(bar.querySelectorAll('.bar-item')).toHaveLength(5);
+    // Task 12 §5.2: the swapped strip carries six batch actions.
+    expect(bar.querySelectorAll('.bar-item')).toHaveLength(6);
 
     // The swap needs the history drawer closed: opening it veils the bar.
     app['toggleRight']();
@@ -582,12 +583,14 @@ describe('App', () => {
     const list = app['entryList']();
     assert(list);
     const openSpy = vi.spyOn(list, 'openBatchOperations').mockResolvedValue(undefined);
+    const delimitersSpy = vi.spyOn(list, 'openDelimiters').mockResolvedValue(undefined);
     const exportSpy = vi.spyOn(list, 'exportSelection').mockImplementation(() => undefined);
     const duplicateSpy = vi.spyOn(list, 'duplicateSelection').mockImplementation(() => undefined);
     const enabledSpy = vi.spyOn(list, 'setSelectionEnabled').mockImplementation(() => undefined);
     const selectAllSpy = vi.spyOn(list, 'selectAllShown'); // calls through
 
     await app['runBatchBarAction']('batch-edit');
+    await app['runBatchBarAction']('delimiters-selection');
     await app['runBatchBarAction']('export-selected');
     // Deliberate no-op (the bar's more_vert opens its own menu in place).
     await app['runBatchBarAction']('more-batch-actions');
@@ -597,6 +600,7 @@ describe('App', () => {
     await app['runBatchBarAction']('select-all-shown');
 
     expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(delimitersSpy).toHaveBeenCalledTimes(1);
     expect(exportSpy).toHaveBeenCalledTimes(1);
     expect(duplicateSpy).toHaveBeenCalledTimes(1);
     expect(enabledSpy).toHaveBeenCalledTimes(2);

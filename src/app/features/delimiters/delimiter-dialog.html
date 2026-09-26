@@ -1,195 +1,228 @@
-<h2 mat-dialog-title>
-  <mat-icon aria-hidden="true">code</mat-icon>
-  Content delimiters
-</h2>
+<!-- Dual-container pane (BatchOperationsDialog pattern): the same template
+     renders as a centered dialog (tablet/desktop) and a bottom sheet (phones,
+     .app-delimiters-sheet) — the pane paints its own header / scrolling body /
+     pinned footer instead of the mat-dialog-* sections those containers each
+     style differently. -->
+<div class="pane">
+  <header class="pane-header">
+    <h2 mat-dialog-title class="pane-title">
+      <mat-icon aria-hidden="true">code</mat-icon>
+      @if (selectionMode) {
+        Delimiters — {{ targets().length }} entr{{ targets().length === 1 ? 'y' : 'ies' }}
+      } @else {
+        Content delimiters
+      }
+    </h2>
+    <button
+      matIconButton
+      type="button"
+      class="pane-close"
+      (click)="close()"
+      matTooltip="Close"
+      aria-label="Close delimiters pane"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
 
-<mat-dialog-content class="dialog-body">
-  <p class="dialog-intro">
-    Wrap entry content so the model can tell where each block begins and ends. Existing delimiters
-    are recognized and replaced when you pick a new style.
-  </p>
+  <div class="pane-body">
+    <p class="dialog-intro">
+      Wrap entry content so the model can tell where each block begins and ends. Existing
+      delimiters are recognized and replaced when you pick a new style.
+    </p>
 
-  <div class="controls">
-    <mat-form-field subscriptSizing="dynamic" appearance="fill">
-      <mat-label>Apply to</mat-label>
-      <mat-select [value]="scope()" (selectionChange)="setScope($event.value)">
-        <mat-option value="entry">This entry only</mat-option>
-        <mat-option value="all">All entries ({{ targets().length }})</mat-option>
-      </mat-select>
-    </mat-form-field>
-
-    <mat-form-field class="grow" subscriptSizing="dynamic" appearance="fill">
-      <mat-label>Delimiter style</mat-label>
-      <mat-select [value]="style()" (selectionChange)="setStyle($event.value)">
-        @for (option of styleOptions; track option.value) {
-          <mat-option [value]="option.value" [matTooltip]="option.hint">
-            {{ option.label }}
-          </mat-option>
-        }
-      </mat-select>
-    </mat-form-field>
-  </div>
-
-  @if (needsName()) {
-    <div class="controls name-row">
-      <mat-form-field
-        class="grow"
-        subscriptSizing="dynamic"
-        [matTooltip]="
-          usePrimaryKey()
-            ? 'Each entry is wrapped with its first primary key'
-            : nameResolvedFromEntries()
-              ? 'Each entry uses the name from its comment or first key'
-              : 'Name used in the wrapper'
-        "
-      >
-        <mat-label>Wrapper name</mat-label>
-        <input
-          matInput
-          [formField]="delimiterForm.name"
-          placeholder="e.g. London"
-          aria-label="Wrapper name"
-        />
-        @if (nameMissing()) {
-          <mat-hint class="pattern-error">A name is required for this style.</mat-hint>
-        }
-        @if (fixedNameRewritten()) {
-          <mat-hint class="resolved-name-hint">
-            Will be applied as <code>{{ resolvedFixedName() }}</code>
-          </mat-hint>
-        }
+    <div class="controls">
+      @if (!selectionMode) {
+        <mat-form-field subscriptSizing="dynamic" appearance="fill">
+          <mat-label>Apply to</mat-label>
+          <mat-select [value]="scope()" (selectionChange)="setScope($event.value)">
+            <mat-option value="entry">This entry only</mat-option>
+            <mat-option value="all">All entries ({{ targets().length }})</mat-option>
+          </mat-select>
+        </mat-form-field>
+      }
+      <mat-form-field class="grow" subscriptSizing="dynamic" appearance="fill">
+        <mat-label>Delimiter style</mat-label>
+        <mat-select [value]="style()" (selectionChange)="setStyle($event.value)">
+          @for (option of styleOptions; track option.value) {
+            <mat-option [value]="option.value" [matTooltip]="option.hint">
+              {{ option.label }}
+            </mat-option>
+          }
+        </mat-select>
       </mat-form-field>
+    </div>
 
-      <mat-checkbox
-        [checked]="usePrimaryKey()"
-        (change)="setUsePrimaryKey($event.checked)"
-        matTooltip="Wrap each entry with its first primary key instead of its name — entries without keys fall back to their name"
-      >
-        Use first primary key
-      </mat-checkbox>
+    @if (!selectionMode) {
+      <!-- Discoverability hint (Task 12 §5.4, D10): the editor-opened pane is
+           where the whole-book scope lives, so this is the one touch that
+           points at the selection flow. Always visible in both scopes. -->
+      <p class="scope-hint">
+        Select entries in the list and choose Delimiters in the batch toolbar to apply to a range.
+      </p>
+    }
 
-      @if (scope() === 'all' && !usePrimaryKey()) {
+    @if (needsName()) {
+      <div class="controls name-row">
+        <mat-form-field
+          class="grow"
+          subscriptSizing="dynamic"
+          [matTooltip]="
+            usePrimaryKey()
+              ? 'Each entry is wrapped with its first primary key'
+              : nameResolvedFromEntries()
+                ? 'Each entry uses the name from its comment or first key'
+                : 'Name used in the wrapper'
+          "
+        >
+          <mat-label>Wrapper name</mat-label>
+          <input
+            matInput
+            [formField]="delimiterForm.name"
+            placeholder="e.g. London"
+            aria-label="Wrapper name"
+          />
+          @if (nameMissing()) {
+            <mat-hint class="pattern-error">A name is required for this style.</mat-hint>
+          }
+          @if (fixedNameRewritten()) {
+            <mat-hint class="resolved-name-hint">
+              Will be applied as <code>{{ resolvedFixedName() }}</code>
+            </mat-hint>
+          }
+        </mat-form-field>
+
         <mat-checkbox
-          [checked]="useEachName()"
-          (change)="setUseEachName($event.checked)"
-          matTooltip="Names each wrapper after its own entry (comment, then first key)"
+          [checked]="usePrimaryKey()"
+          (change)="setUsePrimaryKey($event.checked)"
+          matTooltip="Wrap each entry with its first primary key instead of its name — entries without keys fall back to their name"
         >
-          Use each entry’s own name
+          Use first primary key
         </mat-checkbox>
-      }
-    </div>
-  }
 
-  <div class="example-card" aria-label="Format example">
-    <span class="example-label">Format</span>
-    <pre class="example-text">{{ example().join('\n') }}</pre>
-  </div>
-
-  @if (malformedCount()) {
-    <div class="malformed-banner">
-      <mat-icon>warning</mat-icon>
-      <div class="banner-copy">
-        <span class="banner-title">
-          {{ malformedCount() }}
-          {{ malformedCount() === 1 ? 'entry has' : 'entries have' }} malformed delimiters
-        </span>
-        <p class="banner-body">
-          Mismatched or unclosed pairs such as &lt;test&gt; … &lt;/universe&gt;. Applying a style
-          replaces them; None removes them.
-        </p>
+        @if (scope() === 'all' && !usePrimaryKey()) {
+          <mat-checkbox
+            [checked]="useEachName()"
+            (change)="setUseEachName($event.checked)"
+            matTooltip="Names each wrapper after its own entry (comment, then first key)"
+          >
+            Use each entry’s own name
+          </mat-checkbox>
+        }
       </div>
+    }
+
+    <div class="example-card" aria-label="Format example">
+      <span class="example-label">Format</span>
+      <pre class="example-text">{{ example().join('\n') }}</pre>
     </div>
-  }
 
-  <div class="preview-header">
-    <span>
-      @if (previewEntry(); as p) {
-        Preview — {{ p.title }}
-      }
-    </span>
-    <span class="meta">
-      {{ changedCount() }} of {{ targets().length }} entr{{ targets().length === 1 ? 'y' : 'ies' }}
-      will change
-      @if (blankCount()) {
-        · {{ blankCount() }} blank unchanged
-      }
-      @if (malformedCount()) {
-        · {{ malformedCount() }} malformed
-      }
-      ·
-      <span
-        class="token-delta"
-        [class.up]="tokenDeltaDirection() === 'up'"
-        [class.down]="tokenDeltaDirection() === 'down'"
-        [class.neutral]="tokenDeltaDirection() === 'neutral'"
-        matTooltip="Estimated token change from these delimiters"
-        >~{{ tokenDeltaLabel() }} tokens</span
-      >
-    </span>
-  </div>
+    @if (malformedCount()) {
+      <div class="malformed-banner">
+        <mat-icon>warning</mat-icon>
+        <div class="banner-copy">
+          <span class="banner-title">
+            {{ malformedCount() }}
+            {{ malformedCount() === 1 ? 'entry has' : 'entries have' }} malformed delimiters
+          </span>
+          <p class="banner-body">
+            Mismatched or unclosed pairs such as &lt;test&gt; … &lt;/universe&gt;. Applying a style
+            replaces them; None removes them.
+          </p>
+        </div>
+      </div>
+    }
 
-  <div class="preview-list" role="list" aria-label="Per-entry preview">
-    @for (p of previews(); track p.entryId) {
-      <div class="preview-list-item" role="listitem">
-        <button
-          type="button"
-          class="preview-row"
-          [class.selected]="p.entryId === selectedPreviewId()"
-          [attr.aria-pressed]="p.entryId === selectedPreviewId()"
-          [matTooltip]="'Show the diff for ' + p.title"
-          (click)="selectPreview(p.entryId)"
+    <div class="preview-header">
+      <span>
+        @if (previewEntry(); as p) {
+          Preview — {{ p.title }}
+        }
+      </span>
+      <span class="meta">
+        {{ changedCount() }} of {{ targets().length }} entr{{ targets().length === 1 ? 'y' : 'ies' }}
+        will change
+        @if (blankCount()) {
+          · {{ blankCount() }} blank unchanged
+        }
+        @if (malformedCount()) {
+          · {{ malformedCount() }} malformed
+        }
+        ·
+        <span
+          class="token-delta"
+          [class.up]="tokenDeltaDirection() === 'up'"
+          [class.down]="tokenDeltaDirection() === 'down'"
+          [class.neutral]="tokenDeltaDirection() === 'neutral'"
+          matTooltip="Estimated token change from these delimiters"
+          >~{{ tokenDeltaLabel() }} tokens</span
         >
-          <span class="row-title">{{ p.title }}</span>
-          @if (p.malformed; as m) {
-            <span class="row-chip malformed-chip">
-              {{ malformedChipLabel(m) }}
+      </span>
+    </div>
+
+    <div class="preview-list" role="list" aria-label="Per-entry preview">
+      @for (p of previews(); track p.entryId) {
+        <div class="preview-list-item" role="listitem">
+          <button
+            type="button"
+            class="preview-row"
+            [class.selected]="p.entryId === selectedPreviewId()"
+            [attr.aria-pressed]="p.entryId === selectedPreviewId()"
+            [matTooltip]="'Show the diff for ' + p.title"
+            (click)="selectPreview(p.entryId)"
+          >
+            <span class="row-title">{{ p.title }}</span>
+            @if (p.malformed; as m) {
+              <span class="row-chip malformed-chip">
+                {{ malformedChipLabel(m) }}
+              </span>
+            }
+            @if (p.blank) {
+              <span class="row-chip">blank</span>
+            }
+            <span class="row-state">{{ p.changed ? 'will change' : 'unchanged' }}</span>
+            <span
+              class="token-delta"
+              [class.up]="deltaDirection(p.tokenDelta) === 'up'"
+              [class.down]="deltaDirection(p.tokenDelta) === 'down'"
+              [class.neutral]="deltaDirection(p.tokenDelta) === 'neutral'"
+              >~{{ formatDelta(p.tokenDelta) }}</span
+            >
+          </button>
+          @if (p.replacedDelimiter; as label) {
+            <span class="row-hint">
+              {{
+                style() === 'none'
+                  ? 'Will remove the existing ' + label + ' delimiter'
+                  : 'Will replace the existing ' + label + ' delimiter'
+              }}
             </span>
           }
-          @if (p.blank) {
-            <span class="row-chip">blank</span>
+          @if (p.malformed; as m) {
+            <span class="row-hint">{{ malformedHint(m) }}</span>
           }
-          <span class="row-state">{{ p.changed ? 'will change' : 'unchanged' }}</span>
-          <span
-            class="token-delta"
-            [class.up]="deltaDirection(p.tokenDelta) === 'up'"
-            [class.down]="deltaDirection(p.tokenDelta) === 'down'"
-            [class.neutral]="deltaDirection(p.tokenDelta) === 'neutral'"
-            >~{{ formatDelta(p.tokenDelta) }}</span
-          >
-        </button>
-        @if (p.replacedDelimiter; as label) {
-          <span class="row-hint">
-            {{
-              style() === 'none'
-                ? 'Will remove the existing ' + label + ' delimiter'
-                : 'Will replace the existing ' + label + ' delimiter'
-            }}
-          </span>
-        }
-        @if (p.malformed; as m) {
-          <span class="row-hint">{{ malformedHint(m) }}</span>
-        }
-      </div>
+        </div>
+      }
+    </div>
+
+    @if (previewEntry(); as p) {
+      <app-diff-viewer class="preview-diff" [oldText]="p.current" [newText]="p.next" />
     }
   </div>
 
-  @if (previewEntry(); as p) {
-    <app-diff-viewer class="preview-diff" [oldText]="p.current" [newText]="p.next" />
-  }
-</mat-dialog-content>
-
-<mat-dialog-actions align="end">
-  <button matButton type="button" (click)="close()">Cancel</button>
-  <button
-    matButton="filled"
-    type="button"
-    (click)="apply()"
-    [disabled]="!changedCount() || nameMissing() || allBlank()"
-  >
-    @if (scope() === 'all') {
-      Apply to {{ changedCount() }} entr{{ changedCount() === 1 ? 'y' : 'ies' }}
-    } @else {
-      Apply
-    }
-  </button>
-</mat-dialog-actions>
+  <div class="pane-footer">
+    <button matButton type="button" (click)="close()">Cancel</button>
+    <button
+      matButton="filled"
+      type="button"
+      (click)="apply()"
+      [disabled]="!changedCount() || nameMissing() || allBlank()"
+    >
+      @if (scope() === 'all') {
+        Apply to {{ changedCount() }} entr{{ changedCount() === 1 ? 'y' : 'ies' }}
+      } @else {
+        Apply
+      }
+    </button>
+  </div>
+</div>

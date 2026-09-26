@@ -1,19 +1,30 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { MAT_BOTTOM_SHEET_DATA, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CharacterBookEntry } from '../../core/models/lorebook.model';
 import { estimateTokens, formatTokenCount } from '../../core/services/token-estimator';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { DelimiterDialog } from './delimiter-dialog';
+import { type DelimiterDialogData } from './delimiter-dialog.model';
 import { entryWith as entry, projectOf } from '../../../testing/project-fixtures';
 
 describe('DelimiterDialog', () => {
   let workspace: WorkspaceService;
   let closeSpy: ReturnType<typeof vi.fn>;
+  let sheetDismissSpy: ReturnType<typeof vi.fn>;
   let snackBarOpen: ReturnType<typeof vi.fn>;
   /** Mutated per test; the dialog reads it once at construction. */
-  let dialogData: { activeEntryId: number | null };
+  let dialogData: DelimiterDialogData;
+  /**
+   * Which container the pane is mounted against. Both data tokens and both
+   * refs are always registered, but each test picks the pair the container
+   * would actually inject: the dialog token wins unless the sheet mount is
+   * requested (the component reads MAT_DIALOG_DATA first, so it must come
+   * back null there — exactly what a real bottom sheet provides).
+   */
+  let useSheetToken = false;
   let fixture: ComponentFixture<DelimiterDialog> | null;
 
   /**
@@ -80,7 +91,7 @@ describe('DelimiterDialog', () => {
   function applyButton(): HTMLButtonElement {
     assert(fixture);
     const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
-      'mat-dialog-actions button:last-child',
+      '.pane-footer button:last-child',
     );
     assert(button);
     return button;
@@ -94,13 +105,23 @@ describe('DelimiterDialog', () => {
 
   beforeEach(async () => {
     closeSpy = vi.fn();
+    sheetDismissSpy = vi.fn();
     snackBarOpen = vi.fn();
     dialogData = { activeEntryId: 0 };
+    useSheetToken = false;
     TestBed.configureTestingModule({
       imports: [DelimiterDialog],
       providers: [
-        { provide: MAT_DIALOG_DATA, useFactory: () => dialogData },
-        { provide: MatDialogRef, useValue: { close: closeSpy } },
+        { provide: MAT_DIALOG_DATA, useFactory: () => (useSheetToken ? null : dialogData) },
+        {
+          provide: MatDialogRef,
+          useFactory: () => (useSheetToken ? null : { close: closeSpy }),
+        },
+        { provide: MAT_BOTTOM_SHEET_DATA, useFactory: () => dialogData },
+        {
+          provide: MatBottomSheetRef,
+          useFactory: () => (useSheetToken ? { dismiss: sheetDismissSpy } : null),
+        },
         { provide: MatSnackBar, useValue: { open: snackBarOpen } },
       ],
     });
@@ -316,7 +337,7 @@ describe('DelimiterDialog', () => {
     await createDialog([entry(0, { comment: 'London', content: 'London is a city.' })]);
     assert(fixture);
     const cancel = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
-      'mat-dialog-actions button:first-child',
+      '.pane-footer button:first-child',
     );
     assert(cancel);
     cancel.click();
@@ -761,5 +782,87 @@ describe('DelimiterDialog', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('.malformed-banner')).toBeNull();
     expect(el.querySelector('.meta')?.textContent).not.toContain('malformed');
+  });
+
+  it('shows the discoverability hint in the editor-opened pane, in both scopes', async () => {
+    const dialog = await createDialog([entry(0, { comment: 'London', content: 'London is a city.' })]);
+    assert(fixture);
+    const hint = (fixture.nativeElement as HTMLElement).querySelector('.scope-hint');
+    assert(hint);
+    expect(hint.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'Select entries in the list and choose Delimiters in the batch toolbar to apply to a range.',
+    );
+
+    // Always-visible treatment (§5.4): the whole-book scope keeps it too.
+    dialog['setScope']('all');
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.scope-hint')).toBeTruthy();
+  });
+
+  it('locks the pane to the checked selection: count header, hidden scope select, no hint', async () => {
+    dialogData.entryIds = [0, 2];
+    const dialog = await createDialog([
+      entry(0, { comment: 'London', content: 'London is a city.' }),
+      entry(1, { comment: 'Paris', content: 'Paris is a city.' }),
+      entry(2, { comment: 'Fuyuki', content: 'Emiya shrine.' }),
+    ]);
+
+    expect(dialog['selectionMode']).toBe(true);
+    // The scope internals run at `all` (per-entry naming machinery) and the
+    // Apply-to select is hidden, so it can never be changed (D2).
+    expect(dialog['scope']()).toBe('all');
+    expect(dialog['targets']().map((e) => e.id)).toEqual([0, 2]);
+    assert(fixture);
+    expect(fixture.debugElement.queryAll(By.css('mat-select'))).toHaveLength(1);
+    expect((fixture.nativeElement as HTMLElement).querySelector('.scope-hint')).toBeNull();
+
+    // The header carries the checked count instead of the editor heading.
+    expect((fixture.nativeElement as HTMLElement).querySelector('.pane-title')?.textContent).toContain(
+      'Delimiters — 2 entries',
+    );
+
+    // Per-entry naming is the selection default: each checked entry is
+    // wrapped with its own name, so the fixed-name field is skipped.
+    expect(dialog['nameResolvedFromEntries']()).toBe(true);
+  });
+
+  it('applies to exactly the checked selection and closes truthy', async () => {
+    dialogData.entryIds = [0, 2];
+    const dialog = await createDialog([
+      entry(0, { comment: 'London', content: 'London is a city.' }),
+      entry(1, { comment: 'Paris', content: 'Paris is a city.' }),
+      entry(2, { comment: 'Fuyuki', content: 'Emiya shrine.' }),
+    ]);
+
+    const previews = dialog['previews']();
+    expect(previews).toHaveLength(2);
+    expect(dialog['changedCount']()).toBe(2);
+    assert(fixture);
+    expect(applyButton().textContent).toContain('Apply to 2 entries');
+
+    dialog['apply']();
+    expect(closeSpy).toHaveBeenCalledWith(true);
+    expect(entryOf(0).content).toBe('<London>\nLondon is a city.\n</London>');
+    expect(entryOf(2).content).toBe('<Fuyuki>\nEmiya shrine.\n</Fuyuki>');
+    // The unchecked entry is out of scope, untouched.
+    expect(entryOf(1).content).toBe('Paris is a city.');
+    expect(snackBarOpen).toHaveBeenCalledWith('Delimiters updated on 2 entries.', 'OK', {
+      duration: 3500,
+    });
+  });
+
+  it('opens as a bottom-sheet pane against the sheet data token', async () => {
+    // Mount against the bottom-sheet container's tokens: no MAT_DIALOG_DATA,
+    // the ref is a MatBottomSheetRef whose dismiss() carries the result.
+    useSheetToken = true;
+    dialogData = { entryIds: [0] };
+    const dialog = await createDialog([entry(0, { comment: 'London', content: 'London is a city.' })]);
+    expect(dialog['selectionMode']).toBe(true);
+    expect(dialog['targets']().map((e) => e.id)).toEqual([0]);
+
+    dialog['apply']();
+    expect(sheetDismissSpy).toHaveBeenCalledWith(true);
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(entryOf(0).content).toBe('<London>\nLondon is a city.\n</London>');
   });
 });

@@ -33,6 +33,7 @@ export type MobileBarAction = 'new-entry' | 'search-replace' | 'batch' | 'histor
  */
 export type BatchBarAction =
   | 'batch-edit'
+  | 'delimiters-selection'
   | 'export-selected'
   | 'more-batch-actions'
   | 'duplicate-selection'
@@ -67,8 +68,8 @@ export type BarState = 'normal' | 'backgrounded' | 'batch';
  * state at all.
  *
  * In `batch` (entries drawer open + a selection) the five quick actions are
- * replaced by five batch action items across the strip (`div.batch-bar[role=toolbar]`),
- * with a subtle tonal top edge on the host as the approved emphasis cue. The bar
+ * replaced by the batch action strip (`div.batch-bar[role=toolbar]`), with a
+ * subtle tonal top edge on the host as the approved emphasis cue. The bar
  * is presentational here too: the toolbar and its menu only emit
  * `batchAction`; the shell routes every member to the `EntryList` public API
  * (`App.runBatchBarAction`).

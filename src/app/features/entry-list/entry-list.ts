@@ -33,6 +33,7 @@ import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { debouncedSignal } from '../../shared/util/debounced-signal';
 import { entrySearchHaystack, matchesQuery, type EntryListItem } from './entry-list.model';
 import { type BatchOperationsDialogData } from './batch-operations-dialog';
+import { type DelimiterDialogData } from '../delimiters/delimiter-dialog.model';
 
 /** Form model of the sidebar filter box. */
 interface EntryFilterModel {
@@ -479,6 +480,45 @@ export class EntryList {
       },
       sheetPanelClass: 'app-batch-sheet',
       sheetConfig: { ariaLabel: 'Batch edit entries' },
+    });
+    const applied = await paneResult(ref);
+    if (applied) {
+      this.clearSelection();
+    }
+  }
+
+  /**
+   * Opens the delimiter pane locked to the current selection (Task 12 §5.2,
+   * D2): centered dialog on tablet/desktop, bottom sheet on phones
+   * (`ResponsiveOverlayService` owns the viewport branch). The pane's
+   * selection mode hides the Apply-to select and shows the checked count;
+   * like Batch edit, the selection clears only when the pane closes truthy.
+   * Public so the mobile shell (bottom bar's Delimiters item) routes here
+   * through `App.runBatchBarAction`.
+   */
+  async openDelimiters(): Promise<void> {
+    const ids = [...this.selection()];
+    if (!ids.length) {
+      // The bottom bar's item is reachable with nothing selected; say so
+      // instead of doing nothing.
+      this.snackBar.open('Select entries first to apply delimiters.', 'OK', { duration: 3000 });
+      return;
+    }
+    // Lazy-loaded: keeps the delimiter pane out of the initial bundle.
+    const { DelimiterDialog } = await import('../delimiters/delimiter-dialog');
+    const ref = this.overlays.openResponsive<
+      InstanceType<typeof DelimiterDialog>,
+      DelimiterDialogData,
+      boolean
+    >(DelimiterDialog, {
+      data: { entryIds: ids },
+      // Same dialog config as the entry editor's opener — one pane width.
+      dialog: {
+        maxWidth: 'min(96vw, 860px)',
+        panelClass: 'app-compact-fullscreen-dialog',
+      },
+      sheetPanelClass: 'app-delimiters-sheet',
+      sheetConfig: { ariaLabel: 'Content delimiters' },
     });
     const applied = await paneResult(ref);
     if (applied) {

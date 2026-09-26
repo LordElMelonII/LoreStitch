@@ -1,7 +1,6 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { FormField, form } from '@angular/forms/signals';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -17,6 +16,8 @@ import {
   malformedWrapperLabel,
   type MalformedWrapper,
 } from '../../../core/models/delimiters';
+import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
+import { type DelimiterDialogData } from '../../delimiters/delimiter-dialog.model';
 import { entrySliceSignal } from '../entry-edit-form';
 
 /** Form model of the content editor. */
@@ -43,7 +44,7 @@ interface EntryContentModel {
   styleUrl: './entry-content-field.scss',
 })
 export class EntryContentField {
-  private readonly dialog = inject(MatDialog);
+  private readonly overlays = inject(ResponsiveOverlayService);
 
   /** The entry being edited (owned by the enclosing `EntryFields`). */
   readonly entry = input.required<CharacterBookEntry>();
@@ -112,12 +113,23 @@ export class EntryContentField {
   protected async openDelimiterDialog(): Promise<void> {
     // Lazy-loaded: keeps the delimiter picker out of the initial bundle.
     const { DelimiterDialog } = await import('../../delimiters/delimiter-dialog');
-    this.dialog.open(DelimiterDialog, {
-      maxWidth: 'min(96vw, 860px)',
-      // MD3 adaptive behavior: the dialog goes full-screen on compact screens
-      // (see the global .app-compact-fullscreen-dialog rules).
-      panelClass: 'app-compact-fullscreen-dialog',
+    // Dual-container pane (Task 12 §5.1, D3): centered dialog on
+    // tablet/desktop, bottom sheet on phones — the viewport branch lives in
+    // the overlay service, never here.
+    this.overlays.openResponsive<
+      InstanceType<typeof DelimiterDialog>,
+      DelimiterDialogData,
+      boolean
+    >(DelimiterDialog, {
       data: { activeEntryId: this.entry().id },
+      // Tablet/desktop config, identical to the former dialog.open() call.
+      dialog: {
+        maxWidth: 'min(96vw, 860px)',
+        // MD3 adaptive behavior: the dialog goes full-screen on compact screens
+        // (see the global .app-compact-fullscreen-dialog rules).
+        panelClass: 'app-compact-fullscreen-dialog',
+      },
+      sheetPanelClass: 'app-delimiters-sheet',
     });
   }
 }

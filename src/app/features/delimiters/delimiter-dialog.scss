@@ -1,24 +1,101 @@
-// Material marks the dialog component host `display: contents` so the title,
-// content, and actions participate directly in the surface's flex column
-// (title/actions pinned, content scrolls). Any other display value here turns
-// the host into a block that overflows the surface and scrolls it as a whole.
+// Dual-container pane: a centered MatDialog (tablet/desktop) and a
+// MatBottomSheet (.app-delimiters-sheet, phones) share this template, so the
+// pane paints its own header / scrolling body / pinned footer instead of the
+// mat-dialog-title/content/actions sections those containers each style
+// differently (BatchOperationsDialog recipe). Desktop metrics mirror
+// Material's own paddings so the dialog path stays pixel-comparable to the
+// former mat-dialog-* layout.
+
+// The sheet path needs a block host to inherit the fixed container height;
+// the dialog path renders the host `display: contents` (or inline-block), and
+// height: 100% of a content-sized surface resolves to auto either way.
 :host {
-  display: contents;
+  display: block;
+  height: 100%;
 }
 
-.dialog-body {
+.pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+// ---------------------------------------------------------------------------
+// Header: title + close affordance
+// ---------------------------------------------------------------------------
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  // Same inset as the dialog headline token (20px 24px 12px); the right side
+  // yields to the close button instead.
+  padding: 20px 12px 12px 24px;
+}
+
+.pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  font: var(--mat-sys-headline-small);
+
+  // The mat-dialog-title directive's legacy ::before spacer is dropped inside
+  // a dialog surface by the global reset; a bottom sheet has no surface, so
+  // drop it here as well (same treatment as the About pane).
+  &::before {
+    display: none;
+  }
+
+  mat-icon {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.pane-close {
+  flex: none;
+}
+
+// ---------------------------------------------------------------------------
+// Body: the scrolling middle
+// ---------------------------------------------------------------------------
+
+// Mirrors .mat-mdc-dialog-content: the title-adjacent top padding is zeroed,
+// the footer owns the bottom gap, and the 65vh cap keeps the centered dialog
+// inside the viewport.
+.pane-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  // mat-dialog-content is a flex item of the dialog surface: without this it
-  // refuses to shrink below its content and the whole surface scrolls (title
-  // and actions drift off-screen) instead of the content scrolling in place.
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
+  padding: 0 24px;
+  max-height: 65vh;
+}
+
+// Phone sheet: the fixed-height sheet container owns the height chain, so the
+// body fills the leftover space instead of capping at 65vh.
+:host-context(.app-delimiters-sheet) .pane-body {
+  max-height: none;
 }
 
 .dialog-intro {
   margin: 0;
   font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// Discoverability hint (Task 12 §5.4): quiet secondary copy under the scope
+// controls — visible, but never competing with the controls it explains.
+.scope-hint {
+  margin: -6px 0 0;
+  font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-surface-variant);
 }
 
@@ -240,12 +317,29 @@
 }
 
 .preview-diff {
-  // Once mat-dialog-content's 65vh cap engages, this flex sibling would be
-  // squeezed down to its toolbar (its host allows min-height: 0). Stay intact
-  // and let the dialog content scroll instead.
+  // Inside the scrolling body this flex sibling would otherwise shrink to its
+  // toolbar once the body's content exceeds the visible height. Stay intact
+  // and let the body scroll instead.
   flex-shrink: 0;
   max-height: 300px;
   overflow: auto;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: var(--mat-sys-corner-small);
+}
+
+// ---------------------------------------------------------------------------
+// Footer: pinned actions
+// ---------------------------------------------------------------------------
+
+// Mirrors .mat-mdc-dialog-actions (align="end"): the same padding band,
+// min-height and end alignment, pinned as the pane's last flex row.
+.pane-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 52px;
+  flex: none;
+  padding: 16px 24px;
 }

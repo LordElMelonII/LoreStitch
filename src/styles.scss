@@ -234,8 +234,8 @@ body {
   border-radius: 28px 28px 0 0;
 }
 
-// --- Batch / merge / export responsive sheets ---
-// Phones (< 768px) open these three panes as bottom sheets via
+// --- Batch / merge / export / delimiters responsive sheets ---
+// Phones (< 768px) open these four panes as bottom sheets via
 // ResponsiveOverlayService instead of the compact full-screen dialog; the
 // shared pane components (self-painted header/body/footer) stretch the fixed
 // container height, so its height must be definite and its padding dropped so
@@ -244,6 +244,16 @@ body {
 // sheets must carry it explicitly.
 
 .app-batch-sheet .mat-bottom-sheet-container {
+  height: 88dvh;
+  max-height: 88dvh;
+  padding: 0;
+  border-radius: 28px 28px 0 0;
+}
+
+// Delimiters pane (src/app/features/delimiters, Task 12 §5.1): the last
+// top-level pane migrated off the plain-dialog path — same fixed-height
+// recipe as the batch pane.
+.app-delimiters-sheet .mat-bottom-sheet-container {
   height: 88dvh;
   max-height: 88dvh;
   padding: 0;

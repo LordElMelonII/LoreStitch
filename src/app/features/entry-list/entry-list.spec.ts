@@ -11,6 +11,7 @@ import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { installMatchMediaStub } from '../../../testing/match-media-stub';
 import { EntryList } from './entry-list';
 import { BatchOperationsDialog } from './batch-operations-dialog';
+import { DelimiterDialog } from '../delimiters/delimiter-dialog';
 import { entryWith as entry, projectOf } from '../../../testing/project-fixtures';
 
 /** Seeds a list workspace; most tests use the default project id. */
@@ -445,17 +446,61 @@ describe('EntryList', () => {
     expect(list['selection']()).toEqual(new Set([0]));
   });
 
+  it('opens the delimiter pane over the selection and clears it when applied', async () => {
+    const list = await createList([entry(0), entry(1)]);
+    list['toggleRow'](itemAt(list, 0), true);
+    list['toggleRow'](itemAt(list, 1), true);
+
+    await list.openDelimiters();
+
+    expect(openResponsive).toHaveBeenCalledTimes(1);
+    const [component, config] = openResponsive.mock.calls[0] as unknown as [
+      unknown,
+      {
+        data: { entryIds: number[] };
+        dialog: Record<string, string>;
+        sheetPanelClass: string;
+        sheetConfig: { ariaLabel: string };
+      },
+    ];
+    expect(component).toBe(DelimiterDialog);
+    // The pane is locked to the checked selection (Task 12 §5.2, D2).
+    expect(config.data).toEqual({ entryIds: [0, 1] });
+    expect(config.dialog).toEqual({
+      maxWidth: 'min(96vw, 860px)',
+      panelClass: 'app-compact-fullscreen-dialog',
+    });
+    expect(config.sheetPanelClass).toBe('app-delimiters-sheet');
+    expect(config.sheetConfig).toEqual({ ariaLabel: 'Content delimiters' });
+    // Batch-edit precedent: the selection survives only a truthy close.
+    expect(list['selection']().size).toBe(0);
+  });
+
+  it('keeps the selection when the delimiter pane is cancelled', async () => {
+    openResponsive.mockReturnValue({ afterDismissed: () => of(false) });
+    const list = await createList([entry(0)]);
+    list['toggleRow'](itemAt(list, 0), true);
+
+    await list.openDelimiters();
+
+    expect(list['selection']()).toEqual(new Set([0]));
+  });
+
   it('no-ops batch actions and dialogs without a selection', async () => {
     const list = await createList([entry(0)]);
 
     await list.deleteSelection();
     await list.openBatchOperations();
+    await list.openDelimiters();
 
     expect(dialogOpen).not.toHaveBeenCalled();
     expect(openResponsive).not.toHaveBeenCalled();
     // The empty-selection tap (e.g. the bottom bar's Batch edit item) says
     // so instead of doing nothing.
     expect(snackBar.open).toHaveBeenCalledWith('Select entries first to batch edit.', 'OK', {
+      duration: 3000,
+    });
+    expect(snackBar.open).toHaveBeenCalledWith('Select entries first to apply delimiters.', 'OK', {
       duration: 3000,
     });
   });

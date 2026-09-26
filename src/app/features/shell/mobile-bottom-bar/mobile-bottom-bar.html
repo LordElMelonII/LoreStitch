@@ -10,7 +10,7 @@
          entry-list batch toolbar transplanted into the strip — same
          `.batch-bar` DOM contract as the drawer's toolbar
          (role=toolbar, aria-label="Batch actions", select-all checkbox,
-         `N selected` count, tune / call_split / more_vert / close) so the
+         `N selected` count, tune / code / call_split / more_vert / close) so the
          shared e2e helper and touch-target selectors keep working. Fully
          interactive (foreground: the bar and the drawer are spatially
          disjoint — no veil, no inert); everything here only EMITS
@@ -49,6 +49,16 @@
         >
           <mat-icon>tune</mat-icon>
           <span class="bar-label">Batch edit</span>
+        </button>
+        <button
+          class="bar-item"
+          type="button"
+          (click)="emitBatch('delimiters-selection')"
+          matTooltip="Apply delimiters to selection"
+          aria-label="Apply delimiters to selection"
+        >
+          <mat-icon>code</mat-icon>
+          <span class="bar-label">Delimiters</span>
         </button>
         <button
           class="bar-item"

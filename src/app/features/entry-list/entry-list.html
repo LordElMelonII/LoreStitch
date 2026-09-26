@@ -79,6 +79,15 @@
       <button
         matIconButton
         type="button"
+        (click)="openDelimiters()"
+        matTooltip="Apply delimiters to selection"
+        aria-label="Apply delimiters to selection"
+      >
+        <mat-icon>code</mat-icon>
+      </button>
+      <button
+        matIconButton
+        type="button"
         (click)="exportSelection()"
         matTooltip="Export selection as lorebook"
         aria-label="Export selection as lorebook"

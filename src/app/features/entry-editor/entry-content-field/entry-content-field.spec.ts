@@ -1,14 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
+import { DelimiterDialog } from '../../delimiters/delimiter-dialog';
 import { EntryContentField } from './entry-content-field';
 import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('EntryContentField', () => {
   let workspace: WorkspaceService;
+  let openResponsive: ReturnType<typeof vi.fn>;
   let fixture: ComponentFixture<EntryContentField>;
 
   function currentEntry(): CharacterBookEntry {
@@ -59,7 +61,13 @@ describe('EntryContentField', () => {
   }
 
   beforeEach(async () => {
-    TestBed.configureTestingModule({ imports: [EntryContentField, MatDialogModule] });
+    // The delimiter pane opens through the responsive overlay (dialog or
+    // sheet); the stub keeps LayoutService's media queries out of the spec.
+    openResponsive = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [EntryContentField],
+      providers: [{ provide: ResponsiveOverlayService, useValue: { openResponsive } }],
+    });
     workspace = TestBed.inject(WorkspaceService);
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
@@ -100,11 +108,7 @@ describe('EntryContentField', () => {
     expect(text()).toContain('click the code button to change');
   });
 
-  it('opens the delimiter dialog for the entry under edit', async () => {
-    const dialog = TestBed.inject(MatDialog);
-    const openSpy = vi
-      .spyOn(dialog, 'open')
-      .mockReturnValue({} as unknown as MatDialogRef<unknown>);
+  it('opens the delimiter pane through the responsive overlay for the entry under edit', async () => {
     await createPane({ content: 'plain lore text' });
 
     const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
@@ -112,15 +116,31 @@ describe('EntryContentField', () => {
     );
     assert(button);
     button.click();
-    // The dialog loads through a dynamic import that can be slow on a loaded
+    // The pane loads through a dynamic import that can be slow on a loaded
     // CI machine; the wait must outlive it or the open lands after teardown.
-    await vi.waitFor(() => expect(openSpy).toHaveBeenCalledOnce(), {
+    await vi.waitFor(() => expect(openResponsive).toHaveBeenCalledOnce(), {
       timeout: 15_000,
       interval: 100,
     });
 
-    expect(openSpy).toHaveBeenCalledOnce();
-    expect(openSpy.mock.calls[0]?.[1]?.data).toEqual({ activeEntryId: 0 });
+    expect(openResponsive).toHaveBeenCalledOnce();
+    const [component, config] = openResponsive.mock.calls[0] as unknown as [
+      unknown,
+      {
+        data: { activeEntryId: number | null };
+        dialog: Record<string, string>;
+        sheetPanelClass: string;
+      },
+    ];
+    expect(component).toBe(DelimiterDialog);
+    // Editor mode: the entry under edit, dialog config unchanged from the
+    // direct dialog.open() era, sheet variant registered for phones.
+    expect(config.data).toEqual({ activeEntryId: 0 });
+    expect(config.dialog).toEqual({
+      maxWidth: 'min(96vw, 860px)',
+      panelClass: 'app-compact-fullscreen-dialog',
+    });
+    expect(config.sheetPanelClass).toBe('app-delimiters-sheet');
   });
 
   it('flags mismatched whole-content wrappers in the hint and tooltip', async () => {
