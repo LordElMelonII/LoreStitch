@@ -217,3 +217,36 @@ accepted. P3/P4 unlocked.
   would reverse the Phase-1 D4 scene-break guard (byte-indistinguishable
   inputs) — asked, awaiting answer.
 - **Plan doc**: §4.4 table carries the dated amendment.
+
+---
+
+## Post-testing fix round 2 — trailing `---` consumed on every switch (user report)
+
+- **Report**: "I set the delimiter to `---` and saved. Then I switched the
+  entry delimiter to XML tag but the `---` stayed. The same happens with
+  brackets. It doesn't happen with markdown [after fix round 1]." — this is
+  the user answering the open question from round 1: the separator→tag/bracket
+  consumption is wanted.
+- **Fix**: `rewrapContent` now strips a detected trailing separator run for
+  EVERY target (`stripSeparator: true` unconditional) — the tag/bracket strip
+  paths still ignore the flag by design, so a `---` inside a tag/bracket
+  payload (mid-content scene break) keeps the Phase-1 D4 protection. The
+  pane's `replacedDelimiter` hint flag extends to separator detection for all
+  targets (the row now says the marker will be replaced — it previously stayed
+  silent while keeping it).
+- **Pins migrated**: unit `preserves a trailing separator as payload when
+  wrapping` → `consumes a trailing separator when re-wrapping
+  separator-detected content` (+ idempotency, bracket); dialog Tier-2 `keeps a
+  trailing scene break when wrapping and strips it only with None` →
+  `consumes a trailing separator when wrapping; None strips it explicitly`
+  (hint now `---`, next `<New>\nprose\n</New>`); e2e D4 cycle migrated to a
+  MID-CONTENT scene break (the protection that survives) + new item-13 test
+  `switching away from a trailing --- delimiter consumes the marker`
+  (tag → bracket → none, hint asserted on the first switch). New unit pin:
+  mid-content scene break survives a separator-detection switch.
+- **Gates**: unit 60 files / 1325 passed · build ✓ · lint ✓ ·
+  typecheck:e2e ✓ · desktop delimiters e2e smoke 16 passed / 3 phone-pinned
+  skipped. (First smoke run caught a misplaced hint assertion in the new e2e —
+  the second loop iteration's detected delimiter is the tag wrapper, not the
+  marker; fixed forward.)
+- **Plan doc**: §4.4 amendment updated to the final decision.

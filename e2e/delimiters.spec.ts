@@ -28,8 +28,9 @@ import {
  *  2. The ROADMAP cycle: wrap all → export World Info JSON → re-import →
  *     strip with `none` → export → the first entry's payload is byte-identical
  *     to the fixture content underneath its (replaced) pre-existing wrapper.
- *  3. A literal trailing `---` scene break survives a tag wrap/strip cycle
- *     untouched (the Phase-1 D4 destructive-strip regression guard).
+ *  3. A literal mid-content `---` scene break survives a tag wrap/strip cycle
+ *     untouched (the Phase-1 D4 destructive-strip regression guard — its
+ *     trailing-marker half was superseded 2026-09-26, see item 13).
  *  4. The checked-selection flow (Task 12 D2): the batch toolbar's Delimiters
  *     button opens the pane LOCKED to the selection (selection heading, no
  *     Apply-to combobox), applies with per-entry naming, and clears the
@@ -61,6 +62,9 @@ import {
  *     transforms the content (the layout-only check in `ui-responsiveness`).
  * 12. On a phone-sized viewport the banner and repair flow work inside the
  *     bottom sheet.
+ * 13. Switching away from a trailing `---` (the separator delimiter) consumes
+ *     the marker for tag/bracket too — it was applied as a delimiter, so the
+ *     new shell carries only the payload (user decision 2026-09-26).
  */
 
 
@@ -467,14 +471,18 @@ test.describe('delimiters via the real dialog', () => {
     expect(secondExport.content).toBe(payload);
   });
 
-  test('a literal trailing --- scene break survives a tag wrap/strip cycle', async ({ page }) => {
+  test('a literal mid-content --- scene break survives a tag wrap/strip cycle', async ({
+    page,
+  }) => {
     await createProject(page);
     // A single entry on desktop is added straight from the sidebar/topbar.
     const listAddButton = page.locator('app-entry-list [aria-label="New entry"]');
     await listAddButton.click();
     await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
 
-    const body = 'The scene fades to black.\n\n---';
+    // Mid-content: the `---` has prose after it, so no wrapper shape claims
+    // it as a trailing marker — the D4 guard keeps it byte for byte.
+    const body = 'The scene fades to black.\n\n---\n\nDawn comes.';
     await setEntryContent(page, body);
 
     // Wrap with tag style (entry scope), then strip with none.
@@ -493,6 +501,39 @@ test.describe('delimiters via the real dialog', () => {
 
     // The scene-break `---` must be back, byte for byte — the D4 guard.
     expect(await readEntryContent(page)).toBe(body);
+  });
+
+  test('switching away from a trailing --- delimiter consumes the marker', async ({ page }) => {
+    await createProject(page);
+    await page.locator('app-entry-list [aria-label="New entry"]').click();
+    await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
+
+    // The user applied `---` as the delimiter (item 13): switching to tag or
+    // bracket replaces the old delimiter instead of carrying its marker into
+    // the new shell (user decision 2026-09-26, superseding the Phase-1 D4
+    // trailing-marker wrap-keep).
+    const payload = 'The scene fades to black.';
+    await setEntryContent(page, `${payload}\n\n---`);
+
+    // First switch (separator → tag): the row hint names the replaced marker
+    // before anything is written.
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /Tag/);
+    await expect(delimiterPane(page).locator('.row-hint').first()).toContainText('---');
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(`<New entry 0>\n${payload}\n</New entry 0>`);
+
+    // Same consumption for bracket.
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /Bracket/);
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(`[New entry 0=\n${payload}]`);
+
+    // And `none` strips the replacement back to the bare payload.
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /None/);
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(payload);
   });
 
   test('a single-line mismatched <foo>x</bar> pair is replaced without nesting', async ({

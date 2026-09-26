@@ -542,9 +542,16 @@ describe('delimiters', () => {
       expect(rewrapContent('prose\n\n---', 'none', 'N', ['N'])).toBe('prose');
     });
 
-    it('preserves a trailing separator as payload when wrapping', () => {
-      expect(rewrapContent('prose\n\n---', 'tag', 'N', ['N'])).toBe('<N>\nprose\n\n---\n</N>');
-      expect(rewrapContent('prose\n\n---', 'bracket', 'N', ['N'])).toBe('[N=\nprose\n\n---]');
+    it('consumes a trailing separator when re-wrapping separator-detected content', () => {
+      // User-reported (post-12-1 amendment): `---` was applied as the
+      // delimiter, so a switch replaces it instead of carrying it into the
+      // new shell — superseding the Phase-1 D4 wrap-keep for *trailing*
+      // markers (2026-09-26 decision).
+      expect(rewrapContent('prose\n\n---', 'tag', 'N', ['N'])).toBe('<N>\nprose\n</N>');
+      expect(rewrapContent('prose\n\n---', 'bracket', 'N', ['N'])).toBe('[N=\nprose]');
+      // Idempotent: the wrapped result re-applies as a fixed point.
+      const once = rewrapContent('prose\n\n---', 'tag', 'N', ['N']);
+      expect(rewrapContent(once, 'tag', 'N', ['N'])).toBe(once);
     });
 
     it('normalizes markdown level and spacing on re-apply (never nests)', () => {
@@ -597,10 +604,11 @@ describe('delimiters', () => {
       );
     });
 
-    it('keeps a scene-break --- when re-wrapping separator-detected content to tag (D4)', () => {
-      // No wrapper shape claims the trailing marker on bare prose — the
-      // Phase-1 guard holds: the switch stays additive there.
-      expect(rewrapContent('prose\n\n---', 'tag', 'N', ['N'])).toBe('<N>\nprose\n\n---\n</N>');
+    it('keeps a mid-content scene break through a separator-detection switch (D4)', () => {
+      // A scene break with content after it is not a trailing marker — the
+      // wrap stays additive and the break survives byte for byte.
+      const body = 'scene one\n\n---\n\nscene two';
+      expect(rewrapContent(body, 'tag', 'N', ['N'])).toBe(`<N>\n${body}\n</N>`);
     });
 
     it('wraps additively around a foreign-named markdown header (D4)', () => {

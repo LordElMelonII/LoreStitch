@@ -343,11 +343,13 @@ export class DelimiterDialog {
       // A detected whole-content tag/bracket wrapper is always stripped (its
       // own name is in the accepted set); a markdown wrapper only when its
       // header matches the accepted chain (D7 — foreign headers stay
-      // payload); a trailing `---` only by the `none` target.
+      // payload); a trailing `---` by every switch — it is the old
+      // delimiter's own marker, consumed by `rewrapContent` (user decision
+      // 2026-09-26). `next !== current` keeps a fixed-point row hintless.
       const stripped =
         isNamedWrapper(detected) ||
         (detected.style === 'markdown' && delimiterNameMatches(detected.name, expectedNames)) ||
-        (detected.style === 'separator' && style === 'none');
+        detected.style === 'separator';
       return {
         entryId: entry.id ?? -1,
         title: entryTitle(entry),

@@ -284,24 +284,22 @@ export function unwrapContent(content: string, options: UnwrapOptions = {}): str
  * Applies `style` to content that may already carry another delimiter.
  *
  * The existing wrapper is stripped first when the caller accepts its name
- * (`expectedNames`). Separator handling is deliberate:
- * - targeting `'separator'`/`'none'` strips a detected trailing `---`
- *   (explicit removal / re-apply);
- * - targeting `'markdown'` also consumes a trailing `---` in both toggle
- *   states — ON re-emits exactly one canonical marker (normalizing level and
- *   spacing), OFF removes the old marker — including one that surfaced from a
- *   stripped tag/bracket wrapper, so the toggle can never double markers;
- * - when a markdown **wrapper is detected** in the current content, its
- *   trailing `---` is the style's own toggle marker, not payload: switching
- *   to any target consumes it (a tag/bracket re-wrap writes the clean payload
- *   only). A foreign-named header keeps D7's protection — the header text
- *   stays payload — but its wrapper's marker is still consumed;
- * - any other trailing `---` (bare separator-detected prose, a marker inside
- *   a tag/bracket payload) is kept: a scene break must never be silently
- *   deleted by re-wrapping (the Phase-1 D4 guard).
+ * (`expectedNames`), and a detected trailing separator run is consumed
+ * before the new style is emitted:
+ * - a markdown wrapper's trailing `---` is the style's own toggle marker;
+ * - a bare trailing `---` is the separator style's form — the user applied
+ *   it as a delimiter, so switching styles replaces it instead of carrying
+ *   it into the new shell (user decision 2026-09-26, superseding the
+ *   Phase-1 D4 wrap-keep for *trailing* markers);
+ * - the tag/bracket strips ignore the separator flag by design, so a `---`
+ *   *inside* a tag/bracket payload — a scene break with content around it —
+ *   still survives every switch (D4's remaining protection);
+ * - targeting `'separator'`/`'none'` and the markdown toggle keep their
+ *   consume/re-emit semantics (a re-apply is always a fixed point).
  *
  * Malformed or unrecognized input degrades to additive wrapping, never
- * truncation; re-applying a wrapping style is a fixed point.
+ * truncation — the one documented exception is the trailing separator run,
+ * whose consumption on a switch is the delimiter reading above.
  */
 export function rewrapContent(
   content: string,
@@ -310,10 +308,7 @@ export function rewrapContent(
   expectedNames?: readonly string[],
   options?: MarkdownWrapOptions,
 ): string {
-  const fromMarkdown = detectDelimiter(content).style === 'markdown';
-  const stripSeparator =
-    style === 'none' || style === 'separator' || style === 'markdown' || fromMarkdown;
-  let inner = unwrapContent(content, { expectedNames, stripSeparator });
+  let inner = unwrapContent(content, { expectedNames, stripSeparator: true });
   // The tag/bracket strips ignore `stripSeparator` (scene-break protection),
   // so a marker surfacing from a stripped wrapper reaches here verbatim; a
   // markdown target consumes it before deciding on its own toggle marker.

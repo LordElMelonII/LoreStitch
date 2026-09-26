@@ -568,15 +568,17 @@ describe('DelimiterDialog', () => {
     expect(previews[0].next).toBe('prose');
   });
 
-  it('keeps a trailing scene break when wrapping and strips it only with None', async () => {
+  it('consumes a trailing separator when wrapping; None strips it explicitly', async () => {
     const dialog = await createDialog([entry(0, { comment: 'New', content: 'prose\n\n---' })]);
     await pickStyle('Tag');
 
     const previews = dialog['previews']();
     assert(previews[0]);
-    // The `---` rides along as payload — no replacement hint for it.
-    expect(previews[0].replacedDelimiter).toBeNull();
-    expect(previews[0].next).toBe('<New>\nprose\n\n---\n</New>');
+    // The `---` was applied as a delimiter — the switch consumes it and the
+    // row now says so (user decision 2026-09-26, superseding the Phase-1
+    // D4 wrap-keep for trailing markers).
+    expect(previews[0].replacedDelimiter).toBe('---');
+    expect(previews[0].next).toBe('<New>\nprose\n</New>');
   });
 
   it('strips a separator when None is picked', async () => {
