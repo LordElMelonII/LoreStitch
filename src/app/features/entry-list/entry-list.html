@@ -58,15 +58,31 @@
        selection appears and clips the trailing ✕ inside the drawer. -->
   @if (selectionCount() > 0 && !layout.isMobile()) {
     <div class="batch-bar" role="toolbar" aria-label="Batch actions">
-      <mat-checkbox
+      <!-- Tri-state select-all with the count as a badge (user decision
+           2026-09-26): the labeled "N selected" span never fit six actions
+           in the 320px drawer — the badge frees the row for Clear. Same
+           control contract as the mobile bar's batch strip: role=checkbox,
+           tri-state aria-checked, count in the accessible name. -->
+      <button
         class="select-all"
-        [checked]="allFilteredSelected()"
-        [indeterminate]="someFilteredSelected()"
-        (change)="toggleSelectAll($event.checked)"
+        type="button"
+        role="checkbox"
+        [attr.aria-checked]="
+          allFilteredSelected() ? 'true' : someFilteredSelected() ? 'mixed' : 'false'
+        "
+        (click)="toggleSelectAll(!allFilteredSelected())"
+        matIconButton
         matTooltip="Select / deselect shown entries"
-        [attr.aria-label]="'Select all shown entries'"
-      />
-      <span class="batch-count">{{ selectionCount() }} selected</span>
+        [attr.aria-label]="'Select all shown entries (' + selectionCount() + ' selected)'"
+      >
+        @if (allFilteredSelected()) {
+          <mat-icon [matBadge]="selectionCount()">check_box</mat-icon>
+        } @else if (someFilteredSelected()) {
+          <mat-icon [matBadge]="selectionCount()">indeterminate_check_box</mat-icon>
+        } @else {
+          <mat-icon>check_box_outline_blank</mat-icon>
+        }
+      </button>
       <button
         matIconButton
         type="button"

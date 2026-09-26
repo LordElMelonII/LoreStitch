@@ -250,3 +250,37 @@ accepted. P3/P4 unlocked.
   the second loop iteration's detected delimiter is the tag wrapper, not the
   marker; fixed forward.)
 - **Plan doc**: §4.4 amendment updated to the final decision.
+
+---
+
+## Post-testing fix round 3 — batch bars (user report)
+
+- **Report**: (1) with entries selected the desktop Clear button is no longer
+  visible (tooltip fires on the clipped control); (2) the mobile batch strip
+  should have even-width buttons.
+- **Root cause**: P2 added a 6th action (Delimiters) to the desktop drawer
+  toolbar — the 320px drawer had been at 100% capacity with 5 items, so the
+  row overflowed and clipped the last button. The P2 uneven-flex workaround on
+  the mobile strip traded away the even navigation-bar rhythm the user wanted
+  back.
+- **Fix (user-directed)**: the desktop "N selected" span is gone — the count
+  rides a Material **badge on a tri-state select-all icon button** (user's
+  mock), mirroring the mobile strip's control contract (role=checkbox,
+  tri-state aria-checked, count in the accessible name). Six 40px actions now
+  fit the 320px drawer with ~23px slack — measured scrollWidth 287 = client,
+  every button fully inside. The mobile strip returns to even `flex: 1 1 0`
+  with compacted boxes (margin/padding-inline) and 11px labels — measured
+  all six items 61.7px, no ellipsis at "2 selected" OR "70 selected".
+- **Probe-driven**: candidates were measured live before baking
+  (`__screenshots__/12/probe-bars.mjs` — desktop compaction alone still
+  overflowed by 22px, ruling out a no-layout-change fix; the badge approach
+  removes the 84px count span instead). Evidence:
+  `fix-desktop-batch-bar.png`, `fix-mobile-batch-strip.png`.
+- **Pins migrated**: `entry-list.spec.ts` `.batch-count` read → select-all
+  aria-label + `.mat-badge-content` + aria-checked=mixed; shared
+  `e2e/helpers.ts` `selectFirstTwoRows` toolbar text assert → the select-all
+  checkbox's accessible name (identical on both bars). Mobile-bar spec text
+  pins unchanged (the mobile strip keeps its visible label).
+- **Gates**: unit 60 files / 1325 passed · lint ✓ · build ✓ · typecheck:e2e ✓ ·
+  desktop smoke (delimiters batch-and-tokens ui-responsiveness) 43 passed ·
+  mobile-chrome smoke (mobile-bottom-bar) 7 passed.

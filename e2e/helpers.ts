@@ -220,9 +220,14 @@ export async function selectFirstTwoRows(page: Page): Promise<void> {
   const rows = page.locator('.entry-item');
   await rows.first().locator('.row-select').click();
   await rows.nth(1).locator('.row-select').click();
-  await expect(page.getByRole('toolbar', { name: 'Batch actions' })).toContainText(
-    '2 selected',
-  );
+  // The count rides the select-all's accessible name on BOTH bars (desktop
+  // carries it as a badge per the 2026-09-26 user decision; the mobile strip
+  // keeps the visible label and had the same name all along).
+  await expect(
+    page
+      .getByRole('toolbar', { name: 'Batch actions' })
+      .getByRole('checkbox', { name: 'Select all shown entries (2 selected)' }),
+  ).toBeVisible();
 }
 
 /**

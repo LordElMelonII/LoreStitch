@@ -21,6 +21,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { entryTags, entryTitle, entryTriggerState } from '../../core/models/lorebook.model';
@@ -52,6 +53,7 @@ interface EntryFilterModel {
     ScrollingModule,
     FormField,
     MatButtonModule,
+    MatBadgeModule,
     MatCheckboxModule,
     MatFormFieldModule,
     MatIconModule,

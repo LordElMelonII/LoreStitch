@@ -78,15 +78,12 @@
     background: var(--mat-sys-secondary-container);
     color: var(--mat-sys-on-secondary-container);
 
+    // The tri-state select-all carries the selection count as a Material
+    // badge on its icon (user decision 2026-09-26) — the labeled "N selected"
+    // span never fit six actions in the 320px drawer.
     .select-all {
       flex: none;
       margin-right: 2px;
-    }
-
-    .batch-count {
-      font: var(--mat-sys-label-large);
-      margin-right: auto;
-      white-space: nowrap;
     }
   }
 }

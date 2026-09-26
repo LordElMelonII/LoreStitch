@@ -290,9 +290,12 @@ describe('EntryList', () => {
     await settle();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.batch-bar')).toBeTruthy();
-    expect(fixture.nativeElement.querySelector('.batch-count')?.textContent).toContain(
-      '1 selected',
-    );
+    // The count rides the select-all's badge and accessible name (user
+    // decision 2026-09-26 — the labeled span never fit six actions).
+    const selectAll = fixture.nativeElement.querySelector('.select-all');
+    expect(selectAll?.getAttribute('aria-label')).toContain('1 selected');
+    expect(selectAll?.querySelector('.mat-badge-content')?.textContent).toContain('1');
+    expect(selectAll?.getAttribute('aria-checked')).toBe('mixed');
   });
 
   it('hides the in-drawer batch toolbar on phones — the docked bottom bar owns it there', async () => {
