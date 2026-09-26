@@ -148,3 +148,42 @@ accepted. P3/P4 unlocked.
   (house idiom); pre-existing `entry.id ?? -1` sentinel.
 - **Orchestrator gates**: lint ✅ · build ✅ · unit ✅ (60 files / 1323 tests).
 - **Next**: P4 `qa-auditor` (Tier-3 e2e + branch-final sweep).
+
+## P4 — QA: Tier-3 e2e + branch-final sweep (qa-auditor)
+
+- **Status**: ✅ done — commit `2dfd98f`
+  `test(e2e): selection flow, markdown survival, and mobile sheet suite`
+- **Changed** (4 files): `e2e/delimiters.spec.ts` (5 new desktop tests; the
+  390×844 describe migrated off the retired `.app-compact-fullscreen-dialog`
+  pin onto the `app-delimiters-sheet` 88dvh contract; a new phone-pinned
+  bottom-bar batch-strip suite), `e2e/helpers.ts` (parameterized
+  `openEntryRow` — `openFirstEntry` delegates at index 0 — plus an
+  active-tab-scoped `readEntryContent`), and two pin migrations the sweep
+  caught: `e2e/ui-responsiveness.spec.ts` (delimiters phone leg → sheet
+  contract) and `e2e/mobile-bottom-bar.spec.ts` (swapped-strip items 5 → 6,
+  Task 12's Delimiters item).
+- **Tier-3 coverage added** (`delimiters.spec.ts`): desktop — selection apply
+  from the batch toolbar (locked pane, per-entry wrappers, selection cleared),
+  markdown idempotency + level normalization + trailing-`---` toggle,
+  markdown export → re-import byte survival, empty-`##` header repair
+  (byte-identical payload), glue-typed `#Name` header hint-gating + repair;
+  phone — 88dvh sheet geometry + apply, malformed repair in the sheet,
+  batch-strip → locked sheet → apply → selection cleared.
+- **De-dup**: the spec's local `setEntryContent`/`readEntryContent`/
+  `openFirstEntry`/welcome-screen `createProject` copies replaced by the
+  shared `e2e/helpers.ts` implementations (active-tab scoped, per the
+  AGENTS.md locator rule).
+- **Branch-final sweep** (per project, committed state):
+  - `desktop-chrome`: 87 tests — 71 passed, 16 phone-pinned skipped, 0 failed.
+  - `mobile-chrome`: 87 tests — 46 passed, 41 skipped, 0 failed.
+  - `mobile-safari`: 87 tests — 43 passed, 43 skipped, 1 failed = the
+    documented pre-existing WebKit red (`mobile-bottom-bar.spec.ts` "the
+    Export action opens the shared export menu above the bar", ~37px panel
+    offset — AGENTS.md known-red, not this task's regression).
+  - Fix-forwards inside the sweep: the two pin migrations above (re-ran only
+    the failing project/spec, then repeated the full desktop project).
+- **Final gates**: `npm test --coverage` 60 files / 1323 tests passed, all
+  files ≥ thresholds (96.1% stmts / 91.06% branches / 91.36% funcs / 97.32%
+  lines — no `src/` files touched, no touched-file deltas); `npm run lint`
+  clean; `npm run build` and `typecheck:e2e` clean.
+- **Next:** the branch is ready for user testing.
