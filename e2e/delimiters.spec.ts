@@ -1,7 +1,19 @@
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { expect, type Locator, type Page, test } from '@playwright/test';
-import { exportWorldInfo, FATE_PATH, importLorebook } from './helpers';
+import {
+  createProject as createProjectViaWelcomeScreen,
+  expectSnackbar,
+  exportWorldInfo,
+  FATE_PATH,
+  importLorebook,
+  importViaProjectsMenu,
+  openFirstEntry,
+  openEntryRow,
+  readEntryContent,
+  selectFirstTwoRows,
+  setEntryContent,
+} from './helpers';
 
 /**
  * Delimiter acceptance suite (ROADMAP Tier 3):
@@ -18,8 +30,11 @@ import { exportWorldInfo, FATE_PATH, importLorebook } from './helpers';
  *     to the fixture content underneath its (replaced) pre-existing wrapper.
  *  3. A literal trailing `---` scene break survives a tag wrap/strip cycle
  *     untouched (the Phase-1 D4 destructive-strip regression guard).
- *  4. On a phone-sized viewport the dialog is full-screen AND Apply really
- *     transforms the content (the layout-only check in `ui-responsiveness`).
+ *  4. The checked-selection flow (Task 12 D2): the batch toolbar's Delimiters
+ *     button opens the pane LOCKED to the selection (selection heading, no
+ *     Apply-to combobox), applies with per-entry naming, and clears the
+ *     selection — both checked entries carry their own-name wrappers, in the
+ *     drawer toolbar (desktop) and in the bottom bar's batch strip (phone).
  *  5. A single-line mismatched `<foo>x</bar>` pair is classified (Task 05 U1):
  *     the dialog replaces it with one clean wrapper instead of nesting a
  *     second shell around it, and `none` then leaves the bare payload.
@@ -33,8 +48,19 @@ import { exportWorldInfo, FATE_PATH, importLorebook } from './helpers';
  *     payload intact.
  *  8. An orphan opener whose tag matches no entry name stays payload (hint
  *     gating): the wrap is additive and the prose is never truncated.
- *  9. On a phone-sized viewport the banner and repair flow work inside the
- *     full-screen dialog.
+ *  9. The markdown style (Task 12): the level select and trailing-`---`
+ *     toggle ride every apply (preview-is-what-is-written), re-apply at a
+ *     level is a byte-fixed point, a level change normalizes in place (never
+ *     `## ###`), and the wrapper survives export → re-import byte for byte.
+ * 10. Broken markdown headers (Task 12): an empty `##` opener and a
+ *     glue-typed `#Name` opener are classified (badge, banner, chip, row
+ *     hint — the glue shape hint-gated on the entry name) and repair to one
+ *     clean wrapper keeping the payload byte-identical.
+ * 11. On a phone-sized viewport the pane opens as the `app-delimiters-sheet`
+ *     bottom sheet at its documented 88dvh height AND Apply really
+ *     transforms the content (the layout-only check in `ui-responsiveness`).
+ * 12. On a phone-sized viewport the banner and repair flow work inside the
+ *     bottom sheet.
  */
 
 
@@ -45,22 +71,47 @@ const original = JSON.parse(readFileSync(FATE_PATH, 'utf8')) as {
 };
 
 /**
- * The fixture's first entry in the editor's display order. `stNativeToCharacterBook`
- * sorts by `displayIndex` (falling back to `uid`), and the editor opens the
- * first three sorted entries as tabs; the lowest `displayIndex` is the entry
- * the studio shows first. Empirically that is uid `1`.
+ * The fixture entry at a display-order index. `stNativeToCharacterBook`
+ * sorts by `displayIndex` (falling back to `uid`); the lowest `displayIndex`
+ * is the entry the studio shows first (uid `1`), so index 1 is the list's
+ * second row — the selection tests' second target.
  */
-const FIRST_UID = (() => {
+function fixtureUidAt(index: number): string {
   const ids = Object.keys(original.entries);
   const keyed = ids.map((id) => {
     const entry = original.entries[id] as { displayIndex?: number; uid?: number };
     return { id, order: entry.displayIndex ?? entry.uid ?? Number.POSITIVE_INFINITY };
   });
   keyed.sort((a, b) => a.order - b.order);
-  const first = keyed[0];
-  assert(first, 'the Fate fixture has no entries');
-  return first.id;
-})();
+  const at = keyed[index];
+  assert(at, `the Fate fixture has no entry at display-order index ${index}`);
+  return at.id;
+}
+
+/** The fixture's first entry in the editor's display order (uid `1`). */
+const FIRST_UID = fixtureUidAt(0);
+
+/** The fixture's second entry in display order — the selection tests' other target. */
+const SECOND_UID = fixtureUidAt(1);
+
+/** The entry's `comment` — its list title and its per-entry wrapper name. */
+function fixtureComment(uid: string): string {
+  return (original.entries[uid] as { comment?: string }).comment ?? '';
+}
+
+/**
+ * The byte-exact content a tag apply must write for the fixture entry `uid`
+ * under selection mode's per-entry naming: detection is name-agnostic, so
+ * the entry's snake_case fixture shell is REPLACED (never nested) and the
+ * payload sits verbatim under a wrapper named from the entry's comment.
+ * Mirrors `entryDelimiterName` (comment, then name, then first key).
+ */
+function expectedSelectionWrap(uid: string): string {
+  const entry = original.entries[uid] as { content?: string; comment?: string };
+  const payload = unwrapTagWrapper(entry.content ?? '')?.inner;
+  assert(payload, `fixture uid ${uid} content is not a tag wrapper`);
+  return tagWrap(payload, sanitizeDelimiterName(entry.comment ?? ''));
+}
 
 /**
  * Mirror of `wrapContent(content, 'tag', name)` for a single wrapper: the
@@ -110,12 +161,6 @@ function unwrapTagWrapper(content: string): { name: string; inner: string } | nu
   return match ? { name: match[1] ?? '', inner: match[2] ?? '' } : null;
 }
 
-/** Opens the first visible entry (its tab becomes the active editor pane). */
-async function openFirstEntry(page: Page): Promise<void> {
-  await page.locator('.entry-item').first().click();
-  await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
-}
-
 /**
  * Opens the delimiter dialog from the entry content field's suffix button.
  * The dialog is lazy-loaded, so wait for its title rather than racing the
@@ -139,6 +184,53 @@ function scopeSelect(page: Page): Locator {
 function styleSelect(page: Page): Locator {
   return delimiterPane(page).getByRole('combobox', { name: 'Delimiter style' });
 }
+
+/** The markdown style's heading-level select (rendered only for markdown). */
+function levelSelect(page: Page): Locator {
+  return delimiterPane(page).getByRole('combobox', { name: 'Heading level' });
+}
+
+/** The markdown style's trailing-`---` toggle (rendered only for markdown). */
+function trailingSeparatorCheckbox(page: Page): Locator {
+  return delimiterPane(page).getByRole('checkbox', { name: 'Add trailing ---' });
+}
+
+/** The delimiter pane's bottom-sheet overlay pane (phones, `.app-delimiters-sheet`). */
+function delimiterSheetPane(page: Page): Locator {
+  return page.locator('.cdk-overlay-pane.app-delimiters-sheet');
+}
+
+/** The entry tab strip's active tab (aria-selected — the public ARIA contract). */
+function activeEntryTab(page: Page): Locator {
+  return page.locator('app-entry-editor .entry-tabs [role="tab"][aria-selected="true"]');
+}
+
+/**
+ * Mirror of `wrapContent`'s markdown arm (Task 12): the `#{level} name`
+ * header, one structural blank line, the verbatim payload, and the toggle
+ * marker when asked. Inline (rather than imported from `src/`) to pin the
+ * emitted bytes independently of the implementation under test.
+ */
+function markdownWrap(
+  payload: string,
+  name: string,
+  level = 2,
+  trailingSeparator = false,
+): string {
+  return `${'#'.repeat(level)} ${name}\n\n${payload}${trailingSeparator ? '\n\n---' : ''}`;
+}
+
+/** Payload for the markdown apply/survival tests — bare prose, no delimiters. */
+const MD_PAYLOAD = 'Plain prose body that markdown wrapping must keep verbatim.';
+
+/** Empty ATX header content (Task 12): `##` alone on the first line, then the payload. */
+const EMPTY_HEADER_CONTENT = `##\n\n${MALFORMED_PAYLOAD}`;
+
+/** Glue-typed header matching the entry name (`#New entry 0`), then the payload. */
+const NO_SPACE_HEADER_CONTENT = `#New entry 0\n${MALFORMED_PAYLOAD}`;
+
+/** A glue-typed header matching NO entry name — the hint-gating negative. */
+const FOREIGN_NO_SPACE_CONTENT = `#UnrelatedScene\n${MALFORMED_PAYLOAD}`;
 
 /**
  * Picks an option from a Material select's overlay by visible label. The
@@ -196,39 +288,27 @@ async function applyAndReadSnackbar(page: Page): Promise<string> {
   return snackbar.innerText();
 }
 
-/** Set the entry content via the form-field textarea (input event fires). */
-async function setEntryContent(page: Page, content: string): Promise<void> {
-  const textarea = page.locator('[aria-label="Entry content"]');
-  await textarea.fill(content);
-  await expect(textarea).toHaveValue(content);
-}
-
-/** Reads the active entry content textarea's current value. */
-async function readEntryContent(page: Page): Promise<string> {
-  return page.locator('[aria-label="Entry content"]').inputValue();
-}
-
 /** The native export's `entries` bag, typed for content lookups. */
 function exportedEntries(json: Record<string, unknown>): Record<string, { content?: string }> {
   return (json['entries'] ?? {}) as Record<string, { content?: string }>;
 }
 
-/** Creates a project through the welcome screen so the studio shell appears. */
+/** Creates the delimiter suite's project through the shared welcome flow. */
 async function createProject(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New project' }).first().click();
-  await page.getByLabel('Project title').fill('E2E Delimiters');
-  await page.getByRole('button', { name: 'Create Project' }).click();
-  await expect(page.locator('[aria-label="More actions menu"]')).toBeVisible();
-  await expect(page.locator('.entries-sidenav')).toBeAttached();
+  await createProjectViaWelcomeScreen(page, 'E2E Delimiters');
+}
+
+/** Creates a project with one entry whose content is seeded to `content`. */
+async function newProjectWithEntryContent(page: Page, content: string): Promise<void> {
+  await createProject(page);
+  await page.locator('app-entry-list [aria-label="New entry"]').click();
+  await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
+  await setEntryContent(page, content);
 }
 
 /** Creates a project with one entry whose content is the mismatched pair. */
 async function newProjectWithMalformedEntry(page: Page): Promise<void> {
-  await createProject(page);
-  await page.locator('app-entry-list [aria-label="New entry"]').click();
-  await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
-  await setEntryContent(page, MALFORMED_CONTENT);
+  return newProjectWithEntryContent(page, MALFORMED_CONTENT);
 }
 
 /**
@@ -635,13 +715,185 @@ test.describe('delimiters via the real dialog', () => {
     await applyAndReadSnackbar(page);
     expect(await readEntryContent(page)).toBe(body);
   });
+
+  test('applies tag to the checked selection from the batch toolbar and clears it', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await importLorebook(page, FATE_PATH);
+    await selectFirstTwoRows(page);
+    await page.locator('[aria-label="Apply delimiters to selection"]').click();
+
+    // Locked pane (Task 12 D2): the selection heading with NO Apply-to
+    // combobox and no editor-scope discoverability hint.
+    await expect(
+      delimiterPane(page).getByRole('heading', { name: 'Delimiters — 2 entries' }),
+    ).toBeVisible();
+    await expect(scopeSelect(page)).toHaveCount(0);
+    await expect(delimiterPane(page).locator('.scope-hint')).toHaveCount(0);
+    await expect(delimiterPane(page).locator('.preview-header')).toContainText(
+      '2 of 2 entries will change',
+    );
+
+    const snackbar = await applyAndReadSnackbar(page);
+    expect(snackbar).toContain('Delimiters updated on 2 entries.');
+    await expectSnackbar(page, 'Delimiters updated on 2 entries.');
+
+    // A truthy pane result clears the selection: the batch toolbar goes away.
+    await expect(page.getByRole('toolbar', { name: 'Batch actions' })).toBeHidden();
+
+    // Each checked entry carries its own-name wrapper around the verbatim
+    // payload — the fixture's snake_case shell replaced, never nested.
+    for (const [index, uid] of [
+      [0, FIRST_UID],
+      [1, SECOND_UID],
+    ] as const) {
+      await openEntryRow(page, index);
+      await expect(activeEntryTab(page)).toContainText(fixtureComment(uid));
+      expect(await readEntryContent(page)).toBe(expectedSelectionWrap(uid));
+    }
+  });
+
+  test('markdown style is idempotent, normalizes the level, and toggles the trailing ---', async ({
+    page,
+  }) => {
+    await createProject(page);
+    await page.locator('app-entry-list [aria-label="New entry"]').click();
+    await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
+    await setEntryContent(page, MD_PAYLOAD);
+
+    // Default level 2: the wrap is `## New entry 0`, one blank line, payload.
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /Markdown/);
+    await expect(delimiterPane(page).locator('.example-text')).toContainText('## New entry 0');
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(markdownWrap(MD_PAYLOAD, 'New entry 0'));
+    // Checkpoint 12-1 pin: `##`-led content classifies as the markdown style.
+    await expect(page.getByText('## New entry 0 · click the code button to change')).toBeVisible();
+
+    // Re-open and re-apply at the same level: a byte-fixed point.
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /Markdown/);
+    expect(await readChangedCount(page)).toBe(0);
+    await expect(applyButton(page)).toBeDisabled();
+    await delimiterPane(page).getByRole('button', { name: 'Cancel' }).click();
+
+    // A level change normalizes in place — never nests `## ###` or `### ##`.
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /Markdown/);
+    await pickSelectOption(page, levelSelect(page), /^### — H3$/);
+    await expect(delimiterPane(page).locator('.example-text')).toContainText('### New entry 0');
+    expect(await readChangedCount(page)).toBe(1);
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(markdownWrap(MD_PAYLOAD, 'New entry 0', 3));
+
+    // Toggle "Add trailing ---" on: exactly one canonical marker appended.
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /Markdown/);
+    await pickSelectOption(page, levelSelect(page), /^### — H3$/);
+    await trailingSeparatorCheckbox(page).click();
+    await expect(delimiterPane(page).locator('.example-text')).toContainText('---');
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(markdownWrap(MD_PAYLOAD, 'New entry 0', 3, true));
+
+    // Toggle off (a fresh dialog defaults to off): the marker is removed again.
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /Markdown/);
+    await pickSelectOption(page, levelSelect(page), /^### — H3$/);
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(markdownWrap(MD_PAYLOAD, 'New entry 0', 3));
+  });
+
+  test('the markdown wrapper survives export and re-import byte for byte', async ({ page }) => {
+    await createProject(page);
+    await page.locator('app-entry-list [aria-label="New entry"]').click();
+    await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
+    await setEntryContent(page, MD_PAYLOAD);
+
+    await openDelimiterDialog(page);
+    await pickSelectOption(page, styleSelect(page), /Markdown/);
+    await applyAndReadSnackbar(page);
+    const wrapped = markdownWrap(MD_PAYLOAD, 'New entry 0');
+
+    const exported = await exportWorldInfo(page);
+    const contents = Object.values(exportedEntries(exported.json)).map(
+      (entry) => entry.content ?? '',
+    );
+    expect(contents.filter((content) => content === wrapped)).toHaveLength(1);
+
+    // Re-import that export through the Projects menu (replaces the project):
+    // the header must arrive byte-identical and still classify as markdown.
+    await importViaProjectsMenu(page, await exported.download.path());
+    await openFirstEntry(page);
+    expect(await readEntryContent(page)).toBe(wrapped);
+    await expect(page.locator('.malformed-hint')).toHaveCount(0);
+    await expect(page.getByText('## New entry 0 · click the code button to change')).toBeVisible();
+  });
+
+  test('an empty ## header is flagged and repaired keeping the payload byte-identical', async ({
+    page,
+  }) => {
+    await newProjectWithEntryContent(page, EMPTY_HEADER_CONTENT);
+
+    // The badge names the broken shell (un-hinted classification).
+    await expect(page.locator('.malformed-hint')).toHaveText(
+      '## ? · click the code button to fix',
+    );
+
+    await openDelimiterDialog(page);
+    const pane = delimiterPane(page);
+    const banner = pane.locator('.malformed-banner');
+    await expect(banner).toBeVisible();
+    await expect(banner.locator('.banner-body')).toContainText('broken ATX heading');
+    await expect(pane.locator('.row-chip.malformed-chip')).toHaveText('empty header');
+    await expect(pane.locator('.row-hint')).toHaveText(
+      'Will replace the empty ## heading (no header text)',
+    );
+    expect(await readChangedCount(page)).toBe(1);
+
+    // The tag repair strips the broken first line: the payload survives byte
+    // for byte under the one clean wrapper.
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(REPAIRED_CONTENT);
+    await expect(page.locator('.malformed-hint')).toHaveCount(0);
+  });
+
+  test('a glue-typed header is hint-gated on the entry name and repairs to one wrapper', async ({
+    page,
+  }) => {
+    await newProjectWithEntryContent(page, FOREIGN_NO_SPACE_CONTENT);
+
+    // Hint gating (§3.2.4): `#UnrelatedScene` matches neither the entry's
+    // comment nor its keys, so the glue shape stays payload — no badge.
+    await expect(page.locator('.malformed-hint')).toHaveCount(0);
+
+    // The matching-name spelling classifies: badge, banner, chip, row hint.
+    await setEntryContent(page, NO_SPACE_HEADER_CONTENT);
+    await expect(page.locator('.malformed-hint')).toHaveText(
+      '#New entry 0 ? · click the code button to fix',
+    );
+
+    await openDelimiterDialog(page);
+    const pane = delimiterPane(page);
+    await expect(pane.locator('.malformed-banner')).toBeVisible();
+    await expect(pane.locator('.row-chip.malformed-chip')).toHaveText('missing space');
+    await expect(pane.locator('.row-hint')).toHaveText(
+      'Will replace the unspaced #New entry 0 heading',
+    );
+
+    await applyAndReadSnackbar(page);
+    expect(await readEntryContent(page)).toBe(REPAIRED_CONTENT);
+    await expect(page.locator('.malformed-hint')).toHaveCount(0);
+  });
 });
 
 test.describe('delimiters mobile viewport (390x844)', () => {
-  // Phone-sized viewport with touch: the dialog must be a full-screen pane at
-  // this breakpoint (the global `.app-compact-fullscreen-dialog` rules), and
-  // Apply must actually perform the transformation. The default 30s budget is
-  // tight for a cold WebKit run (app boot + drawer choreography).
+  // Phone-sized viewport with touch: the pane opens as the `app-delimiters-sheet`
+  // bottom sheet through ResponsiveOverlayService (Task 12 §5.1, D3 — the
+  // former compact full-screen dialog), the container stretches to the
+  // documented 88dvh recipe (styles.scss), and Apply must actually perform
+  // the transformation. The default 30s budget is tight for a cold WebKit run
+  // (app boot + drawer choreography).
   test.describe.configure({ timeout: 75_000 });
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
   // Project gate (plan §3.5.5): a phone leg by design — mobile-chrome runs
@@ -652,22 +904,25 @@ test.describe('delimiters mobile viewport (390x844)', () => {
     'phone-pinned delimiter flow runs on the mobile projects only',
   );
 
-  test('full-screen dialog and Apply wraps the entry content', async ({ page }) => {
+  test('bottom sheet at 88dvh and Apply wraps the entry content', async ({ page }) => {
     await createProject(page);
     await addEntryOnPhone(page);
     await setEntryContent(page, 'Mobile delimiter body line.');
 
     await openDelimiterDialog(page);
-    const pane = page.locator('.cdk-overlay-pane.app-compact-fullscreen-dialog');
+    const pane = delimiterSheetPane(page);
     await expect(pane).toBeVisible();
 
-    // Edge-to-edge: the pane fills the viewport at this width.
-    const box = await pane.boundingBox();
-    assert(box, 'dialog pane has no bounding box');
+    // The documented sheet container: fixed 88dvh height, full width, docked
+    // to the viewport's bottom edge (>= 0.85 keeps a margin for rounding).
+    const container = pane.locator('.mat-bottom-sheet-container');
+    await expect(container).toBeVisible();
+    const box = await container.boundingBox();
+    assert(box, 'sheet container has no bounding box');
     const viewport = page.viewportSize();
     assert(viewport, 'page has no viewport size');
     expect(box.width).toBeGreaterThanOrEqual(viewport.width - 1);
-    expect(box.height).toBeGreaterThanOrEqual(viewport.height - 1);
+    expect(box.height).toBeGreaterThanOrEqual(viewport.height * 0.85);
 
     // The diff body keeps its height instead of being squeezed to its toolbar.
     const diffBody = pane.locator('app-diff-viewer .diff-body');
@@ -684,7 +939,7 @@ test.describe('delimiters mobile viewport (390x844)', () => {
     expect(await readEntryContent(page)).toBe(tagWrap('Mobile delimiter body line.', resolvedName));
   });
 
-  test('malformed banner and repair flow work in the full-screen dialog', async ({ page }) => {
+  test('malformed banner and repair flow work in the bottom sheet', async ({ page }) => {
     await createProject(page);
     await addEntryOnPhone(page);
     await setEntryContent(page, MALFORMED_CONTENT);
@@ -695,10 +950,10 @@ test.describe('delimiters mobile viewport (390x844)', () => {
     );
 
     await openDelimiterDialog(page);
-    const pane = page.locator('.cdk-overlay-pane.app-compact-fullscreen-dialog');
+    const pane = delimiterSheetPane(page);
     await expect(pane).toBeVisible();
 
-    // Banner and mismatched chip inside the full-screen pane.
+    // Banner and mismatched chip inside the sheet pane.
     const banner = pane.locator('.malformed-banner');
     await expect(banner).toBeVisible();
     await expect(banner.locator('.banner-title')).toHaveText('1 entry has malformed delimiters');
@@ -715,5 +970,67 @@ test.describe('delimiters mobile viewport (390x844)', () => {
     const snackbar = await applyAndReadSnackbar(page);
     expect(snackbar).toContain('Delimiters updated on 1 entry.');
     expect(await readEntryContent(page)).toBe(tagWrap(MALFORMED_PAYLOAD, resolvedName));
+  });
+});
+
+test.describe('delimiters from the mobile bottom bar', () => {
+  // Task 12 §5.2's phone entry point: the bottom bar's batch strip routes the
+  // Delimiters item to EntryList.openDelimiters — the same locked pane as the
+  // desktop toolbar, as a bottom sheet on the docked bar. Phone-pinned (the
+  // strip only exists below the shell's 768px breakpoint).
+  test.describe.configure({ timeout: 75_000 });
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
+  test.skip(
+    () => test.info().project.name === 'desktop-chrome',
+    'phone-pinned delimiter flow runs on the mobile projects only',
+  );
+
+  test('the batch strip opens the locked sheet, applies, and clears the selection', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await importLorebook(page, FATE_PATH);
+    await selectFirstTwoRows(page);
+
+    // The strip is FOREGROUND while the drawer is open (the two are
+    // spatially disjoint — no veil, no inert): tap Delimiters directly.
+    // Closing the drawer first would collapse the strip — `App.barState`
+    // keeps the swap only while the drawer shows a live selection.
+    await page
+      .locator('app-mobile-bottom-bar [aria-label="Apply delimiters to selection"]')
+      .click();
+    const pane = delimiterSheetPane(page);
+    await expect(pane).toBeVisible();
+
+    // Locked pane: the selection heading, no Apply-to combobox.
+    await expect(
+      pane.getByRole('heading', { name: 'Delimiters — 2 entries' }),
+    ).toBeVisible();
+    await expect(pane.getByRole('combobox', { name: 'Apply to' })).toHaveCount(0);
+    await expect(pane.locator('.preview-header')).toContainText('2 of 2 entries will change');
+
+    const snackbar = await applyAndReadSnackbar(page);
+    expect(snackbar).toContain('Delimiters updated on 2 entries.');
+    await expectSnackbar(page, 'Delimiters updated on 2 entries.');
+
+    // The selection cleared, so the strip is gone (the drawer is still open —
+    // the bar is backgrounded until a user closes it, as in Task 06).
+    await expect(page.getByRole('toolbar', { name: 'Batch actions' })).toBeHidden();
+
+    // Close the drawer: with no selection the bar returns to quick actions.
+    await page.locator('[aria-label="Toggle entries panel"]').click();
+    await expect(
+      page.locator('app-mobile-bottom-bar nav[aria-label="Quick actions"]'),
+    ).toBeVisible();
+
+    // Each checked entry carries its own-name tag wrapper byte for byte.
+    for (const [index, uid] of [
+      [0, FIRST_UID],
+      [1, SECOND_UID],
+    ] as const) {
+      await openEntryRow(page, index);
+      await expect(activeEntryTab(page)).toContainText(fixtureComment(uid));
+      expect(await readEntryContent(page)).toBe(expectedSelectionWrap(uid));
+    }
   });
 });

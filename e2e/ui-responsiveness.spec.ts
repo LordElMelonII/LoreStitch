@@ -347,42 +347,55 @@ test.describe('responsive studio shell', () => {
           expect(visibleDesktopOnly, 'desktop-only buttons visible at phone width').toBe(0);
         });
 
-        test('content delimiters dialog is full-screen with a readable diff', async ({ page }) => {
+        test('content delimiters opens as the 88dvh sheet with a readable diff', async ({
+          page,
+        }) => {
           await createProject(page);
           await addEntry(page, vp.kind);
           await page.locator('[aria-label="Entry content"]').fill(LONG_CONTENT);
 
-          // Stress the short end of the compact class (landscape phones):
-          // there the dialog content must overflow into a scroll instead of
-          // squeezing the diff or clipping the actions.
+          // Stress the short end of the sheet (landscape phones): the fixed
+          // height must still hold, and the pane body must overflow into a
+          // scroll instead of squeezing the diff or clipping the actions.
           await page.setViewportSize({ width: vp.width, height: 500 });
 
           await page.locator('[aria-label="Content delimiters"]').click();
-          const pane = page.locator('.cdk-overlay-pane.app-compact-fullscreen-dialog');
+          const pane = page.locator('.cdk-overlay-pane.app-delimiters-sheet');
           await expect(pane).toBeVisible();
 
-          // MD3 compact screens get the full-screen dialog, edge to edge.
-          const box = await pane.boundingBox();
-          assert(box, 'dialog pane has no bounding box');
+          // Phones get the documented bottom-sheet recipe (styles.scss): the
+          // container is 88dvh tall and full width — even at the 500px stress
+          // height (>= 0.85 keeps a margin for rounding).
+          const container = pane.locator('.mat-bottom-sheet-container');
+          await expect(container).toBeVisible();
+          const box = await container.boundingBox();
+          assert(box, 'sheet container has no bounding box');
           const viewport = page.viewportSize();
           assert(viewport, 'page has no viewport size');
           expect(box.width).toBeGreaterThanOrEqual(viewport.width - 1);
-          expect(box.height).toBeGreaterThanOrEqual(viewport.height - 1);
+          expect(box.height).toBeGreaterThanOrEqual(viewport.height * 0.85);
 
           // The preview diff must keep its body instead of being squeezed down
-          // to its toolbar by the dialog's flex column.
+          // to its toolbar by the pane's flex column.
           const diffBody = pane.locator('app-diff-viewer .diff-body');
           await expect(diffBody).toBeVisible();
           const diffBox = await diffBody.boundingBox();
           assert(diffBox, 'diff body has no bounding box');
           expect(diffBox.height).toBeGreaterThan(50);
 
-          // Long content overflows into the dialog content scroll, with the
-          // actions still pinned in view.
-          const scrollable = await pane
-            .locator('.mat-mdc-dialog-content')
-            .evaluate((el) => el.scrollHeight > el.clientHeight);
-          expect(scrollable, 'dialog content should scroll').toBe(true);
+          // Long content overflows into the pane body's scroll, with the
+          // pinned footer (Apply) still in view.
+          const body = pane.locator('.pane-body');
+          const scroll = await body.evaluate((el: HTMLElement) => ({
+            overflowY: getComputedStyle(el).overflowY,
+            scrollable: el.scrollHeight > el.clientHeight,
+          }));
+          expect(
+            scroll.overflowY === 'auto' || scroll.overflowY === 'scroll',
+            'pane body must be the scroll surface',
+          ).toBe(true);
+          expect(scroll.scrollable, 'pane body should scroll').toBe(true);
+          await expect(pane.locator('.pane-footer')).toBeVisible();
           await expect(pane.getByRole('button', { name: /Apply/ })).toBeInViewport();
         });
 

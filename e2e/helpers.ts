@@ -157,13 +157,14 @@ export async function createProject(page: Page, title: string): Promise<void> {
 }
 
 /**
- * Opens the first visible entry (its tab becomes the active editor pane).
+ * Opens the entry at the given visible-list index (its tab becomes the active
+ * editor pane).
  *
  * Viewport-aware: below the shell's 768px breakpoint the entries sidenav is
  * an off-canvas `over` drawer, so it is toggled open before the click and
  * released again afterwards (the editor renders behind it).
  */
-export async function openFirstEntry(page: Page): Promise<void> {
+export async function openEntryRow(page: Page, index: number): Promise<void> {
   const viewport = page.viewportSize();
   const mobile = viewport !== null && viewport.width < 768;
   const drawerToggle = page.locator('[aria-label="Toggle entries panel"]');
@@ -171,7 +172,7 @@ export async function openFirstEntry(page: Page): Promise<void> {
     await drawerToggle.click();
     await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
   }
-  await page.locator('.entry-item').first().click();
+  await page.locator('.entry-item').nth(index).click();
   await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible();
   if (mobile) {
     // Release the drawer so the editor pane behind it is interactable, and
@@ -186,6 +187,14 @@ export async function openFirstEntry(page: Page): Promise<void> {
       }
     });
   }
+}
+
+/**
+ * Opens the first visible entry (its tab becomes the active editor pane).
+ * The `openEntryRow` index-0 shorthand every single-entry spec uses.
+ */
+export async function openFirstEntry(page: Page): Promise<void> {
+  return openEntryRow(page, 0);
 }
 
 /**
@@ -301,6 +310,15 @@ export async function setEntryContent(page: Page, content: string): Promise<void
   const textarea = activeEditorPane(page).getByLabel('Entry content', { exact: true });
   await textarea.fill(content);
   await expect(textarea).toHaveValue(content);
+}
+
+/**
+ * Reads the active entry's content textarea value. Scoped to the active tab
+ * body (inactive mat-tabs keep their inputs in the DOM), so multi-tab flows
+ * — the selection suites — always read the pane the user is looking at.
+ */
+export async function readEntryContent(page: Page): Promise<string> {
+  return activeEditorPane(page).getByLabel('Entry content', { exact: true }).inputValue();
 }
 
 // -----------------------------------------------------------------------------

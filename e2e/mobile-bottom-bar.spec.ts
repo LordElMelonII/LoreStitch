@@ -292,7 +292,9 @@ test.describe('mobile bottom action bar (phones)', () => {
     await expect(barBatchToolbar(page)).toHaveAttribute('aria-label', 'Batch actions');
     await expect(page.locator('app-entry-list .batch-bar')).toHaveCount(0);
     await expect(barNav(page)).toHaveCount(0);
-    await expect(page.locator('app-mobile-bottom-bar .bar-item')).toHaveCount(5);
+    // Six swapped controls: the Task 06 strip (select-all, batch edit,
+    // export, more, clear) plus Task 12 §5.2's Delimiters item.
+    await expect(page.locator('app-mobile-bottom-bar .bar-item')).toHaveCount(6);
     await expect(barHost(page)).toHaveClass(/bar-batch/);
     await expect(barHost(page)).not.toHaveClass(/bar-backgrounded/);
     await expect.poll(veilColor.bind(null, page)).toBe(TRANSPARENT);
