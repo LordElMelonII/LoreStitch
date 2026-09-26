@@ -580,10 +580,27 @@ describe('delimiters', () => {
       );
     });
 
-    it('keeps a trailing --- as payload when re-wrapping markdown to tag', () => {
-      expect(rewrapContent('## N\n\nprose\n\n---', 'tag', 'N', ['N'])).toBe(
-        '<N>\nprose\n\n---\n</N>',
+    it('consumes the markdown toggle marker when re-wrapping markdown to tag/bracket', () => {
+      // User-reported (post-12-1 amendment): the trailing `---` belongs to the
+      // markdown wrapper, not the payload — a switch must not carry it into
+      // the new shell.
+      expect(rewrapContent('## N\n\nprose\n\n---', 'tag', 'N', ['N'])).toBe('<N>\nprose\n</N>');
+      expect(rewrapContent('## N\n\nprose\n\n---', 'bracket', 'N', ['N'])).toBe('[N=\nprose]');
+      // Idempotent: the wrapped result re-applies as a fixed point.
+      const once = rewrapContent('## N\n\nprose\n\n---', 'tag', 'N', ['N']);
+      expect(rewrapContent(once, 'tag', 'N', ['N'])).toBe(once);
+    });
+
+    it('consumes a foreign markdown toggle marker but keeps the header (D7)', () => {
+      expect(rewrapContent('## Old\n\nprose\n\n---', 'tag', 'N', ['N'])).toBe(
+        '<N>\n## Old\n\nprose\n</N>',
       );
+    });
+
+    it('keeps a scene-break --- when re-wrapping separator-detected content to tag (D4)', () => {
+      // No wrapper shape claims the trailing marker on bare prose — the
+      // Phase-1 guard holds: the switch stays additive there.
+      expect(rewrapContent('prose\n\n---', 'tag', 'N', ['N'])).toBe('<N>\nprose\n\n---\n</N>');
     });
 
     it('wraps additively around a foreign-named markdown header (D4)', () => {

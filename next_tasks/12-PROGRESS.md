@@ -187,3 +187,33 @@ accepted. P3/P4 unlocked.
   lines — no `src/` files touched, no touched-file deltas); `npm run lint`
   clean; `npm run build` and `typecheck:e2e` clean.
 - **Next:** the branch is ready for user testing.
+
+---
+
+## Post-testing fix round 1 — markdown toggle marker on switch (user report)
+
+- **Report**: re-wrapping markdown content (with trailing `---`) to tag/bracket
+  kept the marker inside the new shell; the same was reported for `---`
+  ("separator") content. Screenshot: 圣杯 entry, markdown → Tag preview.
+- **Root cause**: the §4.4 matrix row approved at 12-1 ("tag, bracket: kept as
+  payload") applied regardless of the detected current style. For a detected
+  markdown wrapper the trailing `---` is provably the style's own toggle
+  marker (part of the markdown shape), so keeping it was wrong; for bare
+  separator-detected prose it is byte-identical to a scene break (Phase-1 D4
+  guard).
+- **Fix (this commit)**: `rewrapContent` consumes the trailing `---` for every
+  target when the detected current style is `markdown` (name-matched strip
+  strips it from the payload; foreign header keeps D7 header protection, its
+  marker is still consumed). Separator-detected prose and tag/bracket payloads
+  keep the D4 scene-break protection — pinned explicitly next to the migrated
+  pin. Preview is affected identically (shared rewrap path).
+- **Pins migrated**: `keeps a trailing --- as payload when re-wrapping markdown
+  to tag` → `consumes the markdown toggle marker when re-wrapping markdown to
+  tag/bracket` (+ idempotency) with two new boundary pins (D7 foreign-header
+  marker consumption; D4 separator-detected protection). No e2e pins existed
+  for markdown→tag.
+- **Gates**: unit 60 files / 1325 passed · build ✓ · lint ✓.
+- **Open question for the user**: separator-detected → tag/bracket consumption
+  would reverse the Phase-1 D4 scene-break guard (byte-indistinguishable
+  inputs) — asked, awaiting answer.
+- **Plan doc**: §4.4 table carries the dated amendment.

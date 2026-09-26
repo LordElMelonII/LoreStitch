@@ -291,8 +291,14 @@ export function unwrapContent(content: string, options: UnwrapOptions = {}): str
  *   states — ON re-emits exactly one canonical marker (normalizing level and
  *   spacing), OFF removes the old marker — including one that surfaced from a
  *   stripped tag/bracket wrapper, so the toggle can never double markers;
- * - targeting `'tag'`/`'bracket'` keeps a trailing `---` as payload, because
- *   a scene break must never be silently deleted by re-wrapping.
+ * - when a markdown **wrapper is detected** in the current content, its
+ *   trailing `---` is the style's own toggle marker, not payload: switching
+ *   to any target consumes it (a tag/bracket re-wrap writes the clean payload
+ *   only). A foreign-named header keeps D7's protection — the header text
+ *   stays payload — but its wrapper's marker is still consumed;
+ * - any other trailing `---` (bare separator-detected prose, a marker inside
+ *   a tag/bracket payload) is kept: a scene break must never be silently
+ *   deleted by re-wrapping (the Phase-1 D4 guard).
  *
  * Malformed or unrecognized input degrades to additive wrapping, never
  * truncation; re-applying a wrapping style is a fixed point.
@@ -304,7 +310,9 @@ export function rewrapContent(
   expectedNames?: readonly string[],
   options?: MarkdownWrapOptions,
 ): string {
-  const stripSeparator = style === 'none' || style === 'separator' || style === 'markdown';
+  const fromMarkdown = detectDelimiter(content).style === 'markdown';
+  const stripSeparator =
+    style === 'none' || style === 'separator' || style === 'markdown' || fromMarkdown;
   let inner = unwrapContent(content, { expectedNames, stripSeparator });
   // The tag/bracket strips ignore `stripSeparator` (scene-break protection),
   // so a marker surfacing from a stripped wrapper reaches here verbatim; a

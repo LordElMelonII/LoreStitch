@@ -145,6 +145,13 @@ that already ends in `---` would emit a second marker (today it is idempotent). 
 | `markdown`, toggle OFF | consumed | the toggle must actually remove the old marker |
 | `tag`, `bracket` | kept as payload | scene-break protection, unchanged |
 
+> **Amendment (user, 2026-09-26, post-testing)**: the `tag`/`bracket` row
+> splits by the *detected current* style. When a markdown **wrapper** is
+> detected, its trailing `---` is the style's own toggle marker — switching to
+> any target consumes it (a foreign-named header keeps D7 header protection,
+> its marker does not survive). Bare separator-detected prose and markers
+> inside tag/bracket payloads keep the scene-break protection (Phase-1 D4).
+
 Two pinned-behavior effects of the detection-order change (checkpoint **12-1** evidence):
 `delimiterLabel`/badge for header-led content that used to read `---` (separator) or nothing now
 reads the header (`## Name`), and `# Header`-led content classifies `markdown` instead of
