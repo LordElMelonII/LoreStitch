@@ -95,6 +95,10 @@ the whole time instead of frozen.
 - Final `CI=true npm test -- --watch=false --coverage` → 61 files / **1 379
   tests** ✓ · `npm run lint` ✓. Branch pushed to origin; **stopped for user
   testing** (no self-merge).
+- Merged 2026-09-27 after the user's go: fast-forward-merged into `develop`
+  as `61f677f` (history stayed linear; develop was at `323fbd3`, no rebase
+  needed — the push also published task 18's commits, which had landed
+  directly on local `develop` and left `origin/develop` at `a384720`).
 
 ## Ledger notes (known edges, none escalated)
 
