@@ -16,6 +16,20 @@ function jsonEqual<M>(a: M, b: M): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/**
+ * A runtime own-key field of an entry, read as `unknown`. The merge rule
+ * compares the entries' own enumerable keys (`Object.keys`), which statically
+ * typed access cannot express: `CharacterBookEntry` is a vendor interface
+ * without an index signature, and unknown vendor keys may exist on the object
+ * beyond it. The parameter is `object` — not the entry type — so the single
+ * assertion stays compiler-checked (`Record<string, unknown>` is assignable
+ * to `object`); values are read as `unknown` and only compared by identity,
+ * so no type is smuggled through.
+ */
+function entryFieldValue(entry: object, key: string): unknown {
+  return (entry as Record<string, unknown>)[key];
+}
+
 // ---------------------------------------------------------------------------
 // Coercion helpers for `extensions` values, which are untyped by spec
 // (`Record<string, unknown>`): forms need concrete, null-free field types.
@@ -173,8 +187,7 @@ export function entrySliceSignal<M>(options: EntrySliceOptions<M>): WritableSign
         // reference is "unchanged", a cloned one is "changed").
         const externallyChanged = new Set<string>();
         for (const key of new Set([...Object.keys(previous), ...Object.keys(entry)])) {
-          const before = (previous as unknown as Record<string, unknown>)[key];
-          if (before !== (entry as unknown as Record<string, unknown>)[key]) {
+          if (entryFieldValue(previous, key) !== entryFieldValue(entry, key)) {
             externallyChanged.add(key);
           }
         }

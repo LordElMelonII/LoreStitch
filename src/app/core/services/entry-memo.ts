@@ -28,6 +28,11 @@ import type { LintDiagnostic } from './linter';
  *   never mutated in place; every change produces new references with
  *   structural sharing — the same contract `vcs.service.ts` documents for
  *   `canonicalSerializations`.
+ * - **Id-carrying entries only for the lint memo** (`memoEntryLint`): for an
+ *   id-less entry `entryRefId` resolves `entry.id ?? index`, so its
+ *   diagnostics depend on array position and a reorder would stale the
+ *   cache — id-less entries fall through uncached (see `memoEntryLint`).
+ *   Workspace books always carry ids.
  * - Bare module, no decorator — the `sha256.ts`/`token-estimator.ts`
  *   convention for pure analysis code in services/. No Angular imports (core
  *   invariant).
