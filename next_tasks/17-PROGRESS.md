@@ -99,8 +99,11 @@ projects for the first time since the reds were documented**
   carrying the transferable lesson (layout viewport vs screen size — 390×664 /
   412×839 — and the fit-cap precedent); the Playwright projects note's
   parentheticals corrected to layout viewports.
-- Branch pushed to origin. **STOP** — awaiting the user's manual testing and
-  merge go (`git merge --ff-only` into `develop` is theirs to run).
+- Branch pushed to origin.
+- Merged 2026-09-27 after the user's go: fast-forward-merged into `develop`
+  as `29a99cc` (history stayed linear; develop was at `177df06`, no rebase
+  needed), then the `docs(next_tasks)` mark-merged commit landed on develop
+  and origin was updated.
 
 ## Final state
 

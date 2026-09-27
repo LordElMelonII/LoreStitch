@@ -1,5 +1,9 @@
 # Task 17 — Resolve the two documented known reds
 
+> **Status**: ✅ Complete — both reds resolved 2026-09-27; merged into
+> `develop` (ff-only) on the user's go the same day.
+> **Branch**: `feature/17-known-reds` (off `develop` @ `177df06`).
+
 **Source**: the "Known pre-existing reds" section of `AGENTS.md` (two entries,
 accumulated across tasks 06→16); root-cause analysis session 2026-09-27 (this
 plan distills it — the analysis was posted to the user in full before the go).
