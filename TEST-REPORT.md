@@ -203,3 +203,42 @@ Config: 3 projects (desktop-chrome, mobile-chrome/Pixel 7, mobile-safari/iPhone 
 ---
 
 *Report generated 2026-09-19 by a read-only audit pass (six parallel analyses over 57 spec files, key findings spot-verified against source).*
+
+---
+
+## Task 18 addendum (2026-09-27 — entry-editor keystroke performance)
+
+Suite grew 57 → 70 spec files (61 unit / 9 e2e) and ~1,050 → ~1,354 unit cases
+since the audit above; the audit's per-file verdicts are unchanged except where
+task 18 touched specs (all migrations preserve or tighten the pinned contract):
+
+**New — Essential**
+- `entry-edit-form.spec.ts` (12 tests): the D1 idle-commit contract through the
+  real `entrySliceSignal` export — commit-once-at-300 ms, DestroyRef flush,
+  no-op-never-arms, undo-back-within-window (fire-time re-check), merge-rule
+  re-apply vs external-wins at field granularity (incl. the `extensions`-bag
+  descent cases), no-echo, id-change/vanished-entry draft drops.
+
+**Extended — still Essential, no duplication introduced**
+- `linter.spec.ts` (+6): `includeGraphRules` skip/default pins; memoized≡direct
+  equivalence on fresh identities; id-less memo bypass.
+- `workspace.service.spec.ts` (+3): `hasUnsavedChanges` decomposition (reorder,
+  book-field-only, reference-stable) — closes the audit's defect 3 neighbor.
+- `linter-state.spec.ts` (+2): badge reads the graph-free pass; prefs applied.
+- `linter-dialog.spec.ts` (+1): the dialog still lists graph findings the badge
+  no longer counts (the D4 contract's other half).
+- `entry-list.spec.ts` (+1): virtual rows track by entry id (D6).
+- `entry-content-field.spec.ts` (+1): stats move per keystroke from the form
+  model BEFORE the workspace commit lands (discriminates D1's local-render
+  guarantee; the audit's write-timing pins now advance the faked timer).
+
+**Migrated in place (contract tightened, count unchanged)**: `entry-editor.spec.ts`
+(2 write pins → timer-advanced), `entry-activation` / `entry-inclusion-group` /
+`entry-placement` / `entry-recursion-timing` specs (workspace-state pins →
+`commitIdle()` flush helper), `e2e/linter.spec.ts` (badge counts −1 each, D4),
+`e2e/round-trip.spec.ts` (explicit idle-commit flush before export, D1).
+
+**Suite health at task close** — `CI=true npm test -- --watch=false --coverage`:
+61 files / 1,354 tests pass, thresholds enforced (global 96.18/91.12/91.42/97.39);
+full three-project Playwright matrix green (72+46+44 passed, phone-pinned skips
+by design).
