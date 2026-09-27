@@ -195,6 +195,20 @@ describe('LinterState', () => {
     expect(run.unfilteredRules.has('never-activatable')).toBe(true);
   });
 
+  it('applies muted rules and ignored signatures together in the delivered list', async () => {
+    // The old sync pane pass filtered both prefs sides in one pass; the run's
+    // post-filtering keeps that shape — each side drops its own diagnostics
+    // independently, and both rules stay visible on the chip row.
+    const run = await runOver(severityFixture(), {
+      ignoredSignatures: ['invalid-regex|0|/servant(/'],
+      mutedRules: ['never-activatable'],
+    });
+
+    expect(run.diagnostics.map((d) => d.rule)).toEqual(['selective-without-secondary']);
+    expect(run.unfilteredRules.has('invalid-regex')).toBe(true);
+    expect(run.unfilteredRules.has('never-activatable')).toBe(true);
+  });
+
   it('restarts the run over a changed project (the pane live-recompute cadence)', async () => {
     await runOver(severityFixture());
     expect(doneRun().diagnostics).toHaveLength(3);

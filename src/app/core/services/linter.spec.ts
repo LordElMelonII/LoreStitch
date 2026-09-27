@@ -1273,6 +1273,21 @@ describe('linter', () => {
       expect(chunked).toEqual(lintBook(book));
     });
 
+    it('passes an empty book through both drivers identically (phase-boundary edge)', async () => {
+      // Zero entries: the entry-rules loop never runs, duplicate-keys is its
+      // one chunk and the graph phase completes with total 1 and no pair loop
+      // — every phase boundary fires with nothing to process.
+      const book = deepFreeze(makeBook([]));
+      const expected = lintBook(book);
+      expect(expected).toEqual([]);
+      for (const cadence of CADENCES) {
+        await expect(lintBookChunked(book, undefined, cadence.config), cadence.name).resolves.toEqual(
+          expected,
+        );
+      }
+      expect(Object.isFrozen(book)).toBe(true);
+    });
+
     describe('createLintPass driver', () => {
       it('reports phase-by-phase progress and finishes with the sync output', () => {
         const book = makeVarietyBook(); // 12 entries → graph phase total 13
@@ -1327,6 +1342,25 @@ describe('linter', () => {
           // Drive to completion.
         }
         expect(pass.finish()).toEqual(lintBook(book));
+      });
+
+      it('steps idempotently after completion — late steps are no-ops and finish() stays valid', () => {
+        // The P3 fix-forward contract: a re-polled exhausted generator must
+        // not launder `undefined` into the result through a typing lie.
+        const book = makeVarietyBook();
+        const pass = createLintPass(book, undefined, { entriesPerStep: 1, sourcesPerStep: 1 });
+        while (!pass.step()) {
+          // Drive to completion.
+        }
+        const result = pass.finish();
+        const finalProgress = pass.progress();
+
+        expect(pass.step()).toBe(true);
+        expect(pass.step()).toBe(true);
+        // The same delivered array, not a corrupted re-run.
+        expect(pass.finish()).toBe(result);
+        expect(pass.finish()).toEqual(lintBook(book));
+        expect(pass.progress()).toEqual(finalProgress);
       });
 
       it('completes the >1500-entry skip as a one-unit graph phase', () => {
