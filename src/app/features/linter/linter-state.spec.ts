@@ -3,7 +3,13 @@ import { MatChipSelectionChange } from '@angular/material/chips';
 import { CharacterBookEntry } from '../../core/models/lorebook.model';
 import { LintPrefs } from '../../core/models/project.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
-import { LinterState } from './linter-state';
+import {
+  DoneHealthRun,
+  HealthRun,
+  HealthRunSession,
+  HEALTH_RUN_YIELD,
+  LinterState,
+} from './linter-state';
 import { entryWith as entry, projectOf, severityFixture } from '../../../testing/project-fixtures';
 
 /** A user-initiated chip selection change, as the pane's mute chips emit. */
@@ -24,32 +30,254 @@ describe('LinterState', () => {
   let workspace: WorkspaceService;
   let state: LinterState;
 
+  // --- Health-run scheduler seam (plan 19 D4) --------------------------------
+
+  /**
+   * The default spec scheduler: immediate — a run completes within one
+   * macrotask flush. The lifecycle tests swap in the gated scheduler, which
+   * holds the run at each chunk boundary until released (one pump per chunk),
+   * so mid-run states and stale-run supersession are deterministic.
+   */
+  const immediateYield = async (): Promise<void> => undefined;
+  let activeYield: () => Promise<void> = immediateYield;
+  const tunableYield = (): Promise<void> => activeYield();
+
+  /** Chunk gates of the gated scheduler, one per awaited chunk boundary. */
+  let gates: (() => void)[] = [];
+
+  /** The one pane session most tests run under. */
+  const SESSION: HealthRunSession = {};
+
+  async function flushRun(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  /** Advances a gated run by exactly one chunk boundary. */
+  async function pumpChunk(): Promise<void> {
+    gates.splice(0).forEach((release) => release());
+    await flushRun();
+  }
+
+  /** Pumps a gated run chunk by chunk until it delivers (bounded). */
+  async function pumpToDone(maxChunks = 100): Promise<void> {
+    for (let i = 0; i < maxChunks && state.healthRun().kind !== 'done'; i += 1) {
+      await pumpChunk();
+    }
+  }
+
+  function doneRun(): DoneHealthRun {
+    const run = state.healthRun();
+    assert(run.kind === 'done');
+    return run;
+  }
+
+  /** Seeds a project, starts the pane's run, and flushes it to delivery. */
+  async function runOver(
+    entries: CharacterBookEntry[],
+    lintPrefs?: LintPrefs,
+  ): Promise<DoneHealthRun> {
+    workspace.activeProject.set(seededProject(entries, lintPrefs));
+    state.startHealthRun(SESSION);
+    await flushRun();
+    return doneRun();
+  }
+
   beforeEach(async () => {
     TestBed.configureTestingModule({});
+    // The run scheduler seam — overridden before any inject instantiates
+    // the module (the dialog spec's documented ordering).
+    TestBed.overrideProvider(HEALTH_RUN_YIELD, { useValue: tunableYield });
     workspace = TestBed.inject(WorkspaceService);
     state = TestBed.inject(LinterState);
     // Allow the workspace's async init() to settle before assertions.
     await new Promise((resolve) => setTimeout(resolve, 0));
+    activeYield = immediateYield;
+    gates = [];
   });
 
-  it('reports no diagnostics without an open project', () => {
-    expect(state.diagnostics()).toEqual([]);
-    expect(state.unfilteredDiagnostics()).toEqual([]);
-    expect(state.issueCount()).toBe(0);
-    expect(state.unfilteredRules().size).toBe(0);
-    expect(state.ignoredCount()).toBe(0);
+  // --- The pane's async run (plan 19 D4) --------------------------------------
+
+  it('delivers empty done results without an open project', async () => {
+    state.startHealthRun(SESSION);
+    await flushRun();
+
+    expect(state.healthRun()).toEqual({
+      kind: 'done',
+      diagnostics: [],
+      unfilteredRules: new Set(),
+    });
   });
 
-  it('lints the active book once and memoizes across reads', () => {
+  it('starts into running at zero and steps the bar through the phase weights', async () => {
+    // Gated: every pump is exactly one engine chunk over the severity
+    // fixture (3 entries). The mapping weights entry-rules 0→5,
+    // duplicate-keys 5→10 and the recursion graph 10→100 — the graph
+    // dominates wall time on large books, so it owns the last 90%.
+    gates = [];
+    activeYield = () => new Promise<void>((resolve) => gates.push(resolve));
     workspace.activeProject.set(seededProject(severityFixture()));
+    state.startHealthRun(SESSION);
+    expect(state.healthRun()).toEqual({ kind: 'running', percent: 0 });
 
-    const diagnostics = state.diagnostics();
-    expect(state.diagnostics()).toBe(diagnostics); // same reference: memoized
-    expect(diagnostics.map((d) => d.rule)).toEqual([
+    await pumpChunk(); // entry-rules complete (3/3)
+    let run: HealthRun = state.healthRun();
+    assert(run.kind === 'running');
+    expect(run.percent).toBe(5);
+
+    await pumpChunk(); // duplicate-keys complete (1/1)
+    run = state.healthRun();
+    assert(run.kind === 'running');
+    expect(run.percent).toBe(10);
+
+    await pumpChunk(); // graph sources complete (3/4 of the phase)
+    run = state.healthRun();
+    assert(run.kind === 'running');
+    expect(run.percent).toBe(78); // 10 + (3/4)·90 = 77.5
+
+    await pumpChunk(); // the bounded tail delivers — no 100% frame to sit on
+    expect(state.healthRun().kind).toBe('done');
+  });
+
+  it('delivers the prefs-filtered list and the chip membership from one pass (plan 19 D3)', async () => {
+    const run = await runOver(severityFixture());
+
+    expect(run.diagnostics.map((d) => d.rule)).toEqual([
       'invalid-regex',
       'never-activatable',
       'selective-without-secondary',
     ]);
+    // The chip membership derives from the same pass — every rule the list
+    // carries, plus nothing else when nothing was muted or ignored.
+    expect([...run.unfilteredRules].sort()).toEqual(
+      [...new Set(run.diagnostics.map((d) => d.rule))].sort(),
+    );
+  });
+
+  it('delivered list drops a muted graph finding; chip membership keeps it', async () => {
+    // A recursion cycle muted by prefs: the old emission-level mute dropped
+    // the finding; the run delivers it post-filtered out of the pane's list
+    // while the chip row keeps the rule visible so it can be re-enabled.
+    const run = await runOver(
+      [
+        entry(0, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
+        entry(1, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
+      ],
+      { ignoredSignatures: [], mutedRules: ['recursion-cycle'] },
+    );
+
+    expect(run.diagnostics).toEqual([]);
+    expect(run.unfilteredRules.has('recursion-cycle')).toBe(true);
+  });
+
+  it('delivered list drops ignored signatures; the chips keep every pass rule', async () => {
+    const run = await runOver(severityFixture(), {
+      ignoredSignatures: ['invalid-regex|0|/servant(/'],
+      mutedRules: [],
+    });
+
+    expect(run.diagnostics.map((d) => d.rule)).toEqual([
+      'never-activatable',
+      'selective-without-secondary',
+    ]);
+    expect(run.unfilteredRules.has('invalid-regex')).toBe(true);
+  });
+
+  it('delivered chip membership keeps muted rules visible for re-enabling', async () => {
+    const run = await runOver(severityFixture(), {
+      ignoredSignatures: [],
+      mutedRules: ['never-activatable'],
+    });
+
+    expect(run.diagnostics.map((d) => d.rule)).toEqual([
+      'invalid-regex',
+      'selective-without-secondary',
+    ]);
+    expect(run.unfilteredRules.has('never-activatable')).toBe(true);
+  });
+
+  it('restarts the run over a changed project (the pane live-recompute cadence)', async () => {
+    await runOver(severityFixture());
+    expect(doneRun().diagnostics).toHaveLength(3);
+
+    workspace.activeProject.set(
+      seededProject([entry(0, { comment: 'Clean', keys: ['paris'], content: 'Plain prose.' })]),
+    );
+    state.startHealthRun(SESSION); // the pane's restart effect on the mutation
+    expect(state.healthRun().kind).toBe('running');
+
+    await flushRun();
+    expect(doneRun().diagnostics).toEqual([]);
+  });
+
+  it('a newer run supersedes an in-flight one — stale late steps never overwrite', async () => {
+    // Gated: run A is held mid-flight when the newer run starts.
+    gates = [];
+    activeYield = () => new Promise<void>((resolve) => gates.push(resolve));
+    workspace.activeProject.set(seededProject(severityFixture()));
+    state.startHealthRun(SESSION);
+    await pumpChunk();
+
+    workspace.activeProject.set(
+      seededProject([entry(0, { comment: 'Clean', keys: ['paris'], content: 'Plain prose.' })]),
+    );
+    state.startHealthRun(SESSION);
+    expect(state.healthRun()).toEqual({ kind: 'running', percent: 0 });
+
+    // Drain everything — A's remaining gates and all of B's.
+    await pumpToDone();
+
+    // B's delivered results only: A's late steps never surfaced.
+    const run = doneRun();
+    expect(run.diagnostics).toEqual([]);
+    expect(run.unfilteredRules.size).toBe(0);
+  });
+
+  it('stop abandons the in-flight driver and resets to idle', async () => {
+    gates = [];
+    activeYield = () => new Promise<void>((resolve) => gates.push(resolve));
+    workspace.activeProject.set(seededProject(severityFixture()));
+    state.startHealthRun(SESSION);
+    await pumpChunk();
+    expect(state.healthRun().kind).toBe('running');
+
+    state.stopHealthRun(SESSION); // the pane closed
+    expect(state.healthRun()).toEqual({ kind: 'idle' });
+
+    // The held gate resolves; the abandoned driver exits without stepping or
+    // awaiting again — no background CPU behind the closed pane.
+    await pumpChunk();
+    expect(state.healthRun()).toEqual({ kind: 'idle' });
+    expect(gates).toHaveLength(0);
+
+    // Stopping again is safe: the session is no longer active, nothing lands.
+    state.stopHealthRun(SESSION);
+    expect(state.healthRun()).toEqual({ kind: 'idle' });
+  });
+
+  it('a stale session stop does not land — a stacked pane cannot kill the active run', async () => {
+    gates = [];
+    activeYield = () => new Promise<void>((resolve) => gates.push(resolve));
+    const firstPane: HealthRunSession = {};
+    const secondPane: HealthRunSession = {};
+
+    workspace.activeProject.set(seededProject(severityFixture()));
+    state.startHealthRun(firstPane);
+    state.startHealthRun(secondPane); // a second pane opened — its run is active
+    await pumpChunk();
+
+    state.stopHealthRun(firstPane); // the first pane closes
+    expect(state.healthRun().kind).toBe('running');
+
+    await pumpToDone();
+    expect(doneRun().diagnostics).toHaveLength(3); // the active run completed
+  });
+
+  // --- The badge's graph-free sync path (plan 18 D4, unchanged) ----------------
+
+  it('reports nothing on the badge path without an open project', () => {
+    expect(state.entryDiagnostics()).toEqual([]);
+    expect(state.issueCount()).toBe(0);
+    expect(state.ignoredCount()).toBe(0);
   });
 
   it('counts only errors and warnings for the badge — info never lights it', () => {
@@ -62,7 +290,7 @@ describe('LinterState', () => {
     expect(state.issueCount()).toBe(0);
   });
 
-  it('badge excludes recursion-graph findings the full pass still reports (plan 18 D4)', () => {
+  it('badge excludes recursion-graph findings the run still delivers (plan 18 D4)', async () => {
     // A recursion cycle is a warning — under the old shared pass it counted
     // live; the badge now reads the graph-free entryDiagnostics pass.
     workspace.activeProject.set(
@@ -71,15 +299,17 @@ describe('LinterState', () => {
         entry(1, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
       ]),
     );
+    state.startHealthRun(SESSION);
+    await flushRun();
 
-    // The pane's full pass keeps the graph finding.
-    expect(state.diagnostics().map((d) => d.rule)).toContain('recursion-cycle');
+    // The pane's delivered run keeps the graph finding.
+    expect(doneRun().diagnostics.map((d) => d.rule)).toContain('recursion-cycle');
     // The badge's graph-free pass does not — nothing else in the book is wrong.
     expect(state.entryDiagnostics()).toEqual([]);
     expect(state.issueCount()).toBe(0);
   });
 
-  it('badge pass applies prefs like the full pass — muted/ignored never count', () => {
+  it('badge pass applies prefs like the delivered run — muted/ignored never count', () => {
     workspace.activeProject.set(
       seededProject(severityFixture(), {
         ignoredSignatures: ['invalid-regex|0|/servant(/'],
@@ -91,104 +321,11 @@ describe('LinterState', () => {
     expect(state.issueCount()).toBe(0);
   });
 
-  it('recomputes when the project signal changes', () => {
-    workspace.activeProject.set(seededProject(severityFixture()));
-    const before = state.diagnostics().length;
+  // --- Preferences mutators (the one prefs path, unchanged) --------------------
 
-    workspace.activeProject.set(
-      seededProject([
-        entry(0, { comment: 'Clean', keys: ['paris'], content: 'Something else entirely.' }),
-      ]),
-    );
-    expect(state.diagnostics().length).toBe(0);
-    expect(before).toBe(3);
-  });
-
-  it('applies the project prefs: muted rules and ignored signatures never surface', () => {
-    workspace.activeProject.set(
-      seededProject(severityFixture(), {
-        ignoredSignatures: ['invalid-regex|0|/servant(/'],
-        mutedRules: ['never-activatable'],
-      }),
-    );
-
-    expect(state.diagnostics().map((d) => d.rule)).toEqual(['selective-without-secondary']);
-    // The badge follows the filtered result: muted/ignored issues never count.
-    expect(state.issueCount()).toBe(0);
-  });
-
-  it('exposes the one shared unfiltered pass the filtered views derive from (plan 19 D3)', () => {
-    workspace.activeProject.set(seededProject(severityFixture()));
-
-    expect(state.unfilteredDiagnostics().map((d) => d.rule)).toEqual([
-      'invalid-regex',
-      'never-activatable',
-      'selective-without-secondary',
-    ]);
-    // `unfilteredRules` derives from the same pass — no second lintBook run.
-    expect([...state.unfilteredRules()].sort()).toEqual(
-      [...new Set(state.unfilteredDiagnostics().map((d) => d.rule))].sort(),
-    );
-  });
-
-  it('diagnostics excludes a muted graph finding the shared pass still reports (plan 19 D3)', () => {
-    // A recursion cycle muted by prefs: the old emission-level mute dropped
-    // the finding; the shared pass emits it and `diagnostics` post-filters.
-    workspace.activeProject.set(
-      seededProject(
-        [
-          entry(0, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
-          entry(1, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
-        ],
-        { ignoredSignatures: [], mutedRules: ['recursion-cycle'] },
-      ),
-    );
-
-    // The shared pass keeps the graph finding; the pane's filtered list drops
-    // it; the chip row keeps the rule visible so it can be re-enabled.
-    expect(state.unfilteredDiagnostics().map((d) => d.rule)).toContain('recursion-cycle');
-    expect(state.diagnostics()).toEqual([]);
-    expect(state.unfilteredRules().has('recursion-cycle')).toBe(true);
-    // Badge semantics unchanged (task 18): graph-free pass, nothing counts.
-    expect(state.entryDiagnostics()).toEqual([]);
-    expect(state.issueCount()).toBe(0);
-  });
-
-  it('diagnostics drops ignored signatures from the shared pass, near-misses stay (plan 19 D3)', () => {
-    workspace.activeProject.set(
-      seededProject(severityFixture(), {
-        ignoredSignatures: ['invalid-regex|0|/servant(/'],
-        mutedRules: [],
-      }),
-    );
-
-    expect(state.unfilteredDiagnostics().map((d) => d.rule)).toContain('invalid-regex');
-    expect(state.diagnostics().map((d) => d.rule)).toEqual([
-      'never-activatable',
-      'selective-without-secondary',
-    ]);
-  });
-
-  it('exposes the rules present in an unfiltered pass for the mute-chip row', () => {
-    workspace.activeProject.set(seededProject(severityFixture()));
-
-    const rules = state.unfilteredRules();
-    expect(rules.has('invalid-regex')).toBe(true);
-    expect(rules.has('never-activatable')).toBe(true);
-    expect(rules.has('selective-without-secondary')).toBe(true);
-    // Muted rules stay in the unfiltered set so their chips remain visible.
-    workspace.activeProject.set(
-      seededProject(severityFixture(), {
-        ignoredSignatures: [],
-        mutedRules: ['never-activatable'],
-      }),
-    );
-    expect(state.unfilteredRules().has('never-activatable')).toBe(true);
-  });
-
-  it('ignoreDiagnostic appends the signature through the workspace and drops the row', () => {
-    workspace.activeProject.set(seededProject(severityFixture()));
-    const target = state.diagnostics()[0];
+  it('ignoreDiagnostic appends the signature through the workspace and drops the row', async () => {
+    await runOver(severityFixture());
+    const target = doneRun().diagnostics[0];
     assert(target);
 
     state.ignoreDiagnostic(target);
@@ -197,13 +334,16 @@ describe('LinterState', () => {
       ignoredSignatures: ['invalid-regex|0|/servant(/'],
       mutedRules: [],
     });
-    expect(state.diagnostics().map((d) => d.rule)).not.toContain('invalid-regex');
     expect(state.ignoredCount()).toBe(1);
+    // A fresh run delivers the row gone.
+    state.startHealthRun(SESSION);
+    await flushRun();
+    expect(doneRun().diagnostics.map((d) => d.rule)).not.toContain('invalid-regex');
   });
 
-  it('ignoreDiagnostic is idempotent and writes nothing when already ignored', () => {
-    workspace.activeProject.set(seededProject(severityFixture()));
-    const target = state.diagnostics()[0];
+  it('ignoreDiagnostic is idempotent and writes nothing when already ignored', async () => {
+    await runOver(severityFixture());
+    const target = doneRun().diagnostics[0];
     assert(target);
     state.ignoreDiagnostic(target);
     const projectAfterFirst = workspace.activeProject();
@@ -214,9 +354,9 @@ describe('LinterState', () => {
     expect(workspace.activeProject()?.lintPrefs?.ignoredSignatures).toHaveLength(1);
   });
 
-  it('undoAllIgnored clears ignored signatures and keeps mutes', () => {
-    workspace.activeProject.set(seededProject(severityFixture()));
-    const target = state.diagnostics()[0];
+  it('undoAllIgnored clears ignored signatures and keeps mutes', async () => {
+    await runOver(severityFixture());
+    const target = doneRun().diagnostics[0];
     assert(target);
     state.ignoreDiagnostic(target);
     state.setRuleMuted('recursion-cycle', chipChange(false));
@@ -246,14 +386,17 @@ describe('LinterState', () => {
     });
   });
 
-  it('setRuleMuted maps a user chip selection onto mutedRules', () => {
-    workspace.activeProject.set(seededProject(severityFixture()));
+  it('setRuleMuted maps a user chip selection onto mutedRules', async () => {
+    await runOver(severityFixture());
 
     // Deselected chip = muted.
     state.setRuleMuted('never-activatable', chipChange(false));
     expect(workspace.activeProject()?.lintPrefs?.mutedRules).toEqual(['never-activatable']);
     expect(state.mutedRules().has('never-activatable')).toBe(true);
-    expect(state.diagnostics().map((d) => d.rule)).not.toContain('never-activatable');
+    // A fresh run delivers the muted rule out of the pane's list.
+    state.startHealthRun(SESSION);
+    await flushRun();
+    expect(doneRun().diagnostics.map((d) => d.rule)).not.toContain('never-activatable');
 
     // Re-selected chip = the check runs again.
     state.setRuleMuted('never-activatable', chipChange(true));
@@ -262,7 +405,9 @@ describe('LinterState', () => {
       ignoredSignatures: [],
       mutedRules: [],
     });
-    expect(state.diagnostics().map((d) => d.rule)).toContain('never-activatable');
+    state.startHealthRun(SESSION);
+    await flushRun();
+    expect(doneRun().diagnostics.map((d) => d.rule)).toContain('never-activatable');
   });
 
   it('setRuleMuted writes nothing when the chip state already matches or is not user input', () => {

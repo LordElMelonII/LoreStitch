@@ -1,9 +1,20 @@
 <div class="shell">
+  <!-- The pane renders only from the async health run (plan 19 D4): the
+       loading view shows while the chunked check runs, the delivered results
+       replace it — never a half-populated pane between the two. -->
+  @let run = linter.healthRun();
+
   <header class="header">
     <mat-icon class="pane-icon" aria-hidden="true">health_and_safety</mat-icon>
     <div class="heading">
       <h2 class="pane-title">Health check</h2>
-      <p class="summary" role="status">{{ summary() }}</p>
+      @if (run.kind === 'done') {
+        <p class="summary" role="status">{{ summary() }}</p>
+      } @else {
+        <!-- The status line doubles as the loading copy: same slot, so the
+             pane's live status stays where users (and screen readers) read it. -->
+        <p class="summary" role="status">Checking lorebook health…</p>
+      }
     </div>
     <button
       matIconButton
@@ -17,119 +28,134 @@
     </button>
   </header>
 
-  <div class="body">
-    <!-- Rule mutes (plan 03 §3.6.5.3, amended 2026-09-19): the entry editor's
-         filter-chip pattern — selected (filled + check) = the check runs,
-         deselected (outlined) = muted. The row renders whenever the
-         unfiltered pass has rules, even when every rule is muted and the
-         filtered diagnostics are empty, so an all-muted book keeps its
-         recovery path; the empty state renders below it. -->
-    @if (muteChips().length > 0) {
-      <div class="mute-row">
-        <mat-chip-listbox class="mute-chips" multiple aria-label="Mute checks">
-          @for (chip of muteChips(); track chip.rule) {
-            <mat-chip-option
-              [selected]="!chip.muted"
-              (selectionChange)="linter.setRuleMuted(chip.rule, $event)"
-              [matTooltip]="chip.muted ? 'Restore this check' : 'Mute this check'"
-            >
-              {{ chip.label }}
-            </mat-chip-option>
-          }
-        </mat-chip-listbox>
-      </div>
-    }
-
-    @if (linter.diagnostics().length === 0) {
-      <div class="empty-state">
-        <mat-icon aria-hidden="true">verified</mat-icon>
-        <p>No issues found — lorebook looks healthy.</p>
-      </div>
-    } @else {
-      @for (section of sections(); track section.severity) {
-        <section class="severity-section" [attr.data-severity]="section.severity">
-          <h3 class="section-heading">{{ section.heading }} ({{ section.rows.length }})</h3>
-          <ul class="diagnostic-list">
-            @for (row of section.rows; track $index) {
-              <li class="diagnostic-row">
-                <span class="severity-icon">
-                  <mat-icon aria-hidden="true">{{ section.icon }}</mat-icon>
-                </span>
-                <div class="message-column">
-                  <p class="message">{{ row.diagnostic.message }}</p>
-                  @if (row.diagnostic.details) {
-                    <p class="details">{{ row.diagnostic.details }}</p>
-                  }
-                  @if (row.jumps.length > 0) {
-                    <!-- Multi-entry rows (amended 2026-09-19): one compact
-                         stroked button per entry — unmistakably interactive,
-                         unlike the decorative metadata chips. -->
-                    <div class="chip-row">
-                      @for (jump of row.jumps; track jump.entryId) {
-                        <button
-                          matButton="outlined"
-                          type="button"
-                          class="jump-button"
-                          (click)="goToEntry(jump.entryId)"
-                          [attr.aria-label]="jump.ariaLabel"
-                        >
-                          <!-- One-line label: long titles ellipsize instead of
-                               doubling the button height (the chip rule below);
-                               the full title stays on the aria-label. -->
-                          <span class="jump-title">{{ jump.title }}</span>
-                          <mat-icon aria-hidden="true">north_east</mat-icon>
-                        </button>
-                      }
-                    </div>
-                  } @else if (row.singleTitle !== null) {
-                    <!-- Single-entry rows: the chip is decorative metadata;
-                         the trailing Go-to button carries the action. One line,
-                         ellipsized — [title] reveals the full text on hover,
-                         and the DOM text (the accessible name) stays complete. -->
-                    <div class="chip-row">
-                      <span class="entry-chip" [title]="row.singleTitle">{{ row.singleTitle }}</span>
-                    </div>
-                  }
-                </div>
-                <div class="row-actions">
-                  @if (row.goto; as goto) {
-                    <button
-                      matButton
-                      type="button"
-                      class="goto-button"
-                      (click)="goToEntry(goto.entryId)"
-                      [attr.aria-label]="goto.ariaLabel"
-                    >
-                      Go to entry
-                    </button>
-                  }
-                  <button
-                    matIconButton
-                    type="button"
-                    class="not-an-issue-button"
-                    (click)="linter.ignoreDiagnostic(row.diagnostic)"
-                    matTooltip="Not an issue"
-                    aria-label="Not an issue"
-                  >
-                    <mat-icon aria-hidden="true">do_not_disturb_on</mat-icon>
-                  </button>
-                </div>
-              </li>
+  @if (run.kind === 'done') {
+    <div class="body">
+      <!-- Rule mutes (plan 03 §3.6.5.3, amended 2026-09-19): the entry editor's
+           filter-chip pattern — selected (filled + check) = the check runs,
+           deselected (outlined) = muted. The row renders whenever the
+           unfiltered pass has rules, even when every rule is muted and the
+           filtered diagnostics are empty, so an all-muted book keeps its
+           recovery path; the empty state renders below it. -->
+      @if (muteChips().length > 0) {
+        <div class="mute-row">
+          <mat-chip-listbox class="mute-chips" multiple aria-label="Mute checks">
+            @for (chip of muteChips(); track chip.rule) {
+              <mat-chip-option
+                [selected]="!chip.muted"
+                (selectionChange)="linter.setRuleMuted(chip.rule, $event)"
+                [matTooltip]="chip.muted ? 'Restore this check' : 'Mute this check'"
+              >
+                {{ chip.label }}
+              </mat-chip-option>
             }
-          </ul>
-        </section>
+          </mat-chip-listbox>
+        </div>
       }
-    }
-  </div>
 
-  @if (linter.ignoredCount() > 0) {
-    <footer class="ignored-footer">
-      @if (linter.ignoredCount() === 1) {
-        <span class="ignored-count">1 issue marked not-an-issue</span>
+      @if (run.diagnostics.length === 0) {
+        <div class="empty-state">
+          <mat-icon aria-hidden="true">verified</mat-icon>
+          <p>No issues found — lorebook looks healthy.</p>
+        </div>
       } @else {
-        <span class="ignored-count">{{ linter.ignoredCount() }} issues marked not-an-issue</span>
+        @for (section of sections(); track section.severity) {
+          <section class="severity-section" [attr.data-severity]="section.severity">
+            <h3 class="section-heading">{{ section.heading }} ({{ section.rows.length }})</h3>
+            <ul class="diagnostic-list">
+              @for (row of section.rows; track $index) {
+                <li class="diagnostic-row">
+                  <span class="severity-icon">
+                    <mat-icon aria-hidden="true">{{ section.icon }}</mat-icon>
+                  </span>
+                  <div class="message-column">
+                    <p class="message">{{ row.diagnostic.message }}</p>
+                    @if (row.diagnostic.details) {
+                      <p class="details">{{ row.diagnostic.details }}</p>
+                    }
+                    @if (row.jumps.length > 0) {
+                      <!-- Multi-entry rows (amended 2026-09-19): one compact
+                           stroked button per entry — unmistakably interactive,
+                           unlike the decorative metadata chips. -->
+                      <div class="chip-row">
+                        @for (jump of row.jumps; track jump.entryId) {
+                          <button
+                            matButton="outlined"
+                            type="button"
+                            class="jump-button"
+                            (click)="goToEntry(jump.entryId)"
+                            [attr.aria-label]="jump.ariaLabel"
+                          >
+                            <!-- One-line label: long titles ellipsize instead of
+                                 doubling the button height (the chip rule below);
+                                 the full title stays on the aria-label. -->
+                            <span class="jump-title">{{ jump.title }}</span>
+                            <mat-icon aria-hidden="true">north_east</mat-icon>
+                          </button>
+                        }
+                      </div>
+                    } @else if (row.singleTitle !== null) {
+                      <!-- Single-entry rows: the chip is decorative metadata;
+                           the trailing Go-to button carries the action. One line,
+                           ellipsized — [title] reveals the full text on hover,
+                           and the DOM text (the accessible name) stays complete. -->
+                      <div class="chip-row">
+                        <span class="entry-chip" [title]="row.singleTitle">{{
+                          row.singleTitle
+                        }}</span>
+                      </div>
+                    }
+                  </div>
+                  <div class="row-actions">
+                    @if (row.goto; as goto) {
+                      <button
+                        matButton
+                        type="button"
+                        class="goto-button"
+                        (click)="goToEntry(goto.entryId)"
+                        [attr.aria-label]="goto.ariaLabel"
+                      >
+                        Go to entry
+                      </button>
+                    }
+                    <button
+                      matIconButton
+                      type="button"
+                      class="not-an-issue-button"
+                      (click)="linter.ignoreDiagnostic(row.diagnostic)"
+                      matTooltip="Not an issue"
+                      aria-label="Not an issue"
+                    >
+                      <mat-icon aria-hidden="true">do_not_disturb_on</mat-icon>
+                    </button>
+                  </div>
+                </li>
+              }
+            </ul>
+          </section>
+        }
       }
-      <button matButton type="button" (click)="linter.undoAllIgnored()">Undo all</button>
-    </footer>
+    </div>
+
+    @if (linter.ignoredCount() > 0) {
+      <footer class="ignored-footer">
+        @if (linter.ignoredCount() === 1) {
+          <span class="ignored-count">1 issue marked not-an-issue</span>
+        } @else {
+          <span class="ignored-count">{{ linter.ignoredCount() }} issues marked not-an-issue</span>
+        }
+        <button matButton type="button" (click)="linter.undoAllIgnored()">Undo all</button>
+      </footer>
+    }
+  } @else {
+    <!-- Loading view (plan 19 D4): the determinate bar is the body's only
+         content — the copy rides the header's status line above. Identical in
+         the desktop dialog and the phone bottom sheet (same component). -->
+    <div class="body body-loading">
+      <mat-progress-bar
+        class="checking-bar"
+        [value]="checkingPercent()"
+        aria-label="Checking lorebook health"
+      />
+    </div>
   }
 </div>

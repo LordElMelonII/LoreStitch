@@ -245,6 +245,20 @@
 }
 
 // ---------------------------------------------------------------------------
+// Loading state (plan 19 D4): one determinate bar, vertically centered —
+// the copy rides the header's status line, so the loading view spends its
+// emphasis in exactly one place. The min height keeps the open from
+// collapsing the pane before the results replace it.
+// ---------------------------------------------------------------------------
+
+.body-loading {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 220px;
+}
+
+// ---------------------------------------------------------------------------
 // Empty state (§3.6.4): one centered block, no filler, no button
 // ---------------------------------------------------------------------------
 

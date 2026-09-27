@@ -1,14 +1,22 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+} from '@angular/core';
 import { MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { entryTitle } from '../../core/models/lorebook.model';
 import { LintDiagnostic, LintRuleId, LintSeverity } from '../../core/services/linter';
 import { WorkspaceService } from '../../core/services/workspace.service';
-import { LinterState } from './linter-state';
+import { DoneHealthRun, LinterState } from './linter-state';
 
 /** Humanized mute-chip labels (plan 03 §3.6.5.3) — exhaustive per rule id. */
 const RULE_LABELS: Record<LintRuleId, string> = {
@@ -80,15 +88,18 @@ interface MuteChip {
  * Lorebook health check pane (plan 03 §3.6.2/§3.6.4): centered dialog on
  * tablet/desktop, bottom sheet on phones — the same component inside whichever
  * container `ResponsiveOverlayService` chose, so both refs are optional and
- * dismissal goes to the live one (the About exemplar). The pane renders
- * `LinterState.diagnostics` live: there is no refresh control, the re-run is
- * automatic whenever the project signal changes. The linter only diagnoses —
- * rows offer jump (and the §3.6.5 not-an-issue/mute affordances), never "Fix".
+ * dismissal goes to the live one (the About exemplar). The pane renders the
+ * async health run (`LinterState.healthRun`) live: opening it shows a
+ * determinate progress bar while the chunked check runs (plan 19 D4 — the
+ * loading view is identical in both containers), and the delivered results
+ * replace it; there is no refresh control, the re-run is automatic whenever
+ * the project signal changes. The linter only diagnoses — rows offer jump
+ * (and the §3.6.5 not-an-issue/mute affordances), never "Fix".
  */
 @Component({
   selector: 'app-linter-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatChipsModule, MatIconModule, MatTooltipModule],
+  imports: [MatButtonModule, MatChipsModule, MatIconModule, MatProgressBarModule, MatTooltipModule],
   templateUrl: './linter-dialog.html',
   styleUrl: './linter-dialog.scss',
 })
@@ -99,15 +110,47 @@ export class LinterDialog {
   protected readonly linter = inject(LinterState);
   private readonly workspace = inject(WorkspaceService);
 
+  constructor() {
+    // The pane owns a run session: the effect below starts it on open (and on
+    // every project mutation while open); this hook stops it on close so no
+    // driver keeps stepping behind a dismissed pane (plan 19 D4).
+    inject(DestroyRef).onDestroy(() => this.linter.stopHealthRun(this));
+  }
+
+  /**
+   * The health run's lifecycle driver (plan 19 D4): tracks the project signal
+   * (read inside `startHealthRun`), so it fires once when the pane opens and
+   * re-fires on every project mutation while open — each firing starts a
+   * fresh chunked run that supersedes any in-flight one. Writing the run
+   * signal is the effect's whole job; the effect itself dies with the pane's
+   * view, and the DestroyRef hook above stops the in-flight driver on close.
+   */
+  private readonly runLifecycle = effect(() => this.linter.startHealthRun(this));
+
+  /** The run's delivered results — null while idle/running (nothing renders). */
+  private readonly results = computed<DoneHealthRun | null>(() => {
+    const run = this.linter.healthRun();
+    return run.kind === 'done' ? run : null;
+  });
+
+  /** The determinate bar's value while the check runs (0 before the first chunk). */
+  protected readonly checkingPercent = computed(() => {
+    const run = this.linter.healthRun();
+    return run.kind === 'running' ? run.percent : 0;
+  });
+
   /** Sections in the fixed Errors → Warnings → Notes order; empty ones absent. */
   protected readonly sections = computed<readonly LintSection[]>(() => {
-    const diagnostics = this.linter.diagnostics();
+    const results = this.results();
+    if (!results) {
+      return [];
+    }
     return (['error', 'warning', 'info'] as const)
       .map((severity) => ({
         severity,
         heading: SEVERITY_HEADINGS[severity],
         icon: SEVERITY_ICONS[severity],
-        rows: diagnostics
+        rows: results.diagnostics
           .filter((diagnostic) => diagnostic.severity === severity)
           .map((diagnostic) => this.rowOf(diagnostic)),
       }))
@@ -116,7 +159,11 @@ export class LinterDialog {
 
   /** `N errors · N warnings · N notes` — pluralized, all three counts always shown. */
   protected readonly summary = computed(() => {
-    const diagnostics = this.linter.diagnostics();
+    const results = this.results();
+    if (!results) {
+      return '';
+    }
+    const diagnostics = results.diagnostics;
     const count = (severity: LintSeverity) =>
       diagnostics.filter((diagnostic) => diagnostic.severity === severity).length;
     const errors = count('error');
@@ -128,13 +175,17 @@ export class LinterDialog {
   });
 
   /**
-   * One chip per rule present in the unfiltered pass (§3.6.5.3), muted ones
-   * included so they can be re-enabled. Order follows the pass itself
+   * One chip per rule present in the run's unfiltered pass (§3.6.5.3), muted
+   * ones included so they can be re-enabled. Order follows the pass itself
    * (severity → entry order), deterministic for the same book.
    */
   protected readonly muteChips = computed<readonly MuteChip[]>(() => {
+    const results = this.results();
+    if (!results) {
+      return [];
+    }
     const muted = this.linter.mutedRules();
-    return [...this.linter.unfilteredRules()].map((rule) => ({
+    return [...results.unfilteredRules].map((rule) => ({
       rule,
       label: RULE_LABELS[rule],
       muted: muted.has(rule),
