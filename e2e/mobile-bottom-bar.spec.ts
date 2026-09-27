@@ -152,9 +152,21 @@ test.describe('mobile bottom action bar (phones)', () => {
       if (!barBox) {
         throw new Error('bottom bar host not rendered');
       }
-      return { panelBottom: panelBox.bottom, barTop: barBox.top };
+      return { panelBottom: panelBox.bottom, barTop: barBox.top, panelTop: panelBox.top };
     });
     expect(edges.panelBottom).toBeLessThanOrEqual(edges.barTop + 2);
+
+    // The capped panel must stay fully inside the viewport (1px subpixel
+    // tolerance): fitted viewports put it ~8px below the top, clamped ones
+    // flush at 0.
+    expect(edges.panelTop).toBeGreaterThanOrEqual(-1);
+
+    // The height cap scrolls the overflow INTERNALLY — the last row must stay
+    // reachable (this is what the cap trades for keeping the opens-upward
+    // contract on short viewports).
+    const lastRow = panel.locator('.menu-title', { hasText: 'Character card (JSON)' });
+    await lastRow.scrollIntoViewIfNeeded();
+    await expect(lastRow).toBeVisible();
 
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();

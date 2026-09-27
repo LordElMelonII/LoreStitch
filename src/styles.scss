@@ -331,6 +331,17 @@ app-about-dialog .about-tabs .mat-mdc-tab-body-content {
 }
 
 .mat-mdc-menu-panel.export-menu {
+  // Short viewports (e.g. the 664px-tall mobile-safari layout viewport) cannot
+  // fit this ~640px panel between the topbar and the docked 65px bottom bar —
+  // CDK would push the panel down over the bar, breaking the opens-upward
+  // contract the export-menu e2e pins. The cap keeps the panel inside the
+  // viewport on both surfaces sharing this class (the phone bar menu opens
+  // upward from the bar, the topbar menu downward from the 56px topbar); the
+  // panel ships `overflow: auto`, so the clamp scrolls internally. The env
+  // term mirrors the bottom bar's own safe-area recipe.
+  max-height: calc(100vh - 72px);
+  max-height: calc(100dvh - 72px - env(safe-area-inset-bottom, 0px));
+
   .mat-mdc-menu-item {
     height: auto;
     min-height: 48px;
