@@ -49,15 +49,16 @@
 
   .toolbar-content {
     // The pill keeps mat-toolbar's container surface — written out here so
-    // the choice reads as chosen, not forgotten (Material's defaults are
-    // these same tokens today). User decision 2026-09-27: the pill must read
-    // as a distinct object resting on the recessed well, so the docked
-    // actions stay visible at a glance; `surface` against the filled field's
-    // `surface-container-highest` is the widest neutral gap in both themes.
-    // The pill stays neutral deliberately — the focus toggle inside carries
-    // this surface's one emphasis (its secondary-container active state),
-    // which a filled emphasis pill would swallow.
-    --mat-toolbar-container-background-color: var(--mat-sys-surface);
+    // the choice reads as chosen, not forgotten. User decision 2026-09-27:
+    // the pill must read as a distinct object resting on the recessed well,
+    // so the docked actions stay visible at a glance — but `surface`'s
+    // near-black weight read heavier than the pill needs in dark mode, so
+    // the fill sits one rung in, on `surface-container` (the same
+    // docked-action surface tone the mobile bottom bar paints). The pill
+    // stays neutral deliberately — the focus toggle inside carries this
+    // surface's one emphasis (its secondary-container active state), which
+    // a filled emphasis pill would swallow.
+    --mat-toolbar-container-background-color: var(--mat-sys-surface-container);
     --mat-toolbar-container-text-color: var(--mat-sys-on-surface);
 
     display: flex;
