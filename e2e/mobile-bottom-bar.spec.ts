@@ -156,9 +156,9 @@ test.describe('mobile bottom action bar (phones)', () => {
     });
     expect(edges.panelBottom).toBeLessThanOrEqual(edges.barTop + 2);
 
-    // The capped panel must stay fully inside the viewport (1px subpixel
-    // tolerance): fitted viewports put it ~8px below the top, clamped ones
-    // flush at 0.
+    // The capped panel must stay fully inside the viewport: clamped
+    // viewports put the top ~8px down (the 72px cap offset less the ~65px
+    // bar), fitted ones far lower — the -1 is pure subpixel slack.
     expect(edges.panelTop).toBeGreaterThanOrEqual(-1);
 
     // The height cap scrolls the overflow INTERNALLY — the last row must stay
