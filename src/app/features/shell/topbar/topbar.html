@@ -94,23 +94,18 @@
       </mat-icon>
     </button>
 
-    @if (isDesktop()) {
-      <button
-        matIconButton
-        type="button"
-        class="focus-toggle"
-        [class.toggle-active]="layout.focusMode()"
-        (click)="layout.toggleFocusMode()"
-        [matTooltip]="
-          layout.focusMode()
-            ? 'Exit focus mode — restore full editor width'
-            : 'Focus mode — narrow the editor for easier reading'
-        "
-        [attr.aria-pressed]="layout.focusMode()"
-        aria-label="Toggle focus mode"
-      >
-        <mat-icon>center_focus_strong</mat-icon>
-      </button>
+    <button
+      matIconButton
+      type="button"
+      [matMenuTriggerFor]="moreMenu"
+      matTooltip="More actions"
+      aria-label="More actions menu"
+    >
+      <mat-icon>more_vert</mat-icon>
+    </button>
+
+    @if (!isMobile()) {
+      <mat-divider [vertical]="true"></mat-divider>
     }
 
     <button
@@ -122,16 +117,6 @@
       aria-label="Export menu"
     >
       <mat-icon>file_download</mat-icon>
-    </button>
-
-    <button
-      matIconButton
-      type="button"
-      [matMenuTriggerFor]="moreMenu"
-      matTooltip="More actions"
-      aria-label="More actions menu"
-    >
-      <mat-icon>more_vert</mat-icon>
     </button>
   }
   <mat-menu #exportMenu="matMenu" class="export-menu">
@@ -290,35 +275,6 @@
     </button>
   </mat-menu>
 
-  <!-- Always rendered: theme must be reachable from the welcome screen,
-       before any project exists (it used to be buried in the project-gated
-       More actions menu). With a project open, phones collapse it into the
-       More actions menu instead (the bar cannot fit another 48px action). -->
-  <button
-    matIconButton
-    type="button"
-    [matMenuTriggerFor]="themeMenu"
-    matTooltip="Theme"
-    aria-label="Theme menu"
-    [class.mobile-hidden]="workspace.activeProject()"
-  >
-    <mat-icon>brightness_auto</mat-icon>
-  </button>
-
-  <!-- Always rendered: version/build info must be verifiable on the welcome
-       screen too (e.g. to check a PWA updated to the latest release). With a
-       project open, phones collapse it into the More actions menu instead. -->
-  <button
-    matIconButton
-    type="button"
-    (click)="openAbout()"
-    matTooltip="About LoreStitch"
-    aria-label="About LoreStitch"
-    [class.mobile-hidden]="workspace.activeProject()"
-  >
-    <mat-icon>info</mat-icon>
-  </button>
-
   <button
     matIconButton
     type="button"
@@ -380,13 +336,53 @@
     }
   </mat-menu>
 
+  @if (!isMobile()) {
+    <mat-divider [vertical]="true"></mat-divider>
+  }
+
+  <!-- Theme lives on the bar at every width; the vertical dividers frame the
+       app-level group. Theme must be reachable from the welcome screen,
+       before any project exists (it used to be buried in the project-gated
+       More actions menu); with a project open, phones collapse it into the
+       More actions menu instead (the bar cannot fit another 48px action).
+       About is standalone ONLY while no project exists (the same parking
+       spot as the GitHub link below) so the welcome screen keeps version
+       info one tap away without cluttering the bar for the whole session —
+       once a project is open, the universal More-menu entry is its home. -->
+  <button
+    matIconButton
+    type="button"
+    [matMenuTriggerFor]="themeMenu"
+    matTooltip="Theme"
+    aria-label="Theme menu"
+    [class.mobile-hidden]="workspace.activeProject()"
+  >
+    <mat-icon>brightness_auto</mat-icon>
+  </button>
+
+  @if (!workspace.activeProject()) {
+    <button
+      matIconButton
+      type="button"
+      (click)="openAbout()"
+      matTooltip="About LoreStitch"
+      aria-label="About LoreStitch"
+    >
+      <mat-icon>info</mat-icon>
+    </button>
+  }
+
+  @if (!isMobile()) {
+    <mat-divider [vertical]="true"></mat-divider>
+  }
+
   <!-- Phones reach history through the mobile bottom bar's History item
        (app-mobile-bottom-bar, which carries the same unsaved-changes badge),
        so the topbar button is not rendered at all below the shell's mobile
        breakpoint — tablets and desktops keep it. Removal (not display:none)
        keeps exactly one "Toggle history drawer" control in the DOM at any
        width, the contract the responsive e2e suite relies on. -->
-  @if (workspace.activeProject() && !layout.isMobile()) {
+  @if (workspace.activeProject() && !isMobile()) {
     <button
       matIconButton
       type="button"

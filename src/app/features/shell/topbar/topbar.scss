@@ -16,6 +16,11 @@
   // hardcoded divider glyphs.
   padding-inline: 8px 12px;
 
+  mat-divider.mat-divider-vertical {
+    height: 24px;
+    align-self: center;
+  }
+
   .brand {
     display: flex;
     align-items: center;
@@ -85,13 +90,6 @@
     align-items: center;
     flex: none;
     color: var(--mat-sys-error);
-  }
-
-  // Two-state toolbar buttons (focus mode): a tonal pill while active, per
-  // the M3 "selected icon button" treatment.
-  .toggle-active {
-    background: var(--mat-sys-secondary-container);
-    color: var(--mat-sys-on-secondary-container);
   }
 
   // Shell-mobile (< 768px — keep in sync with the queries in

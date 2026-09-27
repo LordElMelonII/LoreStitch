@@ -82,6 +82,8 @@ html {
     )
   );
   @include mat.system-classes();
+
+  --mat-sys-corner-extra-extra-large: 32px;
 }
 
 html.theme-dark {
@@ -97,6 +99,13 @@ html.theme-dark {
       density: 0,
     )
   );
+
+  // The theme() mixin re-emits the full system token set on this
+  // higher-specificity selector, which would silently revert the shape
+  // override below to the M3 default in the dark scheme only. Both schemes
+  // must carry the override for the consumers (entry-content-field's
+  // .toolbar-content pill) to keep one shape across themes.
+  --mat-sys-corner-extra-extra-large: 32px;
 }
 
 body {

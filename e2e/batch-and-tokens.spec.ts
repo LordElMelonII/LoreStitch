@@ -22,9 +22,26 @@ test.describe('batch operations, token meter & split export', () => {
 
     const meter = page.locator('[aria-label*="Always active token footprint"]');
     await expect(meter).toBeVisible();
-    // The Fate lorebook carries four enabled constant entries, so the meter
-    // shows a non-zero estimate.
-    await expect(meter).toContainText('~');
+
+    // Desktop AND tablet render the labeled pill with the estimate on its
+    // face (the user checkpoint amendment pinned >= 768px to the pill).
+    // Phones below the shell's mobile breakpoint get the icon-only circle
+    // and the visible count is gone — the footprint stays exposed through
+    // the stable aria-label and the inspector the click opens (the tooltip
+    // also carries the estimate, but on touch-capable projects Material
+    // shows it on long-press only — touchGestures 'auto' — which is
+    // device-OS territory, not a stable automation pin; the tooltip wording
+    // is unit-pinned in topbar.spec instead). The three Playwright projects
+    // span only >= 1280 and < 768, so the width check below separates the
+    // two variants exactly.
+    if ((page.viewportSize()?.width ?? 0) >= 768) {
+      // The Fate lorebook carries four enabled constant entries, so the
+      // meter shows a non-zero estimate.
+      await expect(meter).toContainText('~');
+    } else {
+      await expect(meter).toHaveAttribute('aria-label', /Always active token footprint/);
+      await expect(meter).not.toContainText('~');
+    }
 
     await meter.click();
     const inspector = page.getByRole('heading', { name: 'Always Active Token Footprint' });
@@ -105,8 +122,12 @@ test.describe('batch operations, token meter & split export', () => {
     await expect(formatSelect).toBeVisible();
     await formatSelect.click();
     const listbox = page.getByRole('listbox', { name: 'Export file format' });
-    await expect(listbox.getByText('Direct import into SillyTavern’s World Info panel')).toBeVisible();
-    await expect(listbox.getByText('Spec format for character cards & third-party tools')).toBeVisible();
+    await expect(
+      listbox.getByText('Direct import into SillyTavern’s World Info panel'),
+    ).toBeVisible();
+    await expect(
+      listbox.getByText('Spec format for character cards & third-party tools'),
+    ).toBeVisible();
     await page.getByRole('option', { name: /SillyTavern World Info/ }).click();
 
     await expect(page.getByRole('button', { name: 'Export 2 entries' })).toBeEnabled();

@@ -1,20 +1,23 @@
 import {
   DESKTOP_BREAKPOINT_QUERY,
   MOBILE_BREAKPOINT_QUERY,
+  TABLET_BREAKPOINT_QUERY,
 } from '../app/shared/constants/breakpoints';
 
 /**
- * jsdom has no matchMedia; install a stub whose desktop/mobile answers can be
- * flipped mid-test (the CDK observer reacts to change events, exactly like a
- * browser).
+ * jsdom has no matchMedia; install a stub whose desktop/tablet/mobile
+ * answers can be flipped mid-test (the CDK observer reacts to change events,
+ * exactly like a browser).
  */
 export function installMatchMediaStub(): {
   setDesktop: (matches: boolean) => void;
+  setTablet: (matches: boolean) => void;
   setMobile: (matches: boolean) => void;
 } {
   const state = new Map<string, boolean>([
     [DESKTOP_BREAKPOINT_QUERY, false],
     [MOBILE_BREAKPOINT_QUERY, false],
+    [TABLET_BREAKPOINT_QUERY, false],
   ]);
   /** Listeners keyed by the query they observe: flips notify each with its own answer. */
   const listeners = new Map<string, Set<(event: { matches: boolean }) => void>>();
@@ -49,6 +52,7 @@ export function installMatchMediaStub(): {
   };
   return {
     setDesktop: (matches) => setQuery(DESKTOP_BREAKPOINT_QUERY, matches),
+    setTablet: (matches) => setQuery(TABLET_BREAKPOINT_QUERY, matches),
     setMobile: (matches) => setQuery(MOBILE_BREAKPOINT_QUERY, matches),
   };
 }

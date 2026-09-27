@@ -38,7 +38,7 @@ import { TokenMeter } from './token-meter';
 export class Topbar {
   protected readonly workspace = inject(WorkspaceService);
   protected readonly theme = inject(ThemeService);
-  protected readonly layout = inject(LayoutService);
+  protected readonly isMobile = inject(LayoutService).isMobile;
   protected readonly actions = inject(ProjectActionsService);
   protected readonly linter = inject(LinterState);
   private readonly dialog = inject(MatDialog);
@@ -47,13 +47,6 @@ export class Topbar {
   /** Drawer toggles, handled by the shell that owns the sidenav layout. */
   readonly toggleEntries = output<void>();
   readonly toggleHistory = output<void>();
-
-  /**
-   * Focus mode exists only where the constrained width has room to center
-   * in: desktop viewports. The toggle button is hidden below 1280px. Owned
-   * by `LayoutService` (the single source of viewport truth).
-   */
-  protected readonly isDesktop = this.layout.isDesktop;
 
   protected readonly projectName = computed(
     () => this.workspace.activeProject()?.title ?? 'LoreStitch',

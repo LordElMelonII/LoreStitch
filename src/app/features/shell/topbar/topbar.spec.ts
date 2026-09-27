@@ -9,7 +9,6 @@ import { createEmptyEntry } from '../../../core/models/lorebook.model';
 import { ProjectWorkspace } from '../../../core/models/project.model';
 import { StorageService } from '../../../core/services/storage.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
-import { LayoutService } from '../../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
 import { LinterDialog } from '../../linter/linter-dialog';
 import { ProjectActionsService } from '../project-actions.service';
@@ -24,7 +23,11 @@ describe('Topbar', () => {
   let workspace: WorkspaceService;
   let dialogOpen: ReturnType<typeof vi.fn>;
   let overlayOpen: ReturnType<typeof vi.fn>;
-  let desktop: { setDesktop: (matches: boolean) => void; setMobile: (matches: boolean) => void };
+  let desktop: {
+    setDesktop: (matches: boolean) => void;
+    setTablet: (matches: boolean) => void;
+    setMobile: (matches: boolean) => void;
+  };
   let fixture: import('@angular/core/testing').ComponentFixture<Topbar>;
 
   async function createTopbar(): Promise<Topbar> {
@@ -322,57 +325,27 @@ describe('Topbar', () => {
     expect(options.data.activeEntryId).toBe(0);
   });
 
-  it('shows the focus toggle only on desktop viewports', async () => {
-    await workspace.createProject('Fuyuki');
-    await createTopbar();
-    // LayoutService classifies a window where no query has answered yet as
-    // desktop, so pin an explicit phone viewport before asserting the
-    // toggle is hidden below the desktop class.
-    desktop.setMobile(true);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[aria-label="Toggle focus mode"]')).toBeNull();
-
-    desktop.setMobile(false);
-    desktop.setDesktop(true);
-    // The CDK observer throttles breakpoint emissions (auditTime).
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    fixture.detectChanges();
-    const toggle = fixture.nativeElement.querySelector('[aria-label="Toggle focus mode"]');
-    expect(toggle).toBeTruthy();
-
-    // Toggling flips the shared layout state and the pressed marker.
-    toggle?.dispatchEvent(new Event('click'));
-    fixture.detectChanges();
-    const layout = TestBed.inject(LayoutService);
-    expect(layout.focusMode()).toBe(true);
-    expect(
-      fixture.nativeElement
-        .querySelector('[aria-label="Toggle focus mode"]')
-        ?.getAttribute('aria-pressed'),
-    ).toBe('true');
-  });
-
   it('collapses the app-level buttons into the More menu on phones with a project', async () => {
     await createTopbar();
     fixture.detectChanges();
-    // Welcome screen: no More menu exists, so both stay standalone on every
-    // viewport.
-    for (const label of ['About LoreStitch', 'Theme menu']) {
-      const button = fixture.nativeElement.querySelector(`[aria-label="${label}"]`);
-      expect(button).toBeTruthy();
-      expect(button?.classList.contains('mobile-hidden')).toBe(false);
-    }
+    // Welcome screen: no More menu exists, so the theme button stays
+    // standalone on every viewport and About is parked next to it (the
+    // GitHub-link parking spot).
+    const theme = () => fixture.nativeElement.querySelector('[aria-label="Theme menu"]');
+    expect(theme()).toBeTruthy();
+    expect(theme()?.classList.contains('mobile-hidden')).toBe(false);
+    expect(fixture.nativeElement.querySelector('[aria-label="About LoreStitch"]')).toBeTruthy();
 
     await workspace.createProject('Fuyuki');
     fixture.detectChanges();
-    // With a project the More menu exists: phones reach both through it, so
-    // the standalone buttons carry the phone-hiding class.
-    for (const label of ['About LoreStitch', 'Theme menu']) {
-      const button = fixture.nativeElement.querySelector(`[aria-label="${label}"]`);
-      expect(button).toBeTruthy();
-      expect(button?.classList.contains('mobile-hidden')).toBe(true);
-    }
+    // With a project the More menu exists: phones reach the theme through
+    // it (the button carries the phone-hiding class), and About is REMOVED
+    // from the bar entirely (removal, not display:none — the universal
+    // More-menu entry is its home from then on; exactly one About control
+    // per state, like the history-drawer contract).
+    expect(theme()).toBeTruthy();
+    expect(theme()?.classList.contains('mobile-hidden')).toBe(true);
+    expect(fixture.nativeElement.querySelector('[aria-label="About LoreStitch"]')).toBeNull();
   });
 
   it('routes the About pane through the responsive overlay', async () => {
@@ -519,6 +492,11 @@ describe('Topbar', () => {
 describe('TokenMeter', () => {
   let workspace: WorkspaceService;
   let dialogOpen: ReturnType<typeof vi.fn>;
+  let desktop: {
+    setDesktop: (matches: boolean) => void;
+    setTablet: (matches: boolean) => void;
+    setMobile: (matches: boolean) => void;
+  };
 
   function constantEntry(
     id: number,
@@ -528,6 +506,7 @@ describe('TokenMeter', () => {
   }
 
   beforeEach(async () => {
+    desktop = installMatchMediaStub();
     dialogOpen = vi.fn();
     TestBed.configureTestingModule({
       imports: [TokenMeter],
@@ -542,11 +521,97 @@ describe('TokenMeter', () => {
     await fixture.whenStable();
 
     expect(fixture.nativeElement.querySelector('.token-meter')).toBeNull();
+    // The shared tooltip degrades to an empty string without a footprint.
+    expect(fixture.componentInstance['tooltip']()).toBe('');
   });
 
   // The meter's footprint arithmetic, over-budget marking and budget-segment
   // tooltip are pinned by token-estimator.spec and token-inspector-dialog.spec;
-  // only the topbar-composition wiring stays here.
+  // the topbar-composition wiring and the two battery variants stay here.
+
+  it('renders the labeled pill with the progressive budget tiers on desktop', async () => {
+    // ~20 tokens across two constants against a 23 budget: ~87% used — the
+    // near-budget tier, not yet over. No query has answered, so LayoutService
+    // classifies the window as desktop and the pill renders.
+    workspace.activeProject.set(
+      projectOf([constantEntry(0, 'a'.repeat(40)), constantEntry(1, 'b'.repeat(40))], {
+        id: 'meter-project',
+        title: 'Meter',
+        tokenBudget: 23,
+      }),
+    );
+    const fixture = TestBed.createComponent(TokenMeter);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const meter = fixture.nativeElement.querySelector('.token-meter-pill');
+    expect(meter).toBeTruthy();
+    expect(meter?.classList.contains('has-budget')).toBe(true);
+    expect(meter?.classList.contains('near-budget')).toBe(true);
+    expect(meter?.classList.contains('over-budget')).toBe(false);
+    const fill = fixture.componentInstance['fillPercentage']();
+    expect(fill).toBeGreaterThan(85);
+    expect(fill).toBeLessThan(100);
+
+    // A book without a budget renders a quiet pill: no track, no fill.
+    workspace.activeProject.set(
+      projectOf([constantEntry(0, 'a'.repeat(40))], { id: 'meter-project', title: 'Meter' }),
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const quiet = fixture.nativeElement.querySelector('.token-meter-pill');
+    expect(quiet?.classList.contains('has-budget')).toBe(false);
+    expect(fixture.componentInstance['fillPercentage']()).toBe(0);
+  });
+
+  it('collapses to the icon-only circle on phones only, keeping the footprint exposed', async () => {
+    workspace.activeProject.set(
+      projectOf([constantEntry(0, 'a'.repeat(40)), constantEntry(1, 'b'.repeat(40))], {
+        id: 'meter-project',
+        title: 'Meter',
+        tokenBudget: 15,
+      }),
+    );
+    // Phone class first: the circle replaces the pill and the visible count
+    // is gone — the footprint surfaces through the shared tooltip and the
+    // stable aria-label (the locator contract the e2e pins).
+    desktop.setMobile(true);
+    const fixture = TestBed.createComponent(TokenMeter);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const circle = fixture.nativeElement.querySelector('.token-meter-icon');
+    expect(circle).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.token-meter-pill')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.meter-label')).toBeNull();
+    expect(circle?.classList.contains('has-budget')).toBe(true);
+    expect(circle?.classList.contains('over-budget')).toBe(true);
+    expect(circle?.getAttribute('aria-label')).toContain('Always active token footprint');
+    expect(fixture.componentInstance['tooltip']()).toContain('over budget');
+
+    // The circle keeps the pill's click contract: it opens the inspector.
+    circle?.dispatchEvent(new Event('click'));
+    await vi.waitFor(() => expect(dialogOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
+
+    // Back on desktop the labeled pill returns...
+    desktop.setMobile(false);
+    desktop.setDesktop(true);
+    // The CDK observer throttles breakpoint emissions (auditTime).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.token-meter-pill')).toBeTruthy();
+
+    // ...and the user checkpoint amendment pins the tablet band (768-1279)
+    // to the labeled pill too: only phones get the circle.
+    desktop.setDesktop(false);
+    desktop.setTablet(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fixture.detectChanges();
+    const pill = fixture.nativeElement.querySelector('.token-meter-pill');
+    expect(pill).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.token-meter-icon')).toBeNull();
+    expect(pill?.querySelector('.meter-label')?.textContent).toContain('~');
+  });
 
   it('opens the token inspector on click', async () => {
     // Two ~10-token constant entries against a 15 budget: the meter renders
@@ -566,6 +631,7 @@ describe('TokenMeter', () => {
     const meter = fixture.nativeElement.querySelector('.token-meter');
     expect(meter).toBeTruthy();
     expect(meter?.textContent).toContain('~');
+    expect(meter?.className).toContain('has-budget');
     expect(meter?.className).toContain('over-budget');
     expect(fixture.nativeElement.querySelectorAll('.warn-icon').length).toBeGreaterThan(0);
     expect(fixture.componentInstance['tooltip']()).toContain('over budget');
