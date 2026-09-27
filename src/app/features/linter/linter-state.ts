@@ -11,10 +11,17 @@ import { WorkspaceService } from '../../core/services/workspace.service';
 
 /**
  * One shared reactive source for the lorebook health linter (plan 03 §3.3,
- * §3.6.5.4): the topbar badge and the health check pane both read the same
- * memoized diagnostic pass, so they can never disagree about the book's
- * health. Root-provided and consumed cross-feature exactly like
- * `ProjectActionsService`.
+ * §3.6.5.4). Since plan 18 (D3/D4) the badge and the pane no longer share one
+ * pass: the topbar badge reads `entryDiagnostics` — the entry-scoped rules
+ * plus the cheap duplicate-key buckets, with the O(V²) recursion graph
+ * excluded through `lintBook`'s `includeGraphRules: false` — while the health
+ * pane reads `diagnostics`, the full pass including the graph rules. The
+ * split is sound because Angular computeds are lazy: the graph pass only
+ * computes while the pane is open, and the pane overlays the editor, so
+ * there is no simultaneous-typing worst case in practice (plan 18 §3). The
+ * two passes also share the per-entry rule work through `entry-memo.ts`'s
+ * identity-keyed WeakMaps, so the pane's full pass reuses the badge's
+ * entry-scoped results.
  *
  * Recompute cadence matches the `TokenMeter` precedent — a full-book pure
  * pass per project signal mutation; `lintBook` is deterministic and
@@ -34,9 +41,11 @@ export class LinterState {
   private readonly workspace = inject(WorkspaceService);
 
   /**
-   * Single memoized lint pass shared by the topbar badge and the dialog:
-   * `lintBook` with the project's ignored signatures and muted rules applied
-   * (§3.6.5.4). Empty without an open project.
+   * The full lint pass — `lintBook` with the project's ignored signatures and
+   * muted rules applied (§3.6.5.4), including the recursion-graph rules.
+   * Pane-only reader (the pane overlay covers the editor while open);
+   * recursion-cycle/self-trigger findings surface here. Empty without an
+   * open project.
    */
   readonly diagnostics = computed<readonly LintDiagnostic[]>(() => {
     const project = this.workspace.activeProject();
@@ -50,9 +59,35 @@ export class LinterState {
     });
   });
 
-  /** errors + warnings — drives the badge; info never counts. Muted and ignored issues are already absent from `diagnostics`, so they never light the badge either. */
+  /**
+   * The badge's graph-free lint pass — same prefs shape as `diagnostics` plus
+   * `includeGraphRules: false` (plan 18 D4): entry-scoped rules and the
+   * cheap duplicate-key buckets, without the O(V²) recursion graph. The
+   * approved badge-semantics change (2026-09-27): recursion-cycle and
+   * self-trigger findings no longer count live; they appear when the health
+   * pane opens (`diagnostics`).
+   */
+  readonly entryDiagnostics = computed<readonly LintDiagnostic[]>(() => {
+    const project = this.workspace.activeProject();
+    if (!project) {
+      return [];
+    }
+    const prefs = project.lintPrefs;
+    return lintBook(project.activeBook, {
+      ignored: new Set(prefs?.ignoredSignatures ?? []),
+      mutedRules: new Set(prefs?.mutedRules ?? []),
+      includeGraphRules: false,
+    });
+  });
+
+  /**
+   * errors + warnings — drives the badge; info never counts. Read from the
+   * graph-free `entryDiagnostics` pass, so muted and ignored issues never
+   * light it, and recursion-graph findings no longer count live either (see
+   * `entryDiagnostics`).
+   */
   readonly issueCount = computed(
-    () => this.diagnostics().filter((diagnostic) => diagnostic.severity !== 'info').length,
+    () => this.entryDiagnostics().filter((diagnostic) => diagnostic.severity !== 'info').length,
   );
 
   /** The rules the author muted, as a set for O(1) chip-state lookups. */

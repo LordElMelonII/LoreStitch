@@ -3,6 +3,7 @@ import type {
   CharacterBookEntry,
 } from '../models/lorebook.model';
 import { entryTitle, entryTriggerState } from '../models/lorebook.model';
+import { memoEntryTokens } from './entry-memo';
 
 /**
  * Token estimation utilities.
@@ -12,6 +13,13 @@ import { entryTitle, entryTriggerState } from '../models/lorebook.model';
  * dependency-free estimate to spot context blowouts before a chat starts.
  * These functions are pure and deterministic so they are safe inside
  * `computed()` signal graphs and unit-testable in isolation.
+ *
+ * This module and `entry-memo.ts` import each other at the function level
+ * (this module's `estimateTokens` is wrapped by its `memoEntryTokens`, which
+ * `computeTokenFootprint` below consumes; `entry-memo` imports
+ * `estimateTokens` here): benign under ESM live bindings because neither
+ * module calls the other during module evaluation, and there is no
+ * import/no-cycle lint rule in this repo (verified).
  */
 
 /**
@@ -99,7 +107,9 @@ export function computeTokenFootprint(book: CharacterBook): TokenFootprint {
     items.push({
       entryId: entry.id ?? index,
       title: entryTitle(entry),
-      tokens: estimateEntryTokens(entry),
+      // Memoized per entry identity (plan 18 D2) — the topbar recomputes this
+      // per project mutation, so untouched entries must be memo hits.
+      tokens: memoEntryTokens(entry),
     });
   });
   items.sort((a, b) => b.tokens - a.tokens);

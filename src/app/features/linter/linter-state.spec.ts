@@ -61,6 +61,35 @@ describe('LinterState', () => {
     expect(state.issueCount()).toBe(0);
   });
 
+  it('badge excludes recursion-graph findings the full pass still reports (plan 18 D4)', () => {
+    // A recursion cycle is a warning — under the old shared pass it counted
+    // live; the badge now reads the graph-free entryDiagnostics pass.
+    workspace.activeProject.set(
+      seededProject([
+        entry(0, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
+        entry(1, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
+      ]),
+    );
+
+    // The pane's full pass keeps the graph finding.
+    expect(state.diagnostics().map((d) => d.rule)).toContain('recursion-cycle');
+    // The badge's graph-free pass does not — nothing else in the book is wrong.
+    expect(state.entryDiagnostics()).toEqual([]);
+    expect(state.issueCount()).toBe(0);
+  });
+
+  it('badge pass applies prefs like the full pass — muted/ignored never count', () => {
+    workspace.activeProject.set(
+      seededProject(severityFixture(), {
+        ignoredSignatures: ['invalid-regex|0|/servant(/'],
+        mutedRules: ['never-activatable'],
+      }),
+    );
+
+    expect(state.entryDiagnostics().map((d) => d.rule)).toEqual(['selective-without-secondary']);
+    expect(state.issueCount()).toBe(0);
+  });
+
   it('recomputes when the project signal changes', () => {
     workspace.activeProject.set(seededProject(severityFixture()));
     const before = state.diagnostics().length;

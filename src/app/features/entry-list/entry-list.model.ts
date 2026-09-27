@@ -22,35 +22,13 @@ export interface EntryListItem {
 }
 
 /**
- * Pre-folds an entry's searchable text into one lowercase haystack:
- * `[title, ...keys, ...tags, content]` joined on `'\n'` and lowercased once
- * per entry change, so the per-keystroke filter scan becomes a
- * zero-allocation `includes` instead of re-lowercasing every field —
- * including a fresh copy of the full `content` — for each keystroke
- * (Task 07: search responsiveness).
- *
- * Equivalence with the previous per-field checks (`title || keys || tags ||
- * content`, each `toLowerCase().includes(query)`): the sidebar filter reads
- * its query from a single-line text input, and the WHATWG input
- * sanitization algorithm strips newlines from single-line values, so a
- * query can never contain the `'\n'` separator — every query the old scan
- * matched lies wholly inside one field of the join, and no cross-field
- * query can appear.
- *
- * Memory trade: the joined copy roughly doubles the text held for the open
- * book (one extra content-sized string per entry). Documented fallback if
- * that bites on enormous books: per-item memoized folding keyed on entry
- * identity — deliberately not built now
- * (next_tasks/07-search-responsiveness.md §7.2).
+ * Re-export only: the fold primitive itself moved to
+ * `core/services/entry-memo.ts` (plan 18 D2) — core must not import from
+ * features, so the implementation lives core-side next to the per-entry
+ * memoization (`memoEntryHaystack`) that now composes it. Behavior and
+ * export surface are unchanged for every import site.
  */
-export function entrySearchHaystack(
-  title: string,
-  keys: readonly string[],
-  tags: readonly string[],
-  content: string,
-): string {
-  return [title, ...keys, ...tags, content].join('\n').toLowerCase();
-}
+export { entrySearchHaystack } from '../../core/services/entry-memo';
 
 /**
  * Case-insensitive containment over a pre-folded haystack. `query` must

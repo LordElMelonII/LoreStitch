@@ -1077,4 +1077,78 @@ describe('linter', () => {
       expect(singleOf(diagnostics, 'invalid-regex').entryIds).toEqual([42]);
     });
   });
+
+  describe('option: includeGraphRules (plan 18 D3)', () => {
+    it('skips the graph findings but keeps the key rules when false', () => {
+      const book = makeBook([
+        makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
+        makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
+        makeEntry(3),
+      ]);
+      const full = lintBook(book);
+      expect(ruleOf(full, 'recursion-cycle')).toHaveLength(1);
+      const graphFree = lintBook(book, { includeGraphRules: false });
+      expect(ruleOf(graphFree, 'recursion-cycle')).toHaveLength(0);
+      expect(ruleOf(graphFree, 'self-trigger')).toHaveLength(0);
+      // The cheap key rules still run in the graph-free pass.
+      expect(ruleOf(graphFree, 'never-activatable')).toHaveLength(1);
+    });
+
+    it('also skips the book-level large-book skip note when false', () => {
+      // The filler is disabled, so without the skip note nothing emits.
+      const diagnostics = lintBook(makeLargeBook(LARGE_BOOK_THRESHOLD + 1), {
+        includeGraphRules: false,
+      });
+      expect(diagnostics).toHaveLength(0);
+    });
+
+    it('defaults to including the graph rules — lintBook(book) and lintBook(book, {})', () => {
+      const book = makeBook([
+        makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'alpha knows alpha' }),
+      ]);
+      expect(ruleOf(lintBook(book), 'self-trigger')).toHaveLength(1);
+      expect(ruleOf(lintBook(book, {}), 'self-trigger')).toHaveLength(1);
+    });
+  });
+
+  describe('per-entry memoization (plan 18 D2)', () => {
+    it('is deep-equal on the memoized path: repeated runs and fresh entry identities', () => {
+      const book = deepFreeze(
+        makeBook([
+          makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
+          makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
+          makeEntry(3, { keys: ['/bad[/i'] }),
+          makeEntry(4, { comment: 'Paris', keys: ['k'], content: '<Paris>\nlore' }),
+          makeEntry(5, { keys: ['rose'] }),
+          makeEntry(6, { keys: ['rose'] }),
+        ]),
+      );
+      const first = lintBook(book);
+      expect(first.length).toBeGreaterThan(0);
+
+      // Repeat on the same objects — every id-carrying entry is a memo hit.
+      expect(lintBook(book)).toEqual(first);
+
+      // Same logical book, fresh identities for every entry (and the book):
+      // the memo must recompute, never stale — output stays deep-equal.
+      const rebuilt = makeBook(book.entries.map((entry) => ({ ...entry })));
+      expect(lintBook(rebuilt)).toEqual(first);
+    });
+
+    it('bypasses the memo for id-less entries: index-based ids that a reorder swaps', () => {
+      const entryA = { ...makeEntry(1, { keys: ['/a[/i'] }), id: undefined };
+      const entryB = { ...makeEntry(2, { keys: ['/b[/i'] }), id: undefined };
+
+      const forward = lintBook(makeBook([entryA, entryB]));
+      expect(ruleOf(forward, 'invalid-regex').map((d) => d.entryIds)).toEqual([[0], [1]]);
+      expect(ruleOf(forward, 'invalid-regex').map((d) => d.details)).toEqual(['/a[/i', '/b[/i']);
+
+      // Reordering the SAME entry objects (identity-stable — the dangerous
+      // case for a memo) must swap the ids: each entry takes the id of its
+      // new position. Only possible because id-less entries never cache.
+      const reversed = lintBook(makeBook([entryB, entryA]));
+      expect(ruleOf(reversed, 'invalid-regex').map((d) => d.entryIds)).toEqual([[0], [1]]);
+      expect(ruleOf(reversed, 'invalid-regex').map((d) => d.details)).toEqual(['/b[/i', '/a[/i']);
+    });
+  });
 });

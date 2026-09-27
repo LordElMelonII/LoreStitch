@@ -58,6 +58,18 @@ function canonicalJson(value: unknown): unknown {
 const canonicalSerializations = new WeakMap<object, string>();
 
 /**
+ * Memo of book-shell serializations, keyed by the book object identity (plan
+ * 18 D5). `isDirty` compares the books' shells — every book-level field with
+ * `entries` emptied — instead of re-serializing whole books per keystroke.
+ * The shell object is rebuilt fresh per call, so the memo must key on the
+ * book itself; a shell keyed in `canonicalSerializations` would never
+ * WeakMap-hit. Same identity-keyed contract as `canonicalSerializations`
+ * above: correct only under the app-wide immutable-update invariant, no
+ * clear/invalidate API, observably pure.
+ */
+const bookShellSerializations = new WeakMap<object, string>();
+
+/**
  * Commit engine for lorebooks. Commits are content-addressed: the id is the
  * SHA-256 of the parent id plus the serialized book, so identical states
  * produce identical hashes. Each commit stores a full `CharacterBook`
@@ -153,13 +165,54 @@ export class VcsService {
     return this.serialize(book);
   }
 
-  /** True when the working tree differs from HEAD's snapshot. */
+  /**
+   * Serializes the book's shell — every book-level field with `entries`
+   * emptied. The spread preserves unknown book-level vendor keys (lossless).
+   * Memoized by book identity (see `bookShellSerializations`): a fresh shell
+   * object per call would never hit `canonicalSerializations`' WeakMap.
+   */
+  private shellSerialization(book: CharacterBook): string {
+    let serialized = bookShellSerializations.get(book);
+    if (serialized === undefined) {
+      serialized = this.serialize({ ...book, entries: [] });
+      bookShellSerializations.set(book, serialized);
+    }
+    return serialized;
+  }
+
+  /**
+   * True when the working tree differs from HEAD's snapshot.
+   *
+   * Decomposed positionally (plan 18 D5) instead of serializing the whole
+   * books: `canonicalJson` preserves array order and recursively sorts object
+   * keys with the same serializer applied part-wise as whole, so the
+   * decomposition is exact — whole-book string equality ⇔ shell equality ∧
+   * same entry count ∧ positional entry equality. The positional compare
+   * catches entry reorders (which `dirtyEntryIds`' id-matched comparison is
+   * silent on), book-field patches, adds and deletes. Both `serialize` and
+   * `shellSerialization` are identity-memoized, so after first sight
+   * untouched entries and unchanged shells are memo hits and the pass is a
+   * pair of O(V) cheap walks.
+   */
   isDirty(project: ProjectWorkspace): boolean {
     const head = this.headCommit(project);
     if (!head) {
       return true;
     }
-    return this.serializeBook(project.activeBook) !== this.serializeBook(head.snapshot);
+    const workEntries = project.activeBook.entries;
+    const headEntries = head.snapshot.entries;
+    if (workEntries.length !== headEntries.length) {
+      return true;
+    }
+    if (this.shellSerialization(project.activeBook) !== this.shellSerialization(head.snapshot)) {
+      return true;
+    }
+    for (let i = 0; i < workEntries.length; i += 1) {
+      if (this.serialize(workEntries[i]) !== this.serialize(headEntries[i])) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

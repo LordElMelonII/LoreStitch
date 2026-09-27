@@ -80,6 +80,62 @@ describe('WorkspaceService', () => {
     expect(rolled.commits[2].message).toContain('Revert to');
   });
 
+  // The add-entry and delete-entry dirty cases are pinned by the two tests
+  // above; this block pins the positional-isDirty decomposition (plan 18 D5)
+  // that the whole-book serialization used to cover implicitly.
+  describe('hasUnsavedChanges decomposition (plan 18 D5)', () => {
+    it('catches a reorder-only change that dirtyEntryIds is silent on', async () => {
+      await workspace.createProject('Fuyuki', 'standalone_lorebook');
+      const first = workspace.addEntry();
+      const second = workspace.addEntry();
+      workspace.updateEntry(first, { content: 'first' });
+      workspace.updateEntry(second, { content: 'second' });
+      await workspace.commit('two entries');
+      expect(workspace.hasUnsavedChanges()).toBe(false);
+
+      // Swap the two entries' positions without touching their values: the
+      // same entry objects in a different order.
+      workspace.activeProject.update((p) => {
+        if (!p) return p;
+        const entries = [...p.activeBook.entries].reverse();
+        return { ...p, activeBook: { ...p.activeBook, entries } };
+      });
+
+      // The positional compare catches the reorder; the id-matched
+      // `dirtyEntryIds` is silent on it (identical values per id) — exactly
+      // the documented gap the shell+count+positional decomposition closes.
+      expect(workspace.hasUnsavedChanges()).toBe(true);
+      expect(workspace.dirtyEntryIds().size).toBe(0);
+    });
+
+    it('catches a book-field-only patch through updateBook', async () => {
+      await workspace.createProject('Fuyuki', 'standalone_lorebook');
+      workspace.addEntry();
+      await workspace.commit('entry');
+      expect(workspace.hasUnsavedChanges()).toBe(false);
+
+      // A book-level field change with no entry change at all: only the
+      // shell (the book minus its entries) differs from HEAD.
+      workspace.updateBook({ token_budget: 4096 });
+
+      expect(workspace.hasUnsavedChanges()).toBe(true);
+      expect(workspace.dirtyEntryIds().size).toBe(0);
+    });
+
+    it('stays clean when a new project reference is book-identical', async () => {
+      await workspace.createProject('Fuyuki', 'standalone_lorebook');
+      workspace.addEntry();
+      await workspace.commit('entry');
+      expect(workspace.hasUnsavedChanges()).toBe(false);
+
+      // A mutation outside the book (metadata only): same activeBook
+      // reference, so the shell and every positional compare are memo hits.
+      workspace.activeProject.update((p) => (p ? { ...p, updatedAt: p.updatedAt + 1 } : p));
+
+      expect(workspace.hasUnsavedChanges()).toBe(false);
+    });
+  });
+
   it('duplicates entries with fresh ids after the current maximum', async () => {
     await workspace.createProject('Fuyuki', 'standalone_lorebook');
     workspace.activeProject.update((p) => {
