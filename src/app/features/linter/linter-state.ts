@@ -11,17 +11,24 @@ import { WorkspaceService } from '../../core/services/workspace.service';
 
 /**
  * One shared reactive source for the lorebook health linter (plan 03 §3.3,
- * §3.6.5.4). Since plan 18 (D3/D4) the badge and the pane no longer share one
- * pass: the topbar badge reads `entryDiagnostics` — the entry-scoped rules
- * plus the cheap duplicate-key buckets, with the O(V²) recursion graph
- * excluded through `lintBook`'s `includeGraphRules: false` — while the health
- * pane reads `diagnostics`, the full pass including the graph rules. The
- * split is sound because Angular computeds are lazy: the graph pass only
- * computes while the pane is open, and the pane overlays the editor, so
- * there is no simultaneous-typing worst case in practice (plan 18 §3). The
- * two passes also share the per-entry rule work through `entry-memo.ts`'s
- * identity-keyed WeakMaps, so the pane's full pass reuses the badge's
- * entry-scoped results.
+ * §3.6.5.4). Since plan 18 (D3/D4) the topbar badge runs its own graph-free
+ * pass (`entryDiagnostics`): the entry-scoped rules plus the cheap
+ * duplicate-key buckets, with the O(V²) recursion graph excluded through
+ * `lintBook`'s `includeGraphRules: false`. The badge stays cheap per
+ * keystroke, and Angular computeds are lazy, so the graph work only happens
+ * while the pane needs it.
+ *
+ * Since plan 19 (D3) the pane's two full passes collapsed into ONE shared
+ * pass: `unfilteredDiagnostics` runs `lintBook` once over the active book,
+ * and `diagnostics` (the pane's filtered list) plus `unfilteredRules` (the
+ * mute-chip membership) derive from it by pure post-filtering —
+ * byte-identical to the old prefs-shaped calls, because muting/ignoring are
+ * emission-level skips and post-filtering a deterministically sorted list
+ * preserves the survivors' order (the sort is a total order: severity →
+ * firstIndex → unique seq). A muted graph rule no longer short-circuits the
+ * shared pass, but plan 19 D2 memoizes the graph's pair verdicts and target
+ * key plans by entry identity, so repeat passes over an unchanged book are
+ * near-free of real match work — the dominant case (pane open repeatedly).
  *
  * Recompute cadence matches the `TokenMeter` precedent — a full-book pure
  * pass per project signal mutation; `lintBook` is deterministic and
@@ -41,11 +48,24 @@ export class LinterState {
   private readonly workspace = inject(WorkspaceService);
 
   /**
-   * The full lint pass — `lintBook` with the project's ignored signatures and
-   * muted rules applied (§3.6.5.4), including the recursion-graph rules.
-   * Pane-only reader (the pane overlay covers the editor while open);
-   * recursion-cycle/self-trigger findings surface here. Empty without an
-   * open project.
+   * The one shared full lint pass over the open project's book (plan 19 D3)
+   * — `lintBook` with NO prefs applied, recursion-graph rules included.
+   * Every prefs-sensitive view below derives from this single computed;
+   * empty without an open project.
+   */
+  readonly unfilteredDiagnostics = computed<readonly LintDiagnostic[]>(() => {
+    const project = this.workspace.activeProject();
+    if (!project) {
+      return [];
+    }
+    return lintBook(project.activeBook);
+  });
+
+  /**
+   * The pane's filtered list — the shared pass post-filtered by the author's
+   * prefs (plan 19 D3): muted rules and ignored signatures drop here instead
+   * of at emission. Byte-identical to the old prefs-shaped `lintBook` call
+   * (see the class doc); empty without an open project.
    */
   readonly diagnostics = computed<readonly LintDiagnostic[]>(() => {
     const project = this.workspace.activeProject();
@@ -53,10 +73,12 @@ export class LinterState {
       return [];
     }
     const prefs = project.lintPrefs;
-    return lintBook(project.activeBook, {
-      ignored: new Set(prefs?.ignoredSignatures ?? []),
-      mutedRules: new Set(prefs?.mutedRules ?? []),
-    });
+    const muted = new Set(prefs?.mutedRules ?? []);
+    const ignored = new Set(prefs?.ignoredSignatures ?? []);
+    return this.unfilteredDiagnostics().filter(
+      (diagnostic) =>
+        !muted.has(diagnostic.rule) && !ignored.has(lintDiagnosticSignature(diagnostic)),
+    );
   });
 
   /**
@@ -101,17 +123,14 @@ export class LinterState {
   );
 
   /**
-   * Rule ids present in an unfiltered pass over the same book (§3.6.5.3) —
+   * Rule ids present in the shared unfiltered pass (§3.6.5.3, plan 19 D3) —
    * the mute-chip row's membership source, so muted rules stay visible as
    * muted chips and can be re-enabled. Read only while the pane is open (the
-   * badge never reads it), and pure like `diagnostics`.
+   * badge never reads it); derives from `unfilteredDiagnostics` — no second
+   * pass.
    */
   readonly unfilteredRules = computed<ReadonlySet<LintRuleId>>(() => {
-    const book = this.workspace.activeProject()?.activeBook;
-    if (!book) {
-      return new Set<LintRuleId>();
-    }
-    return new Set(lintBook(book).map((diagnostic) => diagnostic.rule));
+    return new Set(this.unfilteredDiagnostics().map((diagnostic) => diagnostic.rule));
   });
 
   /**
@@ -169,9 +188,7 @@ export class LinterState {
       }
       return {
         ignoredSignatures: prefs?.ignoredSignatures ?? [],
-        mutedRules: change.selected
-          ? muted.filter((rule) => rule !== ruleId)
-          : [...muted, ruleId],
+        mutedRules: change.selected ? muted.filter((rule) => rule !== ruleId) : [...muted, ruleId],
       };
     });
   }

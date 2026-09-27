@@ -34,6 +34,7 @@ describe('LinterState', () => {
 
   it('reports no diagnostics without an open project', () => {
     expect(state.diagnostics()).toEqual([]);
+    expect(state.unfilteredDiagnostics()).toEqual([]);
     expect(state.issueCount()).toBe(0);
     expect(state.unfilteredRules().size).toBe(0);
     expect(state.ignoredCount()).toBe(0);
@@ -114,6 +115,58 @@ describe('LinterState', () => {
     expect(state.diagnostics().map((d) => d.rule)).toEqual(['selective-without-secondary']);
     // The badge follows the filtered result: muted/ignored issues never count.
     expect(state.issueCount()).toBe(0);
+  });
+
+  it('exposes the one shared unfiltered pass the filtered views derive from (plan 19 D3)', () => {
+    workspace.activeProject.set(seededProject(severityFixture()));
+
+    expect(state.unfilteredDiagnostics().map((d) => d.rule)).toEqual([
+      'invalid-regex',
+      'never-activatable',
+      'selective-without-secondary',
+    ]);
+    // `unfilteredRules` derives from the same pass — no second lintBook run.
+    expect([...state.unfilteredRules()].sort()).toEqual(
+      [...new Set(state.unfilteredDiagnostics().map((d) => d.rule))].sort(),
+    );
+  });
+
+  it('diagnostics excludes a muted graph finding the shared pass still reports (plan 19 D3)', () => {
+    // A recursion cycle muted by prefs: the old emission-level mute dropped
+    // the finding; the shared pass emits it and `diagnostics` post-filters.
+    workspace.activeProject.set(
+      seededProject(
+        [
+          entry(0, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
+          entry(1, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
+        ],
+        { ignoredSignatures: [], mutedRules: ['recursion-cycle'] },
+      ),
+    );
+
+    // The shared pass keeps the graph finding; the pane's filtered list drops
+    // it; the chip row keeps the rule visible so it can be re-enabled.
+    expect(state.unfilteredDiagnostics().map((d) => d.rule)).toContain('recursion-cycle');
+    expect(state.diagnostics()).toEqual([]);
+    expect(state.unfilteredRules().has('recursion-cycle')).toBe(true);
+    // Badge semantics unchanged (task 18): graph-free pass, nothing counts.
+    expect(state.entryDiagnostics()).toEqual([]);
+    expect(state.issueCount()).toBe(0);
+  });
+
+  it('diagnostics drops ignored signatures from the shared pass, near-misses stay (plan 19 D3)', () => {
+    workspace.activeProject.set(
+      seededProject(severityFixture(), {
+        ignoredSignatures: ['invalid-regex|0|/servant(/'],
+        mutedRules: [],
+      }),
+    );
+
+    expect(state.unfilteredDiagnostics().map((d) => d.rule)).toContain('invalid-regex');
+    expect(state.diagnostics().map((d) => d.rule)).toEqual([
+      'never-activatable',
+      'selective-without-secondary',
+    ]);
   });
 
   it('exposes the rules present in an unfiltered pass for the mute-chip row', () => {

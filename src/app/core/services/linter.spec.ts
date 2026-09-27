@@ -1,9 +1,14 @@
 import {
   LARGE_BOOK_THRESHOLD,
+  createLintPass,
   lintBook,
+  lintBookChunked,
   lintDiagnosticSignature,
+  type LintChunkConfig,
   type LintDiagnostic,
   type LintOptions,
+  type LintPhase,
+  type LintProgress,
   type LintRuleId,
 } from './linter';
 import type { CharacterBook, CharacterBookEntry } from '../models/lorebook.model';
@@ -1149,6 +1154,290 @@ describe('linter', () => {
       const reversed = lintBook(makeBook([entryB, entryA]));
       expect(ruleOf(reversed, 'invalid-regex').map((d) => d.entryIds)).toEqual([[0], [1]]);
       expect(ruleOf(reversed, 'invalid-regex').map((d) => d.details)).toEqual(['/b[/i', '/a[/i']);
+    });
+  });
+
+  // ==========================================================================
+  // Chunked pass engine & pair memos (plan 19 D1/D2)
+  // ==========================================================================
+
+  describe('chunked pass engine (plan 19 D1)', () => {
+    /** Immediate scheduler — deterministic chunk boundaries for tests. */
+    const IMMEDIATE_YIELD = async (): Promise<void> => undefined;
+
+    /** The pathological cadence: a chunk boundary between every unit. */
+    const PATHOLOGICAL: LintChunkConfig = {
+      entriesPerStep: 1,
+      sourcesPerStep: 1,
+      yieldBetween: IMMEDIATE_YIELD,
+    };
+
+    /**
+     * A fixture exercising every phase and most rules: two recursion cycles,
+     * a self-trigger, an invalid regex, a malformed wrapper, duplicate keys,
+     * ignored secondary keys, selective-without-secondary and
+     * never-activatable entries (including a disabled one — the defect ships
+     * anyway).
+     */
+    function makeVarietyBook(): CharacterBook {
+      return makeBook([
+        makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
+        makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
+        makeEntry(3, { comment: 'Gamma', keys: ['gamma'], content: 'the delta sets' }),
+        makeEntry(4, { comment: 'Delta', keys: ['delta'], content: 'the gamma sets' }),
+        makeEntry(5, { keys: ['/bad[/i'] }),
+        makeEntry(6, { comment: 'Paris', keys: ['k'], content: '<Paris>\nlore' }),
+        makeEntry(7, { keys: ['rose'] }),
+        makeEntry(8, { keys: ['rose'] }),
+        makeEntry(9, { secondary_keys: ['s'] }),
+        makeEntry(10, { selective: true }),
+        makeEntry(11, { comment: 'Self', keys: ['self'], content: 'self knows self' }),
+        makeEntry(12, { keys: [], content: '', enabled: false }),
+      ]);
+    }
+
+    const CADENCES: readonly { name: string; config: LintChunkConfig }[] = [
+      { name: 'defaults (setTimeout scheduler)', config: {} },
+      { name: 'pathological 1 entry / 1 source per chunk', config: PATHOLOGICAL },
+      {
+        name: 'mixed small chunks',
+        config: { entriesPerStep: 2, sourcesPerStep: 3, yieldBetween: IMMEDIATE_YIELD },
+      },
+    ];
+
+    /** Option shapes over the variety book; the `ignored` side subsets the plain run. */
+    function makeOptionShapes(book: CharacterBook): { name: string; options: LintOptions }[] {
+      const plain = lintBook(book);
+      return [
+        { name: 'no options', options: {} },
+        {
+          name: 'ignored signatures',
+          options: {
+            ignored: new Set(plain.filter((_, i) => i % 3 === 0).map(lintDiagnosticSignature)),
+          },
+        },
+        {
+          name: 'muted entry-scoped rule',
+          options: { mutedRules: new Set<LintRuleId>(['invalid-regex']) },
+        },
+        {
+          name: 'muted self-trigger (graph still runs)',
+          options: { mutedRules: new Set<LintRuleId>(['self-trigger']) },
+        },
+        {
+          name: 'muted recursion-cycle (graph still runs)',
+          options: { mutedRules: new Set<LintRuleId>(['recursion-cycle']) },
+        },
+        { name: 'graph-free', options: { includeGraphRules: false } },
+      ];
+    }
+
+    it('produces lintBook-identical diagnostics for every cadence across option shapes', async () => {
+      const book = makeVarietyBook();
+      for (const shape of makeOptionShapes(book)) {
+        const expected = lintBook(book, shape.options);
+        for (const cadence of CADENCES) {
+          const chunked = await lintBookChunked(book, shape.options, cadence.config);
+          expect(chunked, `${cadence.name} / ${shape.name}`).toEqual(expected);
+        }
+      }
+    });
+
+    it('is byte-identical to lintBook (JSON serialization) at every cadence', async () => {
+      const book = makeVarietyBook();
+      const expected = JSON.stringify(lintBook(book));
+      for (const cadence of CADENCES) {
+        const chunked = await lintBookChunked(book, undefined, cadence.config);
+        expect(JSON.stringify(chunked), cadence.name).toBe(expected);
+      }
+    });
+
+    it('applies the >1500-entry skip identically to lintBook in both drivers', async () => {
+      const book = makeLargeBook(LARGE_BOOK_THRESHOLD + 1);
+      const expected = lintBook(book);
+      expect(expected).toHaveLength(1); // the skip note alone
+      for (const cadence of CADENCES) {
+        const chunked = await lintBookChunked(book, undefined, cadence.config);
+        expect(chunked, cadence.name).toEqual(expected);
+      }
+    });
+
+    it('keeps a deep-frozen book untouched through the chunked path', async () => {
+      const book = deepFreeze(makeVarietyBook());
+      const before = JSON.stringify(book);
+
+      const chunked = await lintBookChunked(book, undefined, PATHOLOGICAL);
+
+      expect(JSON.stringify(book)).toBe(before);
+      expect(Object.isFrozen(book)).toBe(true);
+      expect(chunked).toEqual(lintBook(book));
+    });
+
+    describe('createLintPass driver', () => {
+      it('reports phase-by-phase progress and finishes with the sync output', () => {
+        const book = makeVarietyBook(); // 12 entries → graph phase total 13
+        const pass = createLintPass(book, undefined, { entriesPerStep: 1, sourcesPerStep: 1 });
+        const snapshots: LintProgress[] = [];
+        for (;;) {
+          const complete = pass.step();
+          snapshots.push(pass.progress());
+          if (complete) {
+            break;
+          }
+        }
+
+        const phases = snapshots.map((snapshot) => snapshot.phase);
+        const firstOf = (phase: LintPhase): number => phases.indexOf(phase);
+        // Phases appear in emission order, each contiguous.
+        expect(firstOf('entry-rules')).toBeGreaterThanOrEqual(0);
+        expect(firstOf('duplicate-keys')).toBeGreaterThan(firstOf('entry-rules'));
+        expect(firstOf('recursion-graph')).toBeGreaterThan(firstOf('duplicate-keys'));
+        expect(new Set(phases.slice(0, firstOf('duplicate-keys'))).size).toBe(1);
+        expect(
+          new Set(phases.slice(firstOf('duplicate-keys'), firstOf('recursion-graph'))).size,
+        ).toBe(1);
+
+        // Entry-rules totals are the entry count; duplicate-keys is one unit.
+        const entrySnapshots = snapshots.filter((snapshot) => snapshot.phase === 'entry-rules');
+        expect(entrySnapshots[0]?.total).toBe(12);
+        expect(entrySnapshots.at(-1)).toEqual({ phase: 'entry-rules', done: 12, total: 12 });
+        const duplicateSnapshots = snapshots.filter(
+          (snapshot) => snapshot.phase === 'duplicate-keys',
+        );
+        expect(duplicateSnapshots.at(-1)).toEqual({ phase: 'duplicate-keys', done: 1, total: 1 });
+
+        // Graph phase: one unit per source plus the one-unit Tarjan tail.
+        const graphSnapshots = snapshots.filter((snapshot) => snapshot.phase === 'recursion-graph');
+        expect(graphSnapshots[0]?.total).toBe(13);
+        const graphDones = graphSnapshots.map((snapshot) => snapshot.done);
+        expect(graphDones.every((done, i) => i === 0 || done >= (graphDones[i - 1] ?? 0))).toBe(
+          true,
+        );
+        expect(graphSnapshots.at(-1)).toEqual({ phase: 'recursion-graph', done: 13, total: 13 });
+
+        expect(pass.finish()).toEqual(lintBook(book));
+      });
+
+      it('throws on finish() before completion and works after', () => {
+        const book = makeVarietyBook();
+        const pass = createLintPass(book, undefined, { entriesPerStep: 1, sourcesPerStep: 1 });
+        expect(() => pass.finish()).toThrow();
+
+        while (!pass.step()) {
+          // Drive to completion.
+        }
+        expect(pass.finish()).toEqual(lintBook(book));
+      });
+
+      it('completes the >1500-entry skip as a one-unit graph phase', () => {
+        const book = makeLargeBook(LARGE_BOOK_THRESHOLD + 1);
+        const pass = createLintPass(book, undefined, {
+          entriesPerStep: LARGE_BOOK_THRESHOLD + 1,
+          sourcesPerStep: LARGE_BOOK_THRESHOLD + 1,
+        });
+        const graphProgress: LintProgress[] = [];
+        for (;;) {
+          const complete = pass.step();
+          const snapshot = pass.progress();
+          if (snapshot.phase === 'recursion-graph') {
+            graphProgress.push(snapshot);
+          }
+          if (complete) {
+            break;
+          }
+        }
+
+        // No pair loop exists above the threshold: phase-complete immediately.
+        expect(graphProgress[0]?.total).toBe(1);
+        expect(graphProgress.at(-1)).toEqual({ phase: 'recursion-graph', done: 1, total: 1 });
+        expect(pass.finish()).toEqual(lintBook(book));
+      });
+    });
+  });
+
+  describe('pair verdict memos (plan 19 D2)', () => {
+    /**
+     * The staleness proof shape: warm the memos with one book, then change
+     * ONE entry (new identity — the app's immutable-update invariant) and
+     * compare against a cold run of the edited book (every entry
+     * re-identitied, so every pair recomputes). Equality proves stale
+     * verdicts cannot leak; asserted via outputs, never memo internals.
+     */
+    function coldCopyOf(book: CharacterBook): CharacterBook {
+      return makeBook(book.entries.map((entry) => ({ ...entry })));
+    }
+
+    it('recomputes pairs involving a changed entry — results equal a from-scratch run', () => {
+      const alpha = makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' });
+      const beta = makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' });
+      const warm = makeBook([alpha, beta]);
+      expect(ruleOf(lintBook(warm), 'recursion-cycle')).toHaveLength(1); // warms verdicts
+
+      const edited = makeBook([alpha, { ...beta, content: 'nothing relevant' }]);
+      expect(ruleOf(lintBook(edited), 'recursion-cycle')).toHaveLength(0);
+      expect(lintBook(edited)).toEqual(lintBook(coldCopyOf(edited)));
+    });
+
+    it('recomputes null verdicts too: an edit can create a cycle', () => {
+      const alpha = makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' });
+      const quietBeta = makeEntry(2, {
+        comment: 'Beta',
+        keys: ['beta'],
+        content: 'nothing relevant',
+      });
+      const warm = makeBook([alpha, quietBeta]);
+      expect(ruleOf(lintBook(warm), 'recursion-cycle')).toHaveLength(0); // warms null verdicts
+
+      const activated = makeBook([alpha, { ...quietBeta, content: 'the alpha falls' }]);
+      expect(ruleOf(lintBook(activated), 'recursion-cycle')).toHaveLength(1);
+      expect(lintBook(activated)).toEqual(lintBook(coldCopyOf(activated)));
+    });
+
+    it('recomputes target-side edits: changed keys invalidate plan and verdicts', () => {
+      const alpha = makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' });
+      const beta = makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' });
+      const warm = makeBook([alpha, beta]);
+      expect(ruleOf(lintBook(warm), 'recursion-cycle')).toHaveLength(1);
+
+      const rekeyed = makeBook([alpha, { ...beta, keys: ['gamma'] }]);
+      expect(ruleOf(lintBook(rekeyed), 'recursion-cycle')).toHaveLength(0);
+      expect(lintBook(rekeyed)).toEqual(lintBook(coldCopyOf(rekeyed)));
+    });
+
+    it('stays identical across repeat runs and both drivers on the same objects', async () => {
+      const book = deepFreeze(
+        makeBook([
+          makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
+          makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
+          makeEntry(3, { comment: 'Self', keys: ['self'], content: 'self knows self' }),
+        ]),
+      );
+      const first = lintBook(book);
+      // Second sync run: every pair memo-hits.
+      expect(lintBook(book)).toEqual(first);
+      // Chunked run over the same (now warm) frozen objects.
+      await expect(
+        lintBookChunked(book, undefined, {
+          entriesPerStep: 1,
+          sourcesPerStep: 1,
+          yieldBetween: async () => undefined,
+        }),
+      ).resolves.toEqual(first);
+    });
+
+    it('verdicts are position-independent: reordering the same entries keeps output correct', () => {
+      const alpha = makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' });
+      const beta = makeEntry(2, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' });
+      const filler = makeEntry(3, { keys: ['/bad[/i'] });
+      lintBook(makeBook([alpha, beta, filler])); // warm the memos, forward positions
+
+      // Reorder the SAME objects — the dangerous case for a position-keyed
+      // memo. Verdicts key on the pair alone, so the reordered book must
+      // equal a cold run of itself.
+      const reordered = makeBook([filler, beta, alpha]);
+      const cycle = ruleOf(lintBook(reordered), 'recursion-cycle');
+      expect(cycle).toHaveLength(1);
+      expect(lintBook(reordered)).toEqual(lintBook(coldCopyOf(reordered)));
     });
   });
 });

@@ -27,10 +27,24 @@ import {
  * Bare module, no decorator — the `sha256.ts`/`token-estimator.ts` convention
  * for pure analysis code in services/. No Angular imports (core invariant).
  *
+ * Engine shape (plan 19 D1): the three phases — entry-scoped rules,
+ * duplicate-key buckets, recursion graph — are driven by ONE resumable
+ * engine. `createLintPass` exposes it (`step()`/`progress()`/`finish()`);
+ * `lintBook` is that engine run synchronously to completion (the pinned
+ * public API), and `lintBookChunked` walks the same engine with scheduler
+ * yields between chunks so the main thread can paint. Both drivers share
+ * emission order, seq assignment and the final sort, so their outputs are
+ * byte-identical for the same input+options regardless of chunk cadence
+ * (pinned in linter.spec.ts). Recursion verdicts and per-target key plans
+ * are memoized by entry identity (plan 19 D2 — see the memos section).
+ *
  * Semantics:
  * - Regex shape/validity and key matching delegate to the P1 modules
  *   `st-regex.ts` / `st-key-match.ts` — faithful ports of the vendored
- *   `world-info.js` oracle (line refs there).
+ *   `world-info.js` oracle (line refs there). A SillyTavern update requires
+ *   a re-read of the vendored snapshot
+ *   (`sillytaver-world-info-doc/world-info.js`, `worldinfo.md`) before
+ *   touching matching behavior.
  * - The five entry-scoped rules (invalid-regex, malformed-wrapper,
  *   secondary-keys-ignored, selective-without-secondary, never-activatable)
  *   live in `entry-memo.ts` next to their per-entry identity-keyed
@@ -261,24 +275,147 @@ interface Collected {
 }
 
 /**
- * Runs every rule and returns the diagnostics sorted by severity
- * (error → warning → info) then entry order (the book's entry array index;
- * multi-entry diagnostics anchor on their lowest member). The emission
- * sequence breaks remaining ties so the output is deterministic.
- *
- * With options (plan 03 §3.6.5.1): `mutedRules` drops a rule's diagnostics at
- * emission — for the O(V·E) recursion rules before the graph is even built,
- * for the entry-scoped rules as an emission-time filter over their memoized
- * results (plan 18 D2, observably identical to the old skip-before-check);
- * `ignored` drops exactly the diagnostics whose signature is in the set.
- * `includeGraphRules: false` skips the recursion pass entirely — both graph
- * rules and the book-level large-book skip note. Filtering precedes the
- * sort, so the surviving output keeps the plain pass's severity→entry-order
- * order. The call stays pure, read-only and deterministic with options
- * passed; `lintBook(book)` and `lintBook(book, {})` produce exactly the
- * pre-options output.
+ * `lintBook`'s final step: the ignored-signature filter (exact matches only,
+ * near-misses stay — plan 03 §3.6.5.1) followed by the severity →
+ * entry-order sort. Filtering precedes the sort, so the survivors keep the
+ * plain pass's severity→entry-order order; the comparator is a total order
+ * (the seq tiebreak is unique), so the output is deterministic.
  */
-export function lintBook(book: CharacterBook, options?: LintOptions): LintDiagnostic[] {
+function finishCollected(
+  collected: readonly Collected[],
+  ignored: ReadonlySet<string> | undefined,
+): LintDiagnostic[] {
+  return collected
+    .filter(
+      (item) => ignored === undefined || !ignored.has(lintDiagnosticSignature(item.diagnostic)),
+    )
+    .sort(
+      (a, b) =>
+        SEVERITY_RANK[a.diagnostic.severity] - SEVERITY_RANK[b.diagnostic.severity] ||
+        a.firstIndex - b.firstIndex ||
+        a.seq - b.seq,
+    )
+    .map((item) => item.diagnostic);
+}
+
+// ============================================================================
+// One resumable pass engine (plan 19 D1)
+// ============================================================================
+
+/** The three phases of a lint pass, in emission order. */
+export type LintPhase = 'entry-rules' | 'duplicate-keys' | 'recursion-graph';
+
+/**
+ * Chunk-resolution progress of a lint pass. `done`/`total` count the current
+ * phase's chunk units: entry-scoped-rule entries for `entry-rules`; one unit
+ * for the cheap duplicate-key buckets; recursion sources plus one bounded
+ * tail unit (Tarjan SCC + cycle emission) for `recursion-graph`. `done`
+ * reaches `total` exactly when the phase — and, at the end, the pass —
+ * completes. The recursion graph dominates wall time on large books (plan
+ * 19 §2), which is why its cadence is the fine-grained one.
+ */
+export interface LintProgress {
+  readonly phase: LintPhase;
+  readonly done: number;
+  readonly total: number;
+}
+
+/** Mutable twin of `LintProgress` — the cell the generator writes per chunk. */
+type MutableLintProgress = { -readonly [P in keyof LintProgress]: LintProgress[P] };
+
+/**
+ * Chunk sizes of a resumable pass. Pure scheduling knobs: the engine holds
+ * all state, so any sizes — including the pathological 1-per-chunk — produce
+ * `lintBook`-identical output (pinned in linter.spec.ts).
+ */
+export interface LintChunkSizes {
+  /** Entry-scoped-rule entries processed per step (default 200). */
+  entriesPerStep?: number;
+  /** Recursion sources processed per step (default 16). */
+  sourcesPerStep?: number;
+}
+
+/**
+ * `lintBookChunked`'s config: chunk sizes plus the scheduler awaited between
+ * chunks. Tests pass an immediate scheduler for determinism.
+ */
+export interface LintChunkConfig extends LintChunkSizes {
+  /**
+   * Awaited between chunks so the main thread can paint. Default: a
+   * `setTimeout(0)` macrotask yield.
+   */
+  yieldBetween?: () => Promise<void>;
+}
+
+/**
+ * Default chunk sizes for the chunked drivers (plan 19 D1), tuned so a chunk
+ * stays near the ~50 ms main-thread budget on the probe books (plan 19 §2):
+ * the entry-scoped rules are per-entry memoized (plan 18 D2) and cheap per
+ * chunk, while the recursion pair loop dominates — hence its finer cadence.
+ * Starting points for the P4 re-measure; sizes never affect output.
+ */
+const DEFAULT_CHUNK_SIZES: Required<LintChunkSizes> = {
+  entriesPerStep: 200,
+  sourcesPerStep: 16,
+};
+
+/** Whole phases per step — `lintBook` runs the engine to completion. */
+const SYNC_CHUNK_SIZES: Required<LintChunkSizes> = {
+  entriesPerStep: Number.POSITIVE_INFINITY,
+  sourcesPerStep: Number.POSITIVE_INFINITY,
+};
+
+/** Default macrotask yield between chunks (see `LintChunkConfig`). */
+const DEFAULT_YIELD_BETWEEN = (): Promise<void> =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+/**
+ * The lint pass itself, written exactly in `lintBook`'s emission order with
+ * `yield` at chunk boundaries: within the entry-rules phase every
+ * `entriesPerStep` entries, within the graph phase every `sourcesPerStep`
+ * sources, and once at each phase boundary. The duplicate-key buckets and
+ * the bounded Tarjan tail are single chunks. A yield only interleaves
+ * scheduling — it never reorders emission or touches the seq counter, so
+ * every cadence produces `lintBook`'s output byte-for-byte.
+ *
+ * Progress is written into the shared `progress` cell the engine factory
+ * reads between steps: `done` counts the current phase's completed chunk
+ * units. The >1500-entry skip is phase-complete immediately (no pair loop
+ * exists to chunk above the threshold): the graph phase then reports
+ * `total: 1` and finishes in one step.
+ *
+ * Phases in emission order (each matches the pre-engine `lintBook` exactly):
+ *
+ * 1. **Entry-scoped rules** — the five per-entry derivations sourced from
+ *    `entry-memo.ts` (memoized by entry identity, plan 18 D2). A muted
+ *    entry-scoped rule is filtered at emission — observably identical to the
+ *    old skip-before-check (the checks are memoized/cheap), while the
+ *    recursion graph keeps its genuine skip-before-build short-circuit.
+ *    Id-less entries bypass the memo (their diagnostics are index-based, so
+ *    a reorder would stale it); `memoEntryLint` evaluates `entryRefId`
+ *    against `entry.id`, which makes the index argument irrelevant for
+ *    id-carrying entries.
+ * 2. **Duplicate-key buckets** — skipped outright while `duplicate-key` is
+ *    muted (genuine short-circuit, unchanged).
+ * 3. **Recursion graph** — the graph rules: `self-trigger` (a node whose own
+ *    content matches its own keys — the graph's self-edge) and
+ *    `recursion-cycle` (strongly connected components of 2+ nodes). Above
+ *    `LARGE_BOOK_THRESHOLD` both are skipped and one `info` diagnostic notes
+ *    the skip; the note reuses the `recursion-cycle` rule id because the
+ *    frozen §3.2 rule union has no book-level id, so muting that rule
+ *    silences the note too (plan 03 §3.6.5.1, pinned in linter.spec.ts).
+ *    Either rule muted alone keeps the graph running for the other. The pair
+ *    loop is the chunk unit; the bounded O(V+E) Tarjan + cycle-emission tail
+ *    runs to completion once the sources are exhausted.
+ */
+function* lintPassChunks(
+  book: CharacterBook,
+  options: LintOptions | undefined,
+  sizes: Required<LintChunkSizes>,
+  progress: MutableLintProgress,
+): Generator<void, LintDiagnostic[], void> {
   const entries = book.entries;
   const collected: Collected[] = [];
   let sequence = 0;
@@ -296,17 +433,19 @@ export function lintBook(book: CharacterBook, options?: LintOptions): LintDiagno
   const includeGraphRules = options?.includeGraphRules ?? true;
   const runRecursionGraph =
     includeGraphRules && (!muted?.has('recursion-cycle') || !muted?.has('self-trigger'));
+  const reportCycles = !muted?.has('recursion-cycle');
+  const reportSelfTriggers = !muted?.has('self-trigger');
+  const entriesPerStep = Math.max(1, sizes.entriesPerStep);
+  const sourcesPerStep = Math.max(1, sizes.sourcesPerStep);
 
-  // The five entry-scoped rules are per-entry derivations sourced from
-  // `entry-memo.ts` (memoized by entry identity, plan 18 D2). A muted
-  // entry-scoped rule is filtered at emission — observably identical to the
-  // old skip-before-check (the checks are memoized/cheap), while the
-  // recursion graph keeps its genuine skip-before-build short-circuit.
-  // Id-less entries bypass the memo (their diagnostics are index-based, so a
-  // reorder would stale it); `memoEntryLint` evaluates `entryRefId` against
-  // `entry.id`, which makes the index argument irrelevant for id-carrying
-  // entries.
+  // ---- Phase: entry-scoped rules -------------------------------------------
+  progress.phase = 'entry-rules';
+  progress.done = 0;
+  progress.total = entries.length;
   for (const [index, entry] of entries.entries()) {
+    if (index > 0 && index % entriesPerStep === 0) {
+      yield;
+    }
     const entryDiagnostics = entry.id != null ? memoEntryLint(entry) : lintEntryRules(entry, index);
     for (const diagnostic of entryDiagnostics) {
       if (muted?.has(diagnostic.rule)) {
@@ -314,29 +453,263 @@ export function lintBook(book: CharacterBook, options?: LintOptions): LintDiagno
       }
       emit(diagnostic, index);
     }
+    progress.done = index + 1;
   }
+
+  // ---- Phase: duplicate-key buckets (cheap ~5 ms — one chunk) ---------------
   if (runDuplicateKeys) {
+    yield;
+    progress.phase = 'duplicate-keys';
+    progress.done = 0;
+    progress.total = 1;
     lintDuplicateKeys(entries, emit);
+    progress.done = 1;
   }
+
+  // ---- Phase: recursion graph -----------------------------------------------
   if (runRecursionGraph) {
-    lintRecursion(entries, emit, muted);
+    yield;
+    progress.phase = 'recursion-graph';
+    progress.done = 0;
+    if (entries.length > LARGE_BOOK_THRESHOLD) {
+      // The skip note ships with rule 'recursion-cycle' — muting that rule
+      // silences it (plan 03 §3.6.5.1). Phase-complete immediately: above the
+      // threshold there is no pair loop to chunk.
+      progress.total = 1;
+      if (reportCycles) {
+        emit(
+          {
+            rule: 'recursion-cycle',
+            severity: 'info',
+            // Book-level diagnostic — it addresses no single entry.
+            entryIds: [],
+            message: `Lorebook has ${entries.length} entries — the recursion cycle and self-trigger checks are skipped above ${LARGE_BOOK_THRESHOLD} for performance.`,
+          },
+          0,
+        );
+      }
+      progress.done = 1;
+    } else {
+      progress.total = entries.length + 1;
+
+      const nodes: RecursionNode[] = entries.map((entry, entryIndex) => ({
+        entry,
+        entryIndex,
+        successors: [],
+        tarjanIndex: -1,
+        lowlink: 0,
+        onStack: false,
+      }));
+
+      // Edge A→B (plan §3.2, verbatim): A enabled && !prevent_recursion
+      // (source can propagate) && B enabled && !constant &&
+      // !exclude_recursion (target is recursion-activatable) && B has usable
+      // keys && a key of B matches A's content with B's own match options.
+      // Whole content is scanned — a conservative superset of ST's
+      // scan_depth window (§7.2), which is why the copy says "may".
+      //
+      // Target eligibility and the per-key plans are invariant across
+      // sources, so they are computed once per pass — not once per pair —
+      // keeping the O(V²) pair loop free of per-key regex parsing and case
+      // folding. The filtered list preserves entry order, so successors are
+      // pushed (and self-triggers emitted) in exactly the unfiltered loop's
+      // order. Plans come from the identity-keyed memo (plan 19 D2), so a
+      // repeat pass skips the parse/fold work entirely.
+      const targets: RecursionTarget[] = [];
+      for (const node of nodes) {
+        if (!node.entry.enabled || node.entry.constant === true) {
+          continue;
+        }
+        const ext = entryExt(node.entry);
+        if (extFlag(ext, 'exclude_recursion') || !hasUsableKeys(node.entry.keys)) {
+          continue;
+        }
+        targets.push({
+          node,
+          plan: memoTargetKeyPlan(node.entry),
+          caseSensitive: node.entry.case_sensitive,
+          matchWholeWords: extBoolOption(ext, 'match_whole_words'),
+        });
+      }
+
+      for (const [i, source] of nodes.entries()) {
+        if (i > 0 && i % sourcesPerStep === 0) {
+          yield;
+        }
+        if (source.entry.enabled && !extFlag(entryExt(source.entry), 'prevent_recursion')) {
+          const content = (source.entry.content ?? '').slice(0, MATCH_CONTENT_CAP);
+          // Folded once per source instead of once per pair/key (see
+          // `firstMatchingKey` for why passing pre-folded input is
+          // equivalent).
+          const foldedContent = content.toLowerCase();
+          for (const target of targets) {
+            const matched = memoPairVerdict(source.entry, target, content, foldedContent);
+            if (matched === null) {
+              continue;
+            }
+            source.successors.push(target.node);
+            if (source === target.node && reportSelfTriggers) {
+              // Self-edge: reported separately as `self-trigger`, never as a
+              // cycle.
+              emit(
+                {
+                  rule: 'self-trigger',
+                  severity: 'info',
+                  entryIds: [entryRefId(source.entry, source.entryIndex)],
+                  message: `Entry "${entryTitle(source.entry)}" content contains its own keys — it may activate itself during recursion.`,
+                  details: matched.trim() === '' ? undefined : matched,
+                },
+                source.entryIndex,
+              );
+            }
+          }
+        }
+        progress.done = i + 1;
+      }
+
+      // The bounded O(V+E) tail — Tarjan SCC plus cycle emission — runs to
+      // completion once the pair loop is exhausted; counted as the graph
+      // phase's one-unit progress tail.
+      yield;
+      if (reportCycles) {
+        for (const component of stronglyConnectedComponents(nodes)) {
+          if (component.length < 2) {
+            continue;
+          }
+          emitCycle(component, emit);
+        }
+      }
+      progress.done = progress.total;
+    }
   }
 
   // Ignored signatures suppress exactly the matching diagnostics (near-misses
   // stay); filtering precedes the sort, so the survivors keep the plain
   // pass's severity→entry-order order (plan 03 §3.6.5.1).
-  const ignored = options?.ignored;
-  return collected
-    .filter(
-      (item) => ignored === undefined || !ignored.has(lintDiagnosticSignature(item.diagnostic)),
-    )
-    .sort(
-      (a, b) =>
-        SEVERITY_RANK[a.diagnostic.severity] - SEVERITY_RANK[b.diagnostic.severity] ||
-        a.firstIndex - b.firstIndex ||
-        a.seq - b.seq,
-    )
-    .map((item) => item.diagnostic);
+  return finishCollected(collected, options?.ignored);
+}
+
+/**
+ * A resumable lint pass over one book (plan 19 D1). One engine drives all
+ * three phases — entry-scoped rules, duplicate-key buckets, recursion graph
+ * — collecting with `lintBook`'s exact emission order and seq assignment and
+ * applying `lintBook`'s exact final filter + sort. Output is byte-identical
+ * to `lintBook`'s for the same input+options regardless of chunk sizes; the
+ * sync and chunked drivers are just two stepping cadences over this engine.
+ */
+export interface LintPass {
+  /**
+   * Advances one chunk of work; returns true once the pass is complete.
+   * Chunk sizes come from the factory's `sizes` argument (whole phases per
+   * step by default).
+   */
+  step(): boolean;
+  /** Progress as of the last chunk boundary. */
+  progress(): LintProgress;
+  /**
+   * The finished diagnostics — ignored-signature filter plus the
+   * severity → firstIndex → seq sort. Valid only once `step()` has returned
+   * true; throws before that.
+   */
+  finish(): LintDiagnostic[];
+}
+
+/**
+ * Creates the one lint engine for `book` + `options` and returns it paused
+ * before the first chunk. `lintBook` runs it synchronously to completion;
+ * `lintBookChunked` steps it with scheduler yields between chunks; the pane
+ * (plan 19 D4) can drive it directly for progress and stale-run supersession.
+ * Pure and read-only: the engine writes into its own collection state and
+ * the plan-19 WeakMap memos, never into the book.
+ */
+export function createLintPass(
+  book: CharacterBook,
+  options?: LintOptions,
+  sizes?: LintChunkSizes,
+): LintPass {
+  const resolved: Required<LintChunkSizes> = {
+    entriesPerStep: sizes?.entriesPerStep ?? DEFAULT_CHUNK_SIZES.entriesPerStep,
+    sourcesPerStep: sizes?.sourcesPerStep ?? DEFAULT_CHUNK_SIZES.sourcesPerStep,
+  };
+  const progress: MutableLintProgress = {
+    phase: 'entry-rules',
+    done: 0,
+    total: book.entries.length,
+  };
+  const iterator = lintPassChunks(book, options, resolved, progress);
+  let result: LintDiagnostic[] | null = null;
+  return {
+    step(): boolean {
+      const next = iterator.next();
+      if (next.done === true) {
+        result = next.value;
+        return true;
+      }
+      return false;
+    },
+    progress(): LintProgress {
+      return { ...progress };
+    },
+    finish(): LintDiagnostic[] {
+      if (result === null) {
+        throw new Error('Lint pass is not complete — step() must return true before finish().');
+      }
+      return result;
+    },
+  };
+}
+
+/**
+ * Runs every rule and returns the diagnostics sorted by severity
+ * (error → warning → info) then entry order (the book's entry array index;
+ * multi-entry diagnostics anchor on their lowest member). The emission
+ * sequence breaks remaining ties so the output is deterministic.
+ *
+ * With options (plan 03 §3.6.5.1): `mutedRules` drops a rule's diagnostics at
+ * emission — for the O(V·E) recursion rules before the graph is even built,
+ * for the entry-scoped rules as an emission-time filter over their memoized
+ * results (plan 18 D2, observably identical to the old skip-before-check);
+ * `ignored` drops exactly the diagnostics whose signature is in the set.
+ * `includeGraphRules: false` skips the recursion pass entirely — both graph
+ * rules and the book-level large-book skip note. Filtering precedes the
+ * sort, so the surviving output keeps the plain pass's severity→entry-order
+ * order. The call stays pure, read-only and deterministic with options
+ * passed; `lintBook(book)` and `lintBook(book, {})` produce exactly the
+ * pre-options output.
+ *
+ * The synchronous public API (plan 19 D1): the one engine
+ * (`createLintPass`) run to completion at whole-phase chunk sizes. The
+ * pinned output contract cannot drift from the chunked variant — both walk
+ * the same engine, and the generator's yields never reorder emission.
+ */
+export function lintBook(book: CharacterBook, options?: LintOptions): LintDiagnostic[] {
+  const pass = createLintPass(book, options, SYNC_CHUNK_SIZES);
+  while (!pass.step()) {
+    // Whole phases per step; the generator's yields are plain pauses here.
+  }
+  return pass.finish();
+}
+
+/**
+ * The chunked async driver (plan 19 D1): walks the SAME engine as
+ * `lintBook`, awaiting the scheduler between chunks so the main thread can
+ * paint. Byte-identical to `lintBook` for the same input+options — the
+ * engine holds all state; this driver only interleaves yields. Defaults to
+ * the tunable `DEFAULT_CHUNK_SIZES` cadence and a `setTimeout(0)` macrotask
+ * yield; tests pin determinism with an immediate scheduler and pathological
+ * 1-per-chunk cadences.
+ */
+export async function lintBookChunked(
+  book: CharacterBook,
+  options?: LintOptions,
+  config?: LintChunkConfig,
+): Promise<LintDiagnostic[]> {
+  const pass = createLintPass(book, options, config);
+  const yieldBetween = config?.yieldBetween ?? DEFAULT_YIELD_BETWEEN;
+  while (!pass.step()) {
+    await yieldBetween();
+  }
+  return pass.finish();
 }
 
 // ============================================================================
@@ -485,132 +858,12 @@ interface RecursionNode {
   onStack: boolean;
 }
 
-/**
- * The graph rules: `self-trigger` (a node whose own content matches its own
- * keys — the graph's self-edge) and `recursion-cycle` (strongly connected
- * components of 2+ nodes). Above `LARGE_BOOK_THRESHOLD` both are skipped and
- * one `info` diagnostic notes the skip.
- *
- * The skip note reuses the `recursion-cycle` rule id because the frozen
- * §3.2 rule union has no book-level id; the message disambiguates. Muting
- * that rule therefore silences the note too — coherent by design (plan 03
- * §3.6.5.1, pinned in linter.spec.ts). Either rule muted alone keeps the
- * graph running for the other.
- */
-function lintRecursion(
-  entries: readonly CharacterBookEntry[],
-  emit: Emit,
-  muted: ReadonlySet<LintRuleId> | undefined,
-): void {
-  const reportCycles = !muted?.has('recursion-cycle');
-  const reportSelfTriggers = !muted?.has('self-trigger');
-  if (entries.length > LARGE_BOOK_THRESHOLD) {
-    // The skip note ships with rule 'recursion-cycle' — muting that rule
-    // silences it (plan 03 §3.6.5.1).
-    if (reportCycles) {
-      emit(
-        {
-          rule: 'recursion-cycle',
-          severity: 'info',
-          // Book-level diagnostic — it addresses no single entry.
-          entryIds: [],
-          message: `Lorebook has ${entries.length} entries — the recursion cycle and self-trigger checks are skipped above ${LARGE_BOOK_THRESHOLD} for performance.`,
-        },
-        0,
-      );
-    }
-    return;
-  }
-
-  const nodes: RecursionNode[] = entries.map((entry, entryIndex) => ({
-    entry,
-    entryIndex,
-    successors: [],
-    tarjanIndex: -1,
-    lowlink: 0,
-    onStack: false,
-  }));
-
-  // Edge A→B (plan §3.2, verbatim): A enabled && !prevent_recursion (source
-  // can propagate) && B enabled && !constant && !exclude_recursion (target is
-  // recursion-activatable) && B has usable keys && a key of B matches A's
-  // content with B's own match options. Whole content is scanned — a
-  // conservative superset of ST's scan_depth window (§7.2), which is why the
-  // copy says "may".
-  //
-  // Target eligibility and the per-key plans are invariant across sources, so
-  // they are computed once per pass — not once per pair — keeping the O(V²)
-  // pair loop free of per-key regex parsing and case folding. The filtered
-  // list preserves entry order, so successors are pushed (and self-triggers
-  // emitted) in exactly the unfiltered loop's order.
-  interface RecursionTarget {
-    readonly node: RecursionNode;
-    readonly plan: TargetKeyPlan;
-    readonly caseSensitive: boolean | undefined;
-    readonly matchWholeWords: boolean | null;
-  }
-  const targets: RecursionTarget[] = [];
-  for (const node of nodes) {
-    if (!node.entry.enabled || node.entry.constant === true) {
-      continue;
-    }
-    const ext = entryExt(node.entry);
-    if (extFlag(ext, 'exclude_recursion') || !hasUsableKeys(node.entry.keys)) {
-      continue;
-    }
-    targets.push({
-      node,
-      plan: prepareTargetKeys(node.entry),
-      caseSensitive: node.entry.case_sensitive,
-      matchWholeWords: extBoolOption(ext, 'match_whole_words'),
-    });
-  }
-
-  for (const source of nodes) {
-    if (!source.entry.enabled || extFlag(entryExt(source.entry), 'prevent_recursion')) {
-      continue;
-    }
-    const content = (source.entry.content ?? '').slice(0, MATCH_CONTENT_CAP);
-    // Folded once per source instead of once per pair/key (see
-    // `firstMatchingKey` for why passing pre-folded input is equivalent).
-    const foldedContent = content.toLowerCase();
-    for (const target of targets) {
-      const matched = firstMatchingKey(
-        target.plan,
-        content,
-        foldedContent,
-        target.caseSensitive,
-        target.matchWholeWords,
-      );
-      if (matched === null) {
-        continue;
-      }
-      source.successors.push(target.node);
-      if (source === target.node && reportSelfTriggers) {
-        // Self-edge: reported separately as `self-trigger`, never as a cycle.
-        emit(
-          {
-            rule: 'self-trigger',
-            severity: 'info',
-            entryIds: [entryRefId(source.entry, source.entryIndex)],
-            message: `Entry "${entryTitle(source.entry)}" content contains its own keys — it may activate itself during recursion.`,
-            details: matched.trim() === '' ? undefined : matched,
-          },
-          source.entryIndex,
-        );
-      }
-    }
-  }
-
-  if (!reportCycles) {
-    return;
-  }
-  for (const component of stronglyConnectedComponents(nodes)) {
-    if (component.length < 2) {
-      continue;
-    }
-    emitCycle(component, emit);
-  }
+/** One recursion-eligible target with its per-pass match facts. */
+interface RecursionTarget {
+  readonly node: RecursionNode;
+  readonly plan: TargetKeyPlan;
+  readonly caseSensitive: boolean | undefined;
+  readonly matchWholeWords: boolean | null;
 }
 
 /**
@@ -731,4 +984,97 @@ function cyclePathIn(component: readonly RecursionNode[]): RecursionNode[] {
   };
 
   return walk(start) ? path : ordered;
+}
+
+// ============================================================================
+// Pair-level verdict memos (plan 19 D2) — identity-keyed, the task-18 pattern
+// ============================================================================
+
+/**
+ * Identity-keyed memo state for the recursion graph (plan 19 D2) — the
+ * `canonicalSerializations` precedent in `vcs.service.ts`; linter keeps its
+ * own memo state here (TargetKeyPlan is linter-internal, so these do not
+ * move to `entry-memo.ts`).
+ *
+ * - **Observably pure**: same pair objects → same verdict, always. A verdict
+ *   depends only on the two entry objects — the source's `content` (capped
+ *   and folded) and the target's keys and match options (its
+ *   `TargetKeyPlan`) — which is why the verdict map is keyed by BOTH
+ *   entries: outer WeakMap by the source (the content side), inner by the
+ *   target (the plan/options side).
+ * - **Correctness rests on the app-wide immutable-update invariant** — model
+ *   values are never mutated in place; every change produces new references
+ *   with structural sharing. A changed entry is a new object, so every pair
+ *   involving it misses and recomputes while untouched pairs hit — that is
+ *   what makes repeat passes near-free of real match work (plan 19 §3 D2).
+ *   There is deliberately **no clear/invalidate API**; stale entries are
+ *   reclaimed by GC together with their entry objects.
+ * - **Position-independent**: verdicts never read the array index (ids are
+ *   resolved at emission, outside the memos), so id-less books and reorders
+ *   are safe — unlike `entry-memo.ts`'s lint memo, no id gate is needed.
+ * - **Option-independent**: `LintOptions` (muted/ignored/includeGraphRules)
+ *   affect filtering only, never matching, so the memos are shared across
+ *   option shapes and across both drivers (sync `lintBook` and chunked
+ *   `lintBookChunked`).
+ * - **Deep-frozen books stay untouched**: the memos write into WeakMaps,
+ *   never into the book (the lossless invariant).
+ * - A stored verdict is `string | null` (the matched spelling, or `null`
+ *   for no match); `undefined` returned from `get` unambiguously means "not
+ *   memoized" — `null` verdicts are stored and hit like any other.
+ */
+
+/** Per-target key plans (`prepareTargetKeys`) keyed by target entry identity. */
+const targetKeyPlans = new WeakMap<CharacterBookEntry, TargetKeyPlan>();
+
+/**
+ * The target's `TargetKeyPlan`, memoized by entry identity: a repeat pass
+ * reuses the parsed regexes and folds instead of re-running O(V·k)
+ * `parseStRegex` calls per pass. Pure per the memos contract above.
+ */
+function memoTargetKeyPlan(entry: CharacterBookEntry): TargetKeyPlan {
+  const cached = targetKeyPlans.get(entry);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const plan = prepareTargetKeys(entry);
+  targetKeyPlans.set(entry, plan);
+  return plan;
+}
+
+/** Per-pair first-match verdicts: source entry → target entry → spelling|null. */
+const pairVerdicts = new WeakMap<CharacterBookEntry, WeakMap<CharacterBookEntry, string | null>>();
+
+/**
+ * The (source content, target plan/options) pair's `firstMatchingKey`
+ * verdict, memoized by both entries' identities (see the memos contract).
+ * Eligibility filters (enabled/constant/exclude_recursion/prevent_recursion)
+ * stay per-pass O(V) reads in the caller — only the per-pair match and the
+ * per-target plan go through the memos. The capped, folded source content is
+ * derived per source per pass — cheap O(V), deliberately unmemoized.
+ */
+function memoPairVerdict(
+  sourceEntry: CharacterBookEntry,
+  target: RecursionTarget,
+  content: string,
+  foldedContent: string,
+): string | null {
+  let perTarget = pairVerdicts.get(sourceEntry);
+  if (perTarget === undefined) {
+    perTarget = new WeakMap<CharacterBookEntry, string | null>();
+    pairVerdicts.set(sourceEntry, perTarget);
+  }
+  const targetEntry = target.node.entry;
+  const cached = perTarget.get(targetEntry);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const matched = firstMatchingKey(
+    target.plan,
+    content,
+    foldedContent,
+    target.caseSensitive,
+    target.matchWholeWords,
+  );
+  perTarget.set(targetEntry, matched);
+  return matched;
 }
