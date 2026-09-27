@@ -3,6 +3,51 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.8.0 — September 28, 2026
+
+The big-book release. Lorebooks with hundreds of entries now get the same
+snappy treatment as small ones: typing no longer stumbles, the health check
+opens with a progress bar instead of a silent freeze, and the token meter has
+been reshaped into a battery that fills as your always-active entries eat the
+budget.
+
+### Highlights
+
+- **Typing that keeps up on big books** — on a lorebook with hundreds of
+  entries, every keystroke used to re-scan the whole book before the letter
+  settled. Text now commits when you pause for a beat (~a third of a second),
+  and the heavy book-wide work is remembered instead of redone — the words you
+  type render instantly, while tab markers, row token counts and saving trail
+  by that same beat.
+- **Drafts survive a mid-type interruption** — when another action touches the
+  entry while you're typing — a delimiter apply, a settings chip, a batch
+  edit — the fields you weren't typing in leave your words alone. Only when
+  both touch the very same field does the newer action win.
+- **The health check shows its work** — opening Health on a large book used to
+  freeze everything for seconds with no sign of life. The pane now opens
+  instantly into a "Checking lorebook health…" progress bar, finishes in about
+  half the time, and feels near-instant on every reopen or filter toggle after
+  that. The shield badge in the top bar now counts the checks it can make on
+  the spot; recursion loops and self-triggers join in when the health pane
+  opens and the full pass runs.
+- **A battery for your token budget** — the Always Active Token Footprint
+  meter now fills like a battery as your always-active entries consume the
+  budget: it shifts to a warning tone as you approach the limit and turns to
+  an error state with a warning mark once you're over. Phones keep the compact
+  circle, wearing the same states.
+- **A calmer top bar, a tidier editor** — related top-bar actions are now
+  framed by subtle dividers; the Focus mode control moved from the top bar
+  into the entry's content field, beside the delimiters control (desktop); and
+  About now lives on the welcome screen — with a project open, you'll find it
+  in the More menu.
+
+### Fixed
+
+- **The phone export menu fits every screen** — on shorter phones the Export
+  menu could grow taller than the screen and spill over the top of it; the
+  menu now caps its height and scrolls inside, opening above the bar where it
+  belongs.
+
 ## 1.7.0 — September 26, 2026
 
 The batch delimiters release. Wrapping entries is no longer a one-entry-at-a-time
