@@ -24,6 +24,15 @@ const EDIT = {
   groupWeight: '77',
 };
 
+/**
+ * The form mirror's idle commit (plan 18 D1): text-slice edits (group label,
+ * weight, content) reach the workspace 300 ms after the last keystroke. The
+ * export reads the committed workspace, and no DOM fact discriminates a
+ * pending draft from a committed value — so a test that fills a text slice
+ * and exports waits out the window explicitly (100 ms margin).
+ */
+const EDIT_COMMIT_FLUSH_MS = 400;
+
 /** Opens the first visible entry and expands its options panel. */
 async function openFirstEntryOptions(page: Page): Promise<void> {
   await page.locator('.entry-item').first().click();
@@ -76,6 +85,12 @@ test.describe('native lorebook round trip', () => {
       .getByRole('listbox', { name: 'Execution modifiers' })
       .getByText('Ignore Budget')
       .click();
+
+    // The group label/weight are text-slice edits: wait out the mirror's
+    // idle-commit window or the export reads the uncommitted book (plan 18
+    // D1 — the discrete chip/select edits above are immediate, the text
+    // edits are not).
+    await page.waitForTimeout(EDIT_COMMIT_FLUSH_MS);
 
     const exported = await exportWorldInfo(page);
     const out = exported.json as {

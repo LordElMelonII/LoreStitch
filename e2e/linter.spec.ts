@@ -17,10 +17,15 @@ import { importLorebook } from './helpers';
  *               · recursion-cycle (uid 4 ↔ 5, Moonshard ↔ Sunwell)
  *   0 notes     · the healthy entry (uid 8) stays clean
  *
- *  1. Desktop: import → badge shows 6 → open the pane from the topbar →
+ * Badge semantics (plan 18 D4, user-approved): the topbar badge reads the
+ * graph-free entry-scoped pass, so the recursion-cycle warning no longer
+ * counts live — 6 diagnostics → badge 5 — and the pane's full pass still
+ * lists it (the summary stays 2 errors · 4 warnings).
+ *
+ *  1. Desktop: import → badge shows 5 → open the pane from the topbar →
  *     summary + section headings + messages from every defect class →
  *     `Go to entry` on the invalid-regex row selects the entry in the editor →
- *     fixing the key through the editor's chip field drops the badge to 5
+ *     fixing the key through the editor's chip field drops the badge to 4
  *     (automatic recompute, no refresh).
  *  2. Desktop amendment: the mute chips are the entry editor's filter-chip
  *     pattern (mat-chip-option: selected = check on, deselected = muted) —
@@ -103,8 +108,9 @@ test.describe('linter desktop flows', () => {
     await page.goto('/');
     await importLorebook(page, FIXTURE_PATH);
 
-    // Badge: errors + warnings = 6 diagnostics (info never counts).
-    await expect(healthBadge(page)).toHaveText('6');
+    // Badge: the entry-scoped pass (plan 18 D4) — 2 errors + 4 warnings minus
+    // the recursion-cycle warning the live badge no longer counts = 5.
+    await expect(healthBadge(page)).toHaveText('5');
 
     await openLinterFromTopbar(page);
     const pane = linterPane(page);
@@ -176,8 +182,9 @@ test.describe('linter desktop flows', () => {
       activeTabBody(page).getByRole('button', { name: `Remove key ${FIXED_KEY}` }),
     ).toBeVisible();
 
-    // The badge recomputes automatically (invalid-regex error gone): 6 → 5.
-    await expect(healthBadge(page)).toHaveText('5');
+    // The badge recomputes automatically (invalid-regex error gone from the
+    // entry-scoped count): 5 → 4.
+    await expect(healthBadge(page)).toHaveText('4');
 
     // Re-opening the pane confirms the recomputed summary without a refresh.
     await openLinterFromTopbar(page);
