@@ -399,7 +399,12 @@ test.describe('mobile bottom action bar (tablet/desktop absence)', () => {
     // the drawer's toolbar the same way it does inside the swap on phones.
     const toolbar = page.locator('app-entry-list .batch-bar');
     await expect(toolbar).toBeVisible();
-    await expect(toolbar).toContainText('2 selected');
+    // Task 12 moved the drawer toolbar's count onto the select-all badge —
+    // the count now rides the accessible name, exactly the contract the
+    // shared helper pins (the visible "N selected" span is phone-only).
+    await expect(
+      toolbar.getByRole('checkbox', { name: 'Select all shown entries (2 selected)' }),
+    ).toBeVisible();
     // …and the phone-only bar contributes nothing at this width.
     await expect(page.locator('app-mobile-bottom-bar .bar-item')).toHaveCount(0);
   });
