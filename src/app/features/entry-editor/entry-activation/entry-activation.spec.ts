@@ -8,6 +8,7 @@ import {
   StTrigger,
 } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { EDIT_COMMIT_DEBOUNCE_MS } from '../entry-editor.constants';
 import { EntryActivation } from './entry-activation';
 import { projectOf } from '../../../../testing/project-fixtures';
 
@@ -21,11 +22,12 @@ describe('EntryActivation', () => {
     return entry;
   }
 
-  async function createPane(
-    overrides: Partial<CharacterBookEntry> = {},
-  ): Promise<EntryActivation> {
+  async function createPane(overrides: Partial<CharacterBookEntry> = {}): Promise<EntryActivation> {
     workspace.activeProject.set(
-      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'activation-project', title: 'Activation' }),
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], {
+        id: 'activation-project',
+        title: 'Activation',
+      }),
     );
     fixture = TestBed.createComponent(EntryActivation);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
@@ -61,10 +63,27 @@ describe('EntryActivation', () => {
     return chip;
   }
 
+  /**
+   * Flushes the mirror's idle-commit debounce (plan 18 D1) with fake time:
+   * flushes the write effect (arming the timer) then elapses the window.
+   */
+  async function commitIdle(): Promise<void> {
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
+  }
+
   beforeEach(async () => {
     TestBed.configureTestingModule({ imports: [EntryActivation] });
     workspace = TestBed.inject(WorkspaceService);
+    // The workspace's async init settles on a real timer BEFORE the fake
+    // clock takes over (the house pattern — entry-list.spec.ts: only the
+    // timer pair is faked, so whenStable is never starved).
     await new Promise((resolve) => setTimeout(resolve, 0));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('seeds the form from the extensions and the character filter', async () => {
@@ -96,7 +115,7 @@ describe('EntryActivation', () => {
       automationId: 'qr-9',
       filterNames: '',
     });
-    await fixture.whenStable();
+    await commitIdle();
 
     const ext = currentEntry().extensions;
     expect(ext['scan_depth']).toBe(3);
@@ -151,7 +170,7 @@ describe('EntryActivation', () => {
       automationId: '',
       filterNames: ' Rin , Saber ,  Rin ',
     });
-    await fixture.whenStable();
+    await commitIdle();
 
     // Comma text becomes a trimmed, de-duplicated name list; tags survive.
     expect(currentEntry().extensions['character_filter']).toEqual({
@@ -170,7 +189,7 @@ describe('EntryActivation', () => {
 
     input.value = 'Rin, Saber';
     input.dispatchEvent(new Event('input'));
-    await fixture.whenStable();
+    await commitIdle();
 
     expect(currentEntry().extensions['character_filter']).toEqual({
       is_exclude: false,
@@ -259,8 +278,6 @@ describe('EntryActivation', () => {
       names: ['Saber'],
       tags: ['noble'],
     });
-    expect(element.textContent).toContain(
-      'Activates for every character except these names',
-    );
+    expect(element.textContent).toContain('Activates for every character except these names');
   });
 });

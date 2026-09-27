@@ -3,6 +3,7 @@ import { By } from '@angular/platform-browser';
 import { MatChipOption } from '@angular/material/chips';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { EDIT_COMMIT_DEBOUNCE_MS } from '../entry-editor.constants';
 import { EntryInclusionGroup } from './entry-inclusion-group';
 import { projectOf } from '../../../../testing/project-fixtures';
 
@@ -20,7 +21,10 @@ describe('EntryInclusionGroup', () => {
     overrides: Partial<CharacterBookEntry> = {},
   ): Promise<EntryInclusionGroup> {
     workspace.activeProject.set(
-      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'inclusion-project', title: 'Inclusion' }),
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], {
+        id: 'inclusion-project',
+        title: 'Inclusion',
+      }),
     );
     fixture = TestBed.createComponent(EntryInclusionGroup);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
@@ -51,10 +55,27 @@ describe('EntryInclusionGroup', () => {
     await fixture.whenStable();
   }
 
+  /**
+   * Flushes the mirror's idle-commit debounce (plan 18 D1) with fake time:
+   * flushes the write effect (arming the timer) then elapses the window.
+   */
+  async function commitIdle(): Promise<void> {
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
+  }
+
   beforeEach(async () => {
     TestBed.configureTestingModule({ imports: [EntryInclusionGroup] });
     workspace = TestBed.inject(WorkspaceService);
+    // The workspace's async init settles on a real timer BEFORE the fake
+    // clock takes over (the house pattern — entry-list.spec.ts: only the
+    // timer pair is faked, so whenStable is never starved).
     await new Promise((resolve) => setTimeout(resolve, 0));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('seeds the group and weight from the extensions', async () => {
@@ -77,7 +98,7 @@ describe('EntryInclusionGroup', () => {
     const component = await createPane();
 
     component['model'].set({ group: 'grail-war', groupWeight: 250 });
-    await fixture.whenStable();
+    await commitIdle();
 
     const ext = currentEntry().extensions;
     expect(ext['group']).toBe('grail-war');
@@ -92,7 +113,7 @@ describe('EntryInclusionGroup', () => {
     });
 
     component['model'].set({ group: '', groupWeight: null });
-    await fixture.whenStable();
+    await commitIdle();
 
     const ext = currentEntry().extensions;
     expect(ext['group']).toBe('');
@@ -113,28 +134,26 @@ describe('EntryInclusionGroup', () => {
 
     // The ST boundaries themselves stay clean.
     component['model'].set({ group: '', groupWeight: 1 });
-    await fixture.whenStable();
+    await commitIdle();
     expect(weight().errors()).toEqual([]);
     component['model'].set({ group: '', groupWeight: 10000 });
-    await fixture.whenStable();
+    await commitIdle();
     expect(weight().errors()).toEqual([]);
     expect(currentEntry().extensions['group_weight']).toBe(10000);
   });
 
   it('toggles Prioritize Inclusion into group_override', async () => {
     await createPane();
-    const chip = fixture.debugElement.query(
-      By.css('mat-chip-option'),
-    ).componentInstance as MatChipOption;
+    const chip = fixture.debugElement.query(By.css('mat-chip-option'))
+      .componentInstance as MatChipOption;
 
     chip.toggleSelected(true);
     rebind();
 
     expect(currentEntry().extensions['group_override']).toBe(true);
     // The stored state feeds back into the chip selection.
-    const selected = fixture.debugElement.query(
-      By.css('mat-chip-option'),
-    ).componentInstance as MatChipOption;
+    const selected = fixture.debugElement.query(By.css('mat-chip-option'))
+      .componentInstance as MatChipOption;
     expect(selected.selected).toBe(true);
   });
 

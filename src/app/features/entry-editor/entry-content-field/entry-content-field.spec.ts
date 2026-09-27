@@ -6,6 +6,7 @@ import { WorkspaceService } from '../../../core/services/workspace.service';
 import { LayoutService } from '../../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
 import { DelimiterDialog } from '../../delimiters/delimiter-dialog';
+import { EDIT_COMMIT_DEBOUNCE_MS } from '../entry-editor.constants';
 import { EntryContentField } from './entry-content-field';
 import { installMatchMediaStub } from '../../../../testing/match-media-stub';
 import { projectOf } from '../../../../testing/project-fixtures';
@@ -86,12 +87,24 @@ describe('EntryContentField', () => {
   });
 
   it('writes content edits through to the workspace entry', async () => {
-    await createPane({ content: '' });
+    // The content slice commits on idle (plan 18 D1): the write lands one
+    // EDIT_COMMIT_DEBOUNCE_MS after the last keystroke, so the check runs on
+    // fake time (house pattern — entry-list.spec.ts) and advances past it.
+    // Scoped to this test: the delimiter-pane and viewport-flip tests below
+    // must keep running on the real clock.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await createPane({ content: '' });
 
-    await type('Rin studies magecraft');
+      await type('Rin studies magecraft');
+      fixture.detectChanges(); // flush the write effect: arms the idle-commit timer
+      await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
 
-    expect(currentEntry().content).toBe('Rin studies magecraft');
-    expect(textarea().value).toBe('Rin studies magecraft');
+      expect(currentEntry().content).toBe('Rin studies magecraft');
+      expect(textarea().value).toBe('Rin studies magecraft');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('recomputes the character / token / line stats on every edit', async () => {
@@ -110,32 +123,49 @@ describe('EntryContentField', () => {
   });
 
   it('shows the delimiter badge only for recognized wrapping', async () => {
-    await createPane({ content: 'plain lore text' });
-    expect(text()).not.toContain('click the code button to change');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await createPane({ content: 'plain lore text' });
+      expect(text()).not.toContain('click the code button to change');
 
-    // After a round-trip through the workspace the badge appears (bracket style).
-    await type('[Saber=\nKing of Knights]');
-    rebind();
-    expect(currentEntry().content).toBe('[Saber=\nKing of Knights]');
-    expect(text()).toContain('[Saber=…]');
-    expect(text()).toContain('click the code button to change');
+      // After a round-trip through the workspace the badge appears (bracket
+      // style); the write trails typing by the idle-commit window.
+      await type('[Saber=\nKing of Knights]');
+      fixture.detectChanges(); // flush the write effect: arms the idle-commit timer
+      await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
+      rebind();
+      expect(currentEntry().content).toBe('[Saber=\nKing of Knights]');
+      expect(text()).toContain('[Saber=…]');
+      expect(text()).toContain('click the code button to change');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('badges a detected markdown wrapper with its heading label', async () => {
-    await createPane({ content: '## London\n\nbody text' });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await createPane({ content: '## London\n\nbody text' });
 
-    // Task 12 §4.4: header-led content classifies markdown (detection order
-    // tag → bracket → markdown → separator), and the badge reads `## London`.
-    expect(text()).toContain('## London');
-    expect(text()).toContain('click the code button to change');
+      // Task 12 §4.4: header-led content classifies markdown (detection order
+      // tag → bracket → markdown → separator), and the badge reads `## London`.
+      expect(text()).toContain('## London');
+      expect(text()).toContain('click the code button to change');
 
-    // A broken ATX header rides the malformed hint instead (`## ?`).
-    await type('##\n\nlore');
-    rebind();
-    const hint = (fixture.nativeElement as HTMLElement).querySelector('.malformed-hint');
-    assert(hint);
-    expect(hint.textContent).toContain('## ?');
-    expect(hint.textContent).toContain('click the code button to fix');
+      // A broken ATX header rides the malformed hint instead (`## ?`); the
+      // typed content reaches the workspace entry after the idle-commit
+      // window, and the hint re-reads it through the rebound input.
+      await type('##\n\nlore');
+      fixture.detectChanges(); // flush the write effect: arms the idle-commit timer
+      await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
+      rebind();
+      const hint = (fixture.nativeElement as HTMLElement).querySelector('.malformed-hint');
+      assert(hint);
+      expect(hint.textContent).toContain('## ?');
+      expect(hint.textContent).toContain('click the code button to fix');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('opens the delimiter pane through the responsive overlay for the entry under edit', async () => {

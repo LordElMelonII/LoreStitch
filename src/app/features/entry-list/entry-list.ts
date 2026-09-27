@@ -25,14 +25,15 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { entryTags, entryTitle, entryTriggerState } from '../../core/models/lorebook.model';
-import { estimateEntryTokens, formatTokenCount } from '../../core/services/token-estimator';
+import { memoEntryHaystack, memoEntryTokens } from '../../core/services/entry-memo';
+import { formatTokenCount } from '../../core/services/token-estimator';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { paneResult, ProjectActionsService } from '../shell/project-actions.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
 import { LayoutService } from '../../shared/services/layout.service';
 import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { debouncedSignal } from '../../shared/util/debounced-signal';
-import { entrySearchHaystack, matchesQuery, type EntryListItem } from './entry-list.model';
+import { matchesQuery, type EntryListItem } from './entry-list.model';
 import { type BatchOperationsDialogData } from './batch-operations-dialog';
 import { type DelimiterDialogData } from '../delimiters/delimiter-dialog.model';
 
@@ -218,14 +219,28 @@ export class EntryList {
         state: entryTriggerState(entry),
         dirty: entry.id !== undefined && dirty.has(entry.id),
         content,
-        tokens: estimateEntryTokens(entry),
+        // Identity-memoized per-entry derivations (plan 18 D2): the
+        // once-per-settle full-book pass costs O(changed) real work plus an
+        // O(V) walk over memo hits, so a workspace mutation that only touched
+        // one entry re-derives tokens/haystack for that entry alone.
+        tokens: memoEntryTokens(entry),
         tags,
         // One fold per entry change, not per keystroke: the filter scan
         // below only ever runs `includes` over this pre-lowered haystack.
-        search: entrySearchHaystack(title, keys, tags, content),
+        search: memoEntryHaystack(entry),
       };
     });
   });
+
+  /**
+   * Stable identity for the virtual-scroll rows (plan 18 D6): unchanged
+   * entries keep their row DOM across a book-wide mutation instead of every
+   * row tearing down and re-rendering (`templateCacheSize: 0` stays — the
+   * cache is deliberately off, so the track fn is what carries reuse).
+   */
+  protected trackById(_index: number, item: EntryListItem): number {
+    return item.id;
+  }
 
   /** All tags in the book, alphabetically (drives the filter chips). */
   protected readonly allTags = computed<string[]>(() => {

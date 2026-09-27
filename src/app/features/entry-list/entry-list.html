@@ -159,7 +159,7 @@
   (cdkDropListDropped)="drop($event.previousIndex, $event.currentIndex)"
 >
   <div
-    *cdkVirtualFor="let item of filtered(); let i = index; templateCacheSize: 0"
+    *cdkVirtualFor="let item of filtered(); let i = index; trackBy: trackById; templateCacheSize: 0"
     cdkDrag
     class="entry-item"
     [class.active]="item.id === activeId()"

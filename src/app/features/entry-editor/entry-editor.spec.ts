@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TAB_STRIP_DRAG_SLOP_PX } from './entry-editor.constants';
+import { TAB_STRIP_DRAG_SLOP_PX, EDIT_COMMIT_DEBOUNCE_MS } from './entry-editor.constants';
 import { EntryEditor, TabStripDragScroller, scrollTabStripOnWheel } from './entry-editor';
 import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
@@ -277,6 +277,14 @@ describe('EntryEditor fields composition', () => {
         },
       ],
     }).compileComponents();
+    // The form slices commit on idle (plan 18 D1): the write pin below
+    // advances the fake clock instead of expecting an immediate write (the
+    // entry-list.spec.ts house pattern — only the timer pair is faked).
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders the writing surface and options accordion bound to the entry', async () => {
@@ -334,7 +342,10 @@ describe('EntryEditor fields composition', () => {
     assert(nameInput);
     nameInput.value = 'Rin Tohsaka';
     nameInput.dispatchEvent(new Event('input'));
-    await fixture.whenStable();
+    // Flush the write effect (arms the idle-commit timer), then let the
+    // window elapse: the commit trails typing by EDIT_COMMIT_DEBOUNCE_MS.
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
 
     expect(updateEntry).toHaveBeenCalledWith(1, { comment: 'Rin Tohsaka' });
   });
@@ -498,17 +509,27 @@ describe('EntryEditor workspace wiring', () => {
   });
 
   it('writes the strip Order field through to insertion_order', async () => {
-    await createEditor();
-    const order = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-      '.trigger-card .num input',
-    );
-    assert(order);
-    expect(order.value).toBe('100');
+    // The strip order rides entrySliceSignal's idle-commit debounce (plan 18
+    // D1): the real-workspace write lands after the window, so the check runs
+    // on fake time (house pattern) and advances past it.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await createEditor();
+      const order = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        '.trigger-card .num input',
+      );
+      assert(order);
+      expect(order.value).toBe('100');
 
-    order.value = '42';
-    order.dispatchEvent(new Event('input'));
-    await fixture.whenStable();
+      order.value = '42';
+      order.dispatchEvent(new Event('input'));
+      fixture.detectChanges(); // flush the write effect: arms the idle-commit timer
+      await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
+      await fixture.whenStable();
 
-    expect(currentEntry(0).insertion_order).toBe(42);
+      expect(currentEntry(0).insertion_order).toBe(42);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

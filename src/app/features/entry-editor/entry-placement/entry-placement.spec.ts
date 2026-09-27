@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { EDIT_COMMIT_DEBOUNCE_MS } from '../entry-editor.constants';
 import { EntryPlacement } from './entry-placement';
 import { projectOf } from '../../../../testing/project-fixtures';
 
@@ -15,11 +16,12 @@ describe('EntryPlacement', () => {
     return entry;
   }
 
-  async function createPane(
-    overrides: Partial<CharacterBookEntry> = {},
-  ): Promise<EntryPlacement> {
+  async function createPane(overrides: Partial<CharacterBookEntry> = {}): Promise<EntryPlacement> {
     workspace.activeProject.set(
-      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'placement-project', title: 'Placement' }),
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], {
+        id: 'placement-project',
+        title: 'Placement',
+      }),
     );
     fixture = TestBed.createComponent(EntryPlacement);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
@@ -28,10 +30,27 @@ describe('EntryPlacement', () => {
     return fixture.componentInstance;
   }
 
+  /**
+   * Flushes the mirror's idle-commit debounce (plan 18 D1) with fake time:
+   * flushes the write effect (arming the timer) then elapses the window.
+   */
+  async function commitIdle(): Promise<void> {
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
+  }
+
   beforeEach(async () => {
     TestBed.configureTestingModule({ imports: [EntryPlacement] });
     workspace = TestBed.inject(WorkspaceService);
+    // The workspace's async init settles on a real timer BEFORE the fake
+    // clock takes over (the house pattern — entry-list.spec.ts: only the
+    // timer pair is faked, so whenStable is never starved).
     await new Promise((resolve) => setTimeout(resolve, 0));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('shows the position select with every ST insertion point', async () => {
@@ -128,7 +147,7 @@ describe('EntryPlacement', () => {
     const component = fixture.componentInstance;
 
     component['model'].set({ depth: 2, outletName: 'scene-notes', priority: 9 });
-    await fixture.whenStable();
+    await commitIdle();
 
     const entry = currentEntry();
     expect(entry.priority).toBe(9);
@@ -144,7 +163,7 @@ describe('EntryPlacement', () => {
     const component = fixture.componentInstance;
 
     component['model'].set({ depth: 4, outletName: '', priority: null });
-    await fixture.whenStable();
+    await commitIdle();
 
     expect(currentEntry().priority).toBeUndefined();
   });
@@ -164,11 +183,11 @@ describe('EntryPlacement', () => {
 
     // The boundary value and positives stay clean.
     component['model'].set({ depth: 0, outletName: '', priority: null });
-    await fixture.whenStable();
+    await commitIdle();
     expect(depth().errors()).toEqual([]);
 
     component['model'].set({ depth: 12, outletName: '', priority: null });
-    await fixture.whenStable();
+    await commitIdle();
     expect(depth().errors()).toEqual([]);
     expect(currentEntry().extensions['depth']).toBe(12);
   });

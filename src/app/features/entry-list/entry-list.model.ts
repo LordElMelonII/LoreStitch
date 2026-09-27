@@ -15,7 +15,8 @@ export interface EntryListItem {
   tags: string[];
   /**
    * Pre-folded lowercase haystack of every searchable field, built once per
-   * entry change by `entrySearchHaystack` in the `items` computed — the
+   * entry change by `memoEntryHaystack` in the `items` computed (the
+   * identity-keyed memo that composes `entrySearchHaystack`) — the
    * per-keystroke filter scan only ever `includes` over it.
    */
   readonly search: string;

@@ -3,6 +3,7 @@ import { By } from '@angular/platform-browser';
 import { MatChipOption } from '@angular/material/chips';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { EDIT_COMMIT_DEBOUNCE_MS } from '../entry-editor.constants';
 import { EntryRecursionTiming } from './entry-recursion-timing';
 import { projectOf } from '../../../../testing/project-fixtures';
 
@@ -20,7 +21,10 @@ describe('EntryRecursionTiming', () => {
     overrides: Partial<CharacterBookEntry> = {},
   ): Promise<EntryRecursionTiming> {
     workspace.activeProject.set(
-      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'recursion-project', title: 'Recursion' }),
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], {
+        id: 'recursion-project',
+        title: 'Recursion',
+      }),
     );
     fixture = TestBed.createComponent(EntryRecursionTiming);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
@@ -38,10 +42,27 @@ describe('EntryRecursionTiming', () => {
     return options as [MatChipOption, MatChipOption, MatChipOption];
   }
 
+  /**
+   * Flushes the mirror's idle-commit debounce (plan 18 D1) with fake time:
+   * flushes the write effect (arming the timer) then elapses the window.
+   */
+  async function commitIdle(): Promise<void> {
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
+  }
+
   beforeEach(async () => {
     TestBed.configureTestingModule({ imports: [EntryRecursionTiming] });
     workspace = TestBed.inject(WorkspaceService);
+    // The workspace's async init settles on a real timer BEFORE the fake
+    // clock takes over (the house pattern — entry-list.spec.ts: only the
+    // timer pair is faked, so whenStable is never starved).
     await new Promise((resolve) => setTimeout(resolve, 0));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('reads guard flags from the extensions into the chips', async () => {
@@ -100,11 +121,13 @@ describe('EntryRecursionTiming', () => {
   });
 
   it('writes numeric timing values back into the extensions', async () => {
-    await createPane({ extensions: { ...createEmptyEntry(0).extensions, delay_until_recursion: true } });
+    await createPane({
+      extensions: { ...createEmptyEntry(0).extensions, delay_until_recursion: true },
+    });
     const component = fixture.componentInstance;
 
     component['model'].set({ recursionLevel: 3, sticky: 2, cooldown: 1, delay: 4 });
-    await fixture.whenStable();
+    await commitIdle();
 
     const ext = currentEntry().extensions;
     expect(ext['delay_until_recursion']).toBe(3);
@@ -120,11 +143,11 @@ describe('EntryRecursionTiming', () => {
     const component = fixture.componentInstance;
 
     component['model'].set({ recursionLevel: 1, sticky: null, cooldown: null, delay: null });
-    await fixture.whenStable();
+    await commitIdle();
     expect(currentEntry().extensions['delay_until_recursion']).toBe(true);
 
     component['model'].set({ recursionLevel: null, sticky: null, cooldown: null, delay: null });
-    await fixture.whenStable();
+    await commitIdle();
     expect(currentEntry().extensions['delay_until_recursion']).toBe(true);
   });
 
