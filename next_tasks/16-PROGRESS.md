@@ -102,5 +102,8 @@ near/over/no-budget tiers, relocated toggle contract, About welcome-present/proj
   thresholds green; `npm run lint` — all files pass.
 - Commits: `refactor(entry-editor)` (in-field toolbar + relocated toggle, with its spec),
   then `feat(topbar)` (battery meter, dividers, About gating, corner token, with spec
-  migrations + match-media stub), then `docs(next_tasks)` (plan + ledger). Pushed to origin;
-  no merge into develop (user testing gate).
+  migrations + match-media stub), then `docs(next_tasks)` (plan + ledger). Pushed to origin.
+- Merged 2026-09-27 after user testing and go-ahead: rebased onto `develop` @ `23ca52c`
+  (the `docs(agents)` lesson-distillation commit landed mid-branch, no file overlap),
+  fast-forward-merged as `ac784a1` (history stayed linear), origin updated; the rebased
+  branch was force-with-lease synced to keep its ref identical to `develop`'s merged tip.

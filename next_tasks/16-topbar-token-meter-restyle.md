@@ -5,7 +5,8 @@
 > intent, not accidental drift.
 > **Type**: Visual restyle + two behavior refinements (About reachability, tablet meter shape)
 > **Suggested agents**: `ui-specialist` (audit-and-complete lead) → `ts-reviewer` → `qa-auditor`
-> **Status**: ✅ Implemented; checkpoint approved 2026-09-27; branch pending user testing.
+> **Status**: ✅ Complete — checkpoint approved 2026-09-27; merged into `develop` (ff-only)
+> after user testing the same day.
 > **Branch**: `feature/16-topbar-token-meter-restyle` (off `develop` @ `2e8ec7c`).
 
 ---
