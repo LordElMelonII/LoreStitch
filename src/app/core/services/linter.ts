@@ -599,9 +599,11 @@ function* lintPassChunks(
  */
 export interface LintPass {
   /**
-   * Advances one chunk of work; returns true once the pass is complete.
+   * Advances one chunk of work; returns true once the pass is complete
+   * (idempotently — a step after completion is a no-op returning true).
    * Chunk sizes come from the factory's `sizes` argument (whole phases per
-   * step by default).
+   * step in the sync `lintBook` driver; the factory default is the tuned
+   * chunk cadence).
    */
   step(): boolean;
   /** Progress as of the last chunk boundary. */
@@ -640,6 +642,13 @@ export function createLintPass(
   let result: LintDiagnostic[] | null = null;
   return {
     step(): boolean {
+      // Already complete: a late step() is a no-op. TS types a finished
+      // generator's `next().value` as the declared return type, but at
+      // runtime it is `undefined` — re-stepping must not launder that into
+      // `result` (typed `LintDiagnostic[] | null`).
+      if (result !== null) {
+        return true;
+      }
       const next = iterator.next();
       if (next.done === true) {
         result = next.value;
