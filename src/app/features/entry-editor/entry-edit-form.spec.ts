@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { EDIT_COMMIT_DEBOUNCE_MS } from './entry-editor.constants';
-import { entrySliceSignal } from './entry-edit-form';
+import { entrySliceSignal, extNumberOrNull, extText } from './entry-edit-form';
 
 /**
  * Comment-slice host: the smallest concrete shape of an `entrySliceSignal`
@@ -39,6 +39,31 @@ class NormalizingSliceHost {
     fallback: { comment: '' },
     pick: (entry) => ({ comment: entry.comment ?? '' }),
     toPatch: (_entry, model) => ({ comment: model.comment.trim() }),
+  });
+}
+
+/** Extensions-bag slice host: exactly `EntryInclusionGroup`'s group/weight slice. */
+@Component({
+  selector: 'app-extensions-slice-host',
+  template: '',
+})
+class ExtensionsSliceHost {
+  readonly entry = input<CharacterBookEntry>();
+
+  readonly model = entrySliceSignal<{ group: string; groupWeight: number | null }>({
+    source: this.entry,
+    fallback: { group: '', groupWeight: null },
+    pick: (entry) => ({
+      group: extText(entry.extensions['group']),
+      groupWeight: extNumberOrNull(entry.extensions['group_weight']),
+    }),
+    toPatch: (entry, model) => ({
+      extensions: {
+        ...entry.extensions,
+        group: model.group,
+        group_weight: model.groupWeight ?? 100,
+      },
+    }),
   });
 }
 
@@ -154,6 +179,75 @@ describe('entrySliceSignal idle-commit', () => {
     seed({ ...original(), comment: 'External' });
     expect(updateEntry).not.toHaveBeenCalled();
     expect(host.model()).toEqual({ comment: 'External' });
+
+    // The timer was dropped with the draft: idling writes nothing.
+    await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS * 2);
+    expect(updateEntry).not.toHaveBeenCalled();
+  });
+
+  it('re-applies an extensions-backed draft past a sibling-extension discrete write', async () => {
+    const extFixture = TestBed.createComponent(ExtensionsSliceHost);
+    const extHost = extFixture.componentInstance;
+    const base = original();
+    extFixture.componentRef.setInput('entry', base);
+    extFixture.detectChanges();
+
+    // The group/weight draft pends — the shape the e2e round-trip caught:
+    // fill Group + Group Weight, then click Prioritize Inclusion.
+    extHost.model.set({ group: 'test group', groupWeight: 77 });
+    extFixture.detectChanges();
+
+    // The discrete chip write replaces the entry and its extensions bag,
+    // touching a DIFFERENT subkey only.
+    const incoming: CharacterBookEntry = {
+      ...base,
+      extensions: { ...base.extensions, group_override: true },
+    };
+    extFixture.componentRef.setInput('entry', incoming);
+    extFixture.detectChanges();
+
+    // Field-granular merge: extensions.group_override is disjoint from the
+    // draft's extensions.group / extensions.group_weight → the draft is
+    // re-applied onto the incoming entry (the chip's bag rides along).
+    expect(updateEntry).toHaveBeenCalledOnce();
+    expect(updateEntry).toHaveBeenCalledWith(1, {
+      extensions: { ...incoming.extensions, group: 'test group', group_weight: 77 },
+    });
+    expect(extHost.model()).toEqual({ group: 'test group', groupWeight: 77 });
+
+    // The re-apply consumed the draft: the echo rebind reseeds nothing and
+    // idling writes nothing more.
+    extFixture.componentRef.setInput('entry', {
+      ...incoming,
+      extensions: { ...incoming.extensions, group: 'test group', group_weight: 77 },
+    });
+    extFixture.detectChanges();
+    expect(extHost.model()).toEqual({ group: 'test group', groupWeight: 77 });
+    await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS * 2);
+    expect(updateEntry).toHaveBeenCalledOnce();
+  });
+
+  it('still drops an extensions-backed draft when the same subkey changes externally', async () => {
+    const extFixture = TestBed.createComponent(ExtensionsSliceHost);
+    const extHost = extFixture.componentInstance;
+    const base = original();
+    extFixture.componentRef.setInput('entry', base);
+    extFixture.detectChanges();
+
+    extHost.model.set({ group: 'test group', groupWeight: 77 });
+    extFixture.detectChanges();
+
+    // An external write to extensions.group itself while the draft pends
+    // (e.g. a batch relabel): external wins at subkey granularity.
+    const incoming: CharacterBookEntry = {
+      ...base,
+      extensions: { ...base.extensions, group: 'External' },
+    };
+    extFixture.componentRef.setInput('entry', incoming);
+    extFixture.detectChanges();
+
+    expect(updateEntry).not.toHaveBeenCalled();
+    expect(extHost.model()).toEqual({ group: 'External', groupWeight: 100 });
 
     // The timer was dropped with the draft: idling writes nothing.
     await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS * 2);

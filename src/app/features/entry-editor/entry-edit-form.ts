@@ -30,6 +30,67 @@ function entryFieldValue(entry: object, key: string): unknown {
   return (entry as Record<string, unknown>)[key];
 }
 
+/**
+ * Runtime shape guard for the merge rule's one-level descent: `true` for
+ * non-null, non-array objects, so a vendor bag like `extensions` can be
+ * scanned by own key without an assertion. Arrays (e.g. the `triggers`
+ * filter) stay whole-value — descending into indexed fields would attribute
+ * changes no `toPatch` output can name.
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Records the fields one side of the merge comparison affects, at one-level
+ * field granularity: an unchanged value contributes nothing; a changed
+ * top-level key whose values are not both plain objects contributes `key`;
+ * two differing plain-object bags contribute `key.subKey` for every subkey
+ * in the union of both bags' own keys whose values differ (deeper nesting
+ * compares by reference — conservative). The vendor
+ * `extensions` bag is the only nested bag slices patch, and the descent is
+ * what keeps the merge honest for it: reference-comparing the bag whole made
+ * ANY discrete extension write (a chip toggle replaces the bag) overlap with
+ * ANY extension-backed text draft — typed user input was dropped (task 18 P5
+ * e2e: a group/weight draft lost to a Prioritize-Inclusion toggle).
+ */
+function addFieldEffects(target: Set<string>, key: string, before: unknown, after: unknown): void {
+  // Unchanged values (equal scalar, or the same bag reference) contribute no
+  // effect — only actual changes are attributed.
+  if (before === after) {
+    return;
+  }
+  if (isPlainObject(before) && isPlainObject(after)) {
+    for (const subKey of new Set([...Object.keys(before), ...Object.keys(after)])) {
+      if (before[subKey] !== after[subKey]) {
+        target.add(`${key}.${subKey}`);
+      }
+    }
+    return;
+  }
+  target.add(key);
+}
+
+/**
+ * Whether the fields one side writes meet the fields the other side changed.
+ * A whole-key field (recorded when a side's value failed the plain-object
+ * shape) covers every `key.subKey` of the opposite set — an unattributable
+ * change must never read as disjoint. Both directions are checked by the
+ * caller: either side can be the unattributable one.
+ */
+function fieldsOverlap(changed: Set<string>, written: Set<string>): boolean {
+  for (const field of written) {
+    if (changed.has(field)) {
+      return true;
+    }
+    const dot = field.indexOf('.');
+    if (dot > 0 && changed.has(field.slice(0, dot))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Coercion helpers for `extensions` values, which are untyped by spec
 // (`Record<string, unknown>`): forms need concrete, null-free field types.
@@ -80,13 +141,16 @@ export interface EntrySliceOptions<M> {
  * - **external replacement while a draft is pending (merge rule):** the
  *   mirror tracks the last-seen entry reference. If the replacement carries
  *   a different id the draft is dropped; if the externally-changed fields
- *   (own keys of both objects whose values differ — shallow compare,
- *   `extensions` by reference, deliberately conservative) stay outside the
- *   slice's `toPatch` keys (e.g. an `enabled` toggle while a content draft
- *   pends), the draft is re-applied onto the incoming entry; if they overlap
- *   the slice (e.g. a delimiter re-wrap applied while typing), external
- *   wins — the newer explicit user action is not clobbered by a stale
- *   ≤300 ms draft, the model re-seeds and the draft is dropped.
+ *   (own keys of both objects whose values differ, attributed at one-level
+ *   field granularity — a plain-object bag like `extensions` descends into
+ *   its own subkeys, see `addFieldEffects`) stay outside the fields the
+ *   slice's `toPatch` writes (e.g. an `enabled` toggle, or a sibling
+ *   extension like `group_override`, while a content / group draft pends),
+ *   the draft is re-applied onto the incoming entry; if they overlap the
+ *   slice (e.g. a delimiter re-wrap applied while typing, or an external
+ *   write to the same extension subkey), external wins — the newer explicit
+ *   user action is not clobbered by a stale ≤300 ms draft, the model
+ *   re-seeds and the draft is dropped.
  *
  * Echo suppression is split by path: the async timer commit self-identifies
  * through pick-equality (below); `echoing` flags only the synchronous
@@ -181,18 +245,39 @@ export function entrySliceSignal<M>(options: EntrySliceOptions<M>): WritableSign
         // and fall through to the plain reseed from the incoming entry.
         dropDraft();
       } else {
-        // Externally-changed fields: own keys of both objects whose values
-        // differ. Shallow per-key compare; nested objects like `extensions`
-        // compare by reference — deliberate and conservative (a re-used
-        // reference is "unchanged", a cloned one is "changed").
-        const externallyChanged = new Set<string>();
+        // Externally-changed fields vs the fields the draft's patch writes,
+        // both attributed at one-level granularity (`addFieldEffects`): for
+        // extension-backed slices the fields live INSIDE the `extensions`
+        // bag, so a sibling discrete write (`extensions.group_override`)
+        // must not read as an overlap with the draft's
+        // `extensions.group`/`extensions.group_weight`. A genuine
+        // same-subkey external write still wins.
+        const externalEffect = new Set<string>();
         for (const key of new Set([...Object.keys(previous), ...Object.keys(entry)])) {
-          if (entryFieldValue(previous, key) !== entryFieldValue(entry, key)) {
-            externallyChanged.add(key);
-          }
+          addFieldEffects(
+            externalEffect,
+            key,
+            entryFieldValue(previous, key),
+            entryFieldValue(entry, key),
+          );
         }
         const patch = untracked(() => options.toPatch(entry, model()));
-        if (Object.keys(patch).some((key) => externallyChanged.has(key))) {
+        // Diffing the patch bag against the incoming entry's bag yields
+        // exactly the written subkeys: a `toPatch` spread carries unchanged
+        // values verbatim, so only the rewritten ones differ by reference.
+        const patchEffect = new Set<string>();
+        for (const key of Object.keys(patch)) {
+          addFieldEffects(
+            patchEffect,
+            key,
+            entryFieldValue(entry, key),
+            entryFieldValue(patch, key),
+          );
+        }
+        if (
+          fieldsOverlap(externalEffect, patchEffect) ||
+          fieldsOverlap(patchEffect, externalEffect)
+        ) {
           // External patch overlaps the slice: external wins. The stale draft
           // is dropped (timer with it) and the model re-seeds from the
           // incoming entry — the `equal` fn drops a no-op set.
