@@ -48,14 +48,17 @@
   }
 
   .toolbar-content {
-    // mat-toolbar paints its own container surface (background + text color
-    // tokens default to --mat-sys-surface / --mat-sys-on-surface). Inside the
-    // filled field that would read as a foreign bar laid over the recessed
-    // well — the pill hosts only icon buttons carrying their own colors, so
-    // the container surface is dropped via the component tokens (never
-    // ::ng-deep).
-    --mat-toolbar-container-background-color: transparent;
-    --mat-toolbar-container-text-color: var(--mat-sys-on-surface-variant);
+    // The pill keeps mat-toolbar's container surface — written out here so
+    // the choice reads as chosen, not forgotten (Material's defaults are
+    // these same tokens today). User decision 2026-09-27: the pill must read
+    // as a distinct object resting on the recessed well, so the docked
+    // actions stay visible at a glance; `surface` against the filled field's
+    // `surface-container-highest` is the widest neutral gap in both themes.
+    // The pill stays neutral deliberately — the focus toggle inside carries
+    // this surface's one emphasis (its secondary-container active state),
+    // which a filled emphasis pill would swallow.
+    --mat-toolbar-container-background-color: var(--mat-sys-surface);
+    --mat-toolbar-container-text-color: var(--mat-sys-on-surface);
 
     display: flex;
     flex-direction: row;
