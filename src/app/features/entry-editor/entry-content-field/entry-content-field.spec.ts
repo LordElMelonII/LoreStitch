@@ -122,6 +122,29 @@ describe('EntryContentField', () => {
     expect(text()).toContain('0 chars · ~0 tokens · 0 lines');
   });
 
+  it('moves the stats from the form model before the workspace commit lands', async () => {
+    // The §5 discriminator under the idle-commit regime: the char/token/line
+    // stats read the textarea's Signal Form, not the workspace — they update
+    // per keystroke while the workspace entry still holds the pre-commit
+    // value (the commit trails by the window, plan 18 D1).
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await createPane({ content: 'King of Knights' });
+      expect(text()).toContain('15 chars · ~4 tokens · 1 lines');
+
+      await type('刀剑神域');
+      fixture.detectChanges();
+      expect(text()).toContain('4 chars · ~4 tokens · 1 lines');
+      expect(currentEntry().content).toBe('King of Knights');
+
+      // The idle commit then catches the workspace up to the form model.
+      await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
+      expect(currentEntry().content).toBe('刀剑神域');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows the delimiter badge only for recognized wrapping', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {

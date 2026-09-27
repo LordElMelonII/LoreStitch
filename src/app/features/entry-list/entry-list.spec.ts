@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { CdkVirtualForOf } from '@angular/cdk/scrolling';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
@@ -113,6 +114,36 @@ describe('EntryList', () => {
     // The search haystack folds once per entry change: title, keys, tags and
     // content joined on '\n', lowercased — the filter only `includes` over it.
     expect(items[0].search).toBe('saber\nsaber\nartoria\nking of knights.');
+  });
+
+  it('tracks the virtual rows by entry id (plan 18 D6)', async () => {
+    const list = await createList([
+      entry(0, { comment: 'Saber', keys: ['saber'] }),
+      entry(1, { comment: 'Rin', keys: ['rin'] }),
+    ]);
+
+    // The *cdkVirtualFor microsyntax's `trackBy: trackById` reaches the
+    // directive as `cdkVirtualForTrackBy`; CDK wraps it with a rendered-range
+    // offset but passes the return value through. templateCacheSize stays 0
+    // deliberately, so this track fn is what carries row reuse across a
+    // book-wide mutation.
+    // The structural directive hosts on a comment anchor — invisible to
+    // `By.directive` (elements only), so resolve it from the debug-node tree.
+    const hosts = fixture.debugElement.queryAllNodes(
+      (node) => node.injector.get(CdkVirtualForOf, null) !== null,
+    );
+    assert(hosts.length > 0);
+    const host = hosts[0];
+    assert(host);
+    const forOf = host.injector.get(CdkVirtualForOf);
+    const track = forOf.cdkVirtualForTrackBy;
+    assert(track);
+    const item = itemAt(list, 1);
+    assert(item);
+    expect(track(0, item)).toBe(1);
+
+    // The bound function itself is a pure id projection (index unused).
+    expect(list['trackById'](3, item)).toBe(1);
   });
 
   it('shows the empty state on an empty book', async () => {

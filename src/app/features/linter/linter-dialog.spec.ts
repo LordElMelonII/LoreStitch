@@ -100,6 +100,28 @@ describe('LinterDialog', () => {
     expect(el().querySelector('.section-heading')?.textContent?.trim()).toBe('Notes (1)');
   });
 
+  it('still lists recursion-graph findings the topbar badge no longer counts (plan 18 D4)', async () => {
+    // The badge reads the graph-free entryDiagnostics pass, so a live
+    // recursion cycle no longer lights it (linter-state.spec pins that);
+    // this pane reads the FULL diagnostics pass and must keep listing it.
+    await createDialog([
+      entry(0, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
+      entry(1, { comment: 'Beta', keys: ['beta'], content: 'the alpha falls' }),
+    ]);
+
+    expect(el().querySelector('.summary')?.textContent?.trim()).toBe(
+      '0 errors · 1 warning · 0 notes',
+    );
+    const warnings = [...el().querySelectorAll('.severity-section')].find(
+      (section) => section.getAttribute('data-severity') === 'warning',
+    );
+    assert(warnings);
+    expect(warnings.querySelector('.section-heading')?.textContent?.trim()).toBe('Warnings (1)');
+    expect(warnings.querySelector('.message')?.textContent).toContain(
+      'may activate during recursion',
+    );
+  });
+
   it('renders the core message verbatim with details, chip, and Go-to action', async () => {
     await createDialog([entry(0, { comment: 'Broken regex', keys: ['/servant(/'] })]);
 
