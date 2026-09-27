@@ -8,17 +8,44 @@
     aria-label="Entry content"
     placeholder="Lore content inserted when this entry activates…"
   ></textarea>
-  <button
-    matIconButton
-    matTextSuffix
-    type="button"
-    class="delimiter-btn"
-    (click)="openDelimiterDialog()"
-    [matTooltip]="delimiterTooltip()"
-    aria-label="Content delimiters"
-  >
-    <mat-icon>code</mat-icon>
-  </button>
+  <mat-toolbar class="toolbar-content">
+    <button
+      matIconButton
+      matTextSuffix
+      type="button"
+      class="delimiter-btn"
+      (click)="openDelimiterDialog()"
+      [matTooltip]="delimiterTooltip()"
+      aria-label="Content delimiters"
+    >
+      <mat-icon>code</mat-icon>
+    </button>
+    @if (isDesktop()) {
+      <!-- Desktop-only global toggle, relocated from the topbar. Inactive
+           mat-tab bodies keep their content in the DOM (visibility: hidden,
+           task 11 multi-tab editing), so one inert copy per open entry tab
+           exists: it is removed from the a11y tree and unclickable there,
+           and layout.toggleFocusMode() is a single global signal, so the
+           copies are functionally harmless. E2E assertions must scope to
+           .mat-mdc-tab-body-active (the established entry-editor rule). -->
+      <button
+        matIconButton
+        type="button"
+        class="focus-toggle"
+        [class.toggle-active]="layout.focusMode()"
+        (click)="layout.toggleFocusMode()"
+        [matTooltip]="
+          layout.focusMode()
+            ? 'Exit focus mode — restore full editor width'
+            : 'Focus mode — narrow the editor for easier reading'
+        "
+        [attr.aria-pressed]="layout.focusMode()"
+        aria-label="Toggle focus mode"
+      >
+        <mat-icon>center_focus_strong</mat-icon>
+      </button>
+    }
+  </mat-toolbar>
   @if (delimiterBadge(); as badge) {
     <mat-hint>{{ badge }} · click the code button to change</mat-hint>
   } @else if (malformedBadge(); as label) {

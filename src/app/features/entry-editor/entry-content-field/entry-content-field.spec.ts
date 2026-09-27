@@ -3,14 +3,21 @@ import { By } from '@angular/platform-browser';
 import { MatTooltip } from '@angular/material/tooltip';
 import { CharacterBookEntry, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { LayoutService } from '../../../shared/services/layout.service';
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
 import { DelimiterDialog } from '../../delimiters/delimiter-dialog';
 import { EntryContentField } from './entry-content-field';
+import { installMatchMediaStub } from '../../../../testing/match-media-stub';
 import { projectOf } from '../../../../testing/project-fixtures';
 
 describe('EntryContentField', () => {
   let workspace: WorkspaceService;
   let openResponsive: ReturnType<typeof vi.fn>;
+  let desktop: {
+    setDesktop: (matches: boolean) => void;
+    setTablet: (matches: boolean) => void;
+    setMobile: (matches: boolean) => void;
+  };
   let fixture: ComponentFixture<EntryContentField>;
 
   function currentEntry(): CharacterBookEntry {
@@ -23,7 +30,10 @@ describe('EntryContentField', () => {
     overrides: Partial<CharacterBookEntry> = {},
   ): Promise<EntryContentField> {
     workspace.activeProject.set(
-      projectOf([{ ...createEmptyEntry(0), ...overrides }], { id: 'content-project', title: 'Content' }),
+      projectOf([{ ...createEmptyEntry(0), ...overrides }], {
+        id: 'content-project',
+        title: 'Content',
+      }),
     );
     fixture = TestBed.createComponent(EntryContentField);
     fixture.componentRef.setInput('entry', structuredClone(currentEntry()));
@@ -62,7 +72,10 @@ describe('EntryContentField', () => {
 
   beforeEach(async () => {
     // The delimiter pane opens through the responsive overlay (dialog or
-    // sheet); the stub keeps LayoutService's media queries out of the spec.
+    // sheet); the provider stub keeps that path out of the spec, while the
+    // matchMedia stub answers the LayoutService queries the component now
+    // reads directly (the relocated focus toggle is desktop-only).
+    desktop = installMatchMediaStub();
     openResponsive = vi.fn();
     TestBed.configureTestingModule({
       imports: [EntryContentField],
@@ -199,5 +212,58 @@ describe('EntryContentField', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('.malformed-hint')).toBeNull();
     expect(el.textContent).not.toContain('click the code button to fix');
+  });
+
+  // -------------------------------------------------------------------------
+  // Relocated focus toggle (task 16): the topbar no longer hosts it — it
+  // lives in the content field's suffix toolbar, desktop-only. The pins that
+  // used to sit in topbar.spec.ts moved here with the control.
+  // -------------------------------------------------------------------------
+
+  it('hosts the relocated focus toggle in the suffix toolbar and drives the global layout state', async () => {
+    await createPane({ content: 'plain lore text' });
+    const layout = TestBed.inject(LayoutService);
+    // Unknown viewports classify as desktop (no query has answered yet), so
+    // the desktop-only toggle is present by default.
+    const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[aria-label="Toggle focus mode"]',
+    );
+    assert(toggle);
+    // The toggle joined the delimiter button inside the suffix toolbar pill.
+    expect(toggle.closest('.toolbar-content')).toBeTruthy();
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+
+    // On: flips the shared layout state and the pressed marker.
+    toggle.click();
+    fixture.detectChanges();
+    expect(layout.focusMode()).toBe(true);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.classList.contains('toggle-active')).toBe(true);
+
+    // Off: the constraint is lifted again.
+    toggle.click();
+    fixture.detectChanges();
+    expect(layout.focusMode()).toBe(false);
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('drops the focus toggle below the desktop class (the contract the topbar used to pin)', async () => {
+    // Pin an explicit phone viewport before creating the pane: LayoutService
+    // classifies a window where no query has answered yet as desktop.
+    desktop.setMobile(true);
+    await createPane({ content: 'plain lore text' });
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Toggle focus mode"]'),
+    ).toBeNull();
+
+    desktop.setMobile(false);
+    desktop.setDesktop(true);
+    // The CDK observer throttles breakpoint emissions (auditTime) on the
+    // RxJS scheduler — settle with a real timer, never a faked clock.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Toggle focus mode"]'),
+    ).toBeTruthy();
   });
 });

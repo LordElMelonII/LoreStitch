@@ -46,4 +46,25 @@
   .malformed-hint {
     color: var(--mat-sys-error);
   }
+
+  .toolbar-content {
+    // mat-toolbar paints its own container surface (background + text color
+    // tokens default to --mat-sys-surface / --mat-sys-on-surface). Inside the
+    // filled field that would read as a foreign bar laid over the recessed
+    // well — the pill hosts only icon buttons carrying their own colors, so
+    // the container surface is dropped via the component tokens (never
+    // ::ng-deep).
+    --mat-toolbar-container-background-color: transparent;
+    --mat-toolbar-container-text-color: var(--mat-sys-on-surface-variant);
+
+    display: flex;
+    flex-direction: row;
+    border-radius: var(--mat-sys-corner-extra-extra-large);
+    width: min-content;
+
+    .toggle-active {
+      background: var(--mat-sys-secondary-container);
+      color: var(--mat-sys-on-secondary-container);
+    }
+  }
 }

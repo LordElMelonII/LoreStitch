@@ -19,6 +19,8 @@ import {
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
 import { type DelimiterDialogData } from '../../delimiters/delimiter-dialog.model';
 import { entrySliceSignal } from '../entry-edit-form';
+import { LayoutService } from '../../../shared/services/layout.service';
+import { MatToolbarModule } from '@angular/material/toolbar';
 
 /** Form model of the content editor. */
 interface EntryContentModel {
@@ -38,6 +40,7 @@ interface EntryContentModel {
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatToolbarModule,
     MatTooltipModule,
   ],
   templateUrl: './entry-content-field.html',
@@ -45,6 +48,9 @@ interface EntryContentModel {
 })
 export class EntryContentField {
   private readonly overlays = inject(ResponsiveOverlayService);
+  protected readonly layout = inject(LayoutService);
+
+  protected readonly isDesktop = this.layout.isDesktop;
 
   /** The entry being edited (owned by the enclosing `EntryFields`). */
   readonly entry = input.required<CharacterBookEntry>();
