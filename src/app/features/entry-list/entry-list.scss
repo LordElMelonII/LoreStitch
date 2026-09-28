@@ -91,9 +91,10 @@
 .list-viewport {
   flex: 1;
   min-height: 0;
-  // Rows truncate to the drawer's width (title ellipsizes, key chips clip)
-  // via the global `app-entry-list` wrapper rule in src/styles.scss, so
-  // nothing overflows horizontally — this is only a rendering guard.
+  // Rows truncate to the drawer's width (title ellipsizes, key chips
+  // ellipsize their labels) via the global `app-entry-list` wrapper rule in
+  // src/styles.scss, so nothing overflows horizontally — this is only a
+  // rendering guard.
   overflow-x: hidden;
 }
 
@@ -182,6 +183,13 @@
     }
   }
 
+  // Chip-truncation contract: the row never scrolls, so key chips truncate
+  // like the title does — each plain key chip is allowed to shrink below its
+  // content size (`flex: 0 1 auto` + `min-width: 0`) and ellipsizes its own
+  // label, instead of the row edge slicing whole chips mid-character. The
+  // +N overflow chip and the constant/vectorized state chips stay
+  // `flex: none`: counts and status badges must remain fully readable. The
+  // tooltip on every chip carries the full text either way.
   .item-keys {
     display: flex;
     gap: 4px;
@@ -195,6 +203,14 @@
       color: var(--mat-sys-on-surface-variant);
       border-radius: var(--mat-sys-corner-full);
       padding: 0 6px;
+      // Shrinkable with an internal ellipsis: `min-width: 0` lifts the
+      // min-content floor so the chip compresses, and overflow + ellipsis
+      // render the truncated label inside the surviving pill.
+      flex: 0 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
 
       &.constant {
         background: var(--mat-sys-tertiary-container);
@@ -206,6 +222,15 @@
       }
       &.more {
         background: transparent;
+      }
+
+      // The overflow count and the state badges never compress — they carry
+      // information that must stay fully readable; only plain key chips
+      // shrink and ellipsize.
+      &.constant,
+      &.vectorized,
+      &.more {
+        flex: none;
       }
     }
 
