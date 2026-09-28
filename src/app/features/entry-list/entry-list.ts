@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   afterNextRender,
   computed,
   effect,
@@ -33,7 +34,7 @@ import { ResponsiveOverlayService } from '../../shared/services/responsive-overl
 import { LayoutService } from '../../shared/services/layout.service';
 import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { debouncedSignal } from '../../shared/util/debounced-signal';
-import { matchesQuery, type EntryListItem } from './entry-list.model';
+import { matchesQuery, applyRangeSelection, type EntryListItem } from './entry-list.model';
 import { type BatchOperationsDialogData } from './batch-operations-dialog';
 import { type DelimiterDialogData } from '../delimiters/delimiter-dialog.model';
 
@@ -41,6 +42,19 @@ import { type DelimiterDialogData } from '../delimiters/delimiter-dialog.model';
 interface EntryFilterModel {
   query: string;
 }
+
+/**
+ * Long-press threshold on a row checkbox before the touch range gesture
+ * fires (task 20 D3). Exported for the specs, which drive the timer on a
+ * faked clock.
+ */
+export const LONG_PRESS_MS = 500;
+
+/**
+ * Pointer drift (px) beyond which an armed long-press cancels: a drifting
+ * finger is a scroll/abort intent, not a gesture (task 20 D3).
+ */
+const LONG_PRESS_SLOP_PX = 8;
 
 /**
  * Sidebar listing every entry; supports filtering (text + tag), batch
@@ -108,6 +122,21 @@ export class EntryList {
       });
     });
 
+    // Shift-click and long-press-release interception (task 20 D2/D3) must
+    // run BEFORE the row checkbox's own activation: MatCheckbox flips its
+    // state and emits the `(change)` output from the inner input's click
+    // listener (target phase), so a bubble-phase preventDefault on the
+    // checkbox host is too late — the native toggle would fire first and
+    // corrupt the range anchor (verified in Chromium:
+    // __screenshots__/task20-probe). A delegated capture-phase listener on
+    // the host element is the earliest possible interception point; see
+    // `interceptCheckboxClick`.
+    const hostElement = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+    hostElement.addEventListener('click', this.interceptCheckboxClick, true);
+    destroyRef.onDestroy(() =>
+      hostElement.removeEventListener('click', this.interceptCheckboxClick, true),
+    );
+
     // Batch selection and tag filters are scoped to one project: opening
     // another project, importing a book or closing the project must drop
     // them, or the stale ids would drive silent no-op batch actions (and
@@ -120,6 +149,7 @@ export class EntryList {
         untracked(() => {
           this.selection.set(new Set());
           this.tagFilter.set(new Set());
+          this.selectionAnchor.set(null);
         });
       }
       selectedProjectId = projectId;
@@ -200,6 +230,15 @@ export class EntryList {
 
   /** Selected entry ids for the batch suite. */
   protected readonly selection = signal<ReadonlySet<number>>(new Set());
+
+  /**
+   * Range-selection anchor (task 20 D1): the last row checkbox toggled
+   * without a range gesture. A range gesture applies the inclusive
+   * `filtered()` slice between this anchor and the gesture row; the anchor
+   * only moves on a plain toggle (or on a degraded gesture) and is nulled
+   * by `clearSelection()` and the project-switch reset.
+   */
+  private readonly selectionAnchor = signal<number | null>(null);
 
   /** Tags the filter isolates on: an entry must carry all of them. */
   protected readonly tagFilter = signal<ReadonlySet<string>>(new Set());
@@ -334,6 +373,10 @@ export class EntryList {
   }
 
   protected toggleRow(item: EntryListItem, checked: boolean): void {
+    // A plain (change)-path toggle is a non-gesture toggle: it always moves
+    // the range anchor (task 20 D1) — including when a range gesture
+    // degrades to this plain path.
+    this.selectionAnchor.set(item.id);
     this.selection.update((current) => {
       const next = new Set(current);
       if (checked) {
@@ -349,6 +392,155 @@ export class EntryList {
    * batch swap routes here through the shell. */
   clearSelection(): void {
     this.selection.set(new Set());
+    // A cleared selection has no anchor to range from (task 20 D1).
+    this.selectionAnchor.set(null);
+  }
+
+  // -------------------------------------------------------------------------
+  // Range selection gestures (task 20 D1–D3, row checkbox only)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The touch press currently armed for a long-press: its row item and the
+   * pointerdown position (for the drift slop). Transient gesture state,
+   * deliberately not signals — nothing renders from it (task 20 D5).
+   */
+  private armedPress: { item: EntryListItem; x: number; y: number } | null = null;
+
+  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * A fired long-press whose release click has not been swallowed yet (D3):
+   * the capture interceptor drops the click a browser synthesizes on
+   * release, so the native toggle cannot apply the range a second time.
+   */
+  private suppressNextClick = false;
+
+  /**
+   * D1 range semantics for one gesture on `item` (a shift+click or a fired
+   * long-press): every entry in the inclusive `filtered()` slice between
+   * the anchor and `item` — either direction — takes `item`'s new state,
+   * and the anchor does not move (gesture A→C then A→E covers A→E). With no
+   * anchor, or an anchor gone from the current view (filtered out or
+   * deleted), the gesture degrades to a plain single toggle of `item` and
+   * the anchor moves to it.
+   */
+  private applyRangeGesture(item: EntryListItem): void {
+    const anchorId = this.selectionAnchor();
+    const current = this.selection();
+    const target = !current.has(item.id);
+    if (anchorId !== null) {
+      const next = applyRangeSelection(current, this.filtered(), anchorId, item.id, target);
+      if (next !== current) {
+        this.selection.set(next);
+        return;
+      }
+    }
+    this.toggleRow(item, target);
+  }
+
+  /**
+   * Capture-phase click interceptor over this component's subtree, bound in
+   * the constructor (see the registration note there for why it must run
+   * before the checkbox's own activation).
+   */
+  private readonly interceptCheckboxClick = (event: MouseEvent): void => {
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest('.row-select')) {
+      return;
+    }
+    if (this.suppressNextClick) {
+      // D3: the click a browser synthesizes after a fired long-press —
+      // swallow it exactly once (cleared here or on the next pointerdown)
+      // so the native toggle cannot apply the range a second time.
+      this.suppressNextClick = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (!event.shiftKey) {
+      // Plain click: nothing intercepted, the native (change) path stays
+      // byte-identical.
+      return;
+    }
+    // D2: cancel the native activation (label→input forwarding and the
+    // input's own listener), then apply the range — the ONLY mutation.
+    event.preventDefault();
+    event.stopPropagation();
+    const rawId = target.closest<HTMLElement>('.row-select')?.getAttribute('data-entry-id');
+    const id = rawId === null || rawId === undefined || rawId === '' ? Number.NaN : Number(rawId);
+    const item = Number.isNaN(id) ? undefined : this.filtered().find((c) => c.id === id);
+    if (item) {
+      this.applyRangeGesture(item);
+    }
+  };
+
+  /**
+   * Arms the long-press timer for touch/pen presses on a row checkbox (D3).
+   * The mouse never arms: desktop keeps shift+click semantics. Touch
+   * pointers are implicitly captured by the pointerdown target, so the
+   * host-bound move/up handlers keep seeing the pointer even as the finger
+   * drifts off the small checkbox.
+   */
+  protected onRowSelectPointerDown(item: EntryListItem, event: PointerEvent): void {
+    // A new press always clears a stale swallow flag (D3).
+    this.suppressNextClick = false;
+    this.cancelLongPress();
+    if (event.pointerType === 'mouse') {
+      return;
+    }
+    this.armedPress = { item, x: event.clientX, y: event.clientY };
+    this.longPressTimer = setTimeout(() => {
+      this.longPressTimer = null;
+      const press = this.armedPress;
+      this.armedPress = null;
+      if (!press) {
+        return;
+      }
+      this.suppressNextClick = true;
+      this.applyRangeGesture(press.item);
+    }, LONG_PRESS_MS);
+  }
+
+  /** Cancels the armed long-press once the finger drifts beyond the slop. */
+  protected onRowSelectPointerMove(event: PointerEvent): void {
+    const press = this.armedPress;
+    if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > LONG_PRESS_SLOP_PX) {
+      this.cancelLongPress();
+    }
+  }
+
+  /** Release before the threshold: a plain tap — the native path owns it. */
+  protected onRowSelectPointerUp(): void {
+    this.cancelLongPress();
+  }
+
+  /**
+   * The virtual scroller taking over a drag cancels the pointer — that is
+   * the scroll path, never fought (D3).
+   */
+  protected onRowSelectPointerCancel(): void {
+    this.cancelLongPress();
+  }
+
+  /**
+   * Suppresses the checkbox contextmenu only while a touch press is armed
+   * or has fired and not yet been swallowed — Android fires it on a held
+   * press. A desktop right-click never finds either state set, so it stays
+   * untouched (D3: guarded by gesture state, never unconditionally).
+   */
+  protected onRowSelectContextMenu(event: MouseEvent): void {
+    if (this.armedPress !== null || this.suppressNextClick) {
+      event.preventDefault();
+    }
+  }
+
+  private cancelLongPress(): void {
+    this.armedPress = null;
+    if (this.longPressTimer !== null) {
+      clearTimeout(this.longPressTimer);
+      this.longPressTimer = null;
+    }
   }
 
   protected toggleTagFilter(tag: string): void {

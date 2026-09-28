@@ -1,4 +1,9 @@
-import { entrySearchHaystack, matchesQuery } from './entry-list.model';
+import {
+  applyRangeSelection,
+  entrySearchHaystack,
+  matchesQuery,
+  type EntryListItem,
+} from './entry-list.model';
 
 describe('entrySearchHaystack', () => {
   const title = 'Crimson Dragon';
@@ -55,5 +60,62 @@ describe('entrySearchHaystack', () => {
     for (const query of queries) {
       expect(matchesQuery(haystack, query)).toBe(legacyScan(query));
     }
+  });
+});
+
+describe('applyRangeSelection', () => {
+  /** Minimal row fixture — the range math only reads `id`. */
+  function viewItem(id: number): EntryListItem {
+    return {
+      id,
+      title: `Entry ${id}`,
+      keys: [],
+      enabled: true,
+      state: 'normal',
+      dirty: false,
+      content: '',
+      tokens: 0,
+      tags: [],
+      search: `entry ${id}`,
+    };
+  }
+
+  function view(...ids: number[]): EntryListItem[] {
+    return ids.map(viewItem);
+  }
+
+  it('selects the inclusive slice in either direction, preserving ids outside it', () => {
+    const current = new Set([5]);
+    // Anchor before the gesture row...
+    expect(applyRangeSelection(current, view(1, 2, 3, 4, 5), 2, 4, true)).toEqual(
+      new Set([2, 3, 4, 5]),
+    );
+    // ...and after it (either direction, same inclusive slice).
+    expect(applyRangeSelection(current, view(1, 2, 3, 4, 5), 4, 2, true)).toEqual(
+      new Set([2, 3, 4, 5]),
+    );
+    // A single-row range when both endpoints meet.
+    expect(applyRangeSelection(current, view(1, 2, 3), 2, 2, true)).toEqual(new Set([2, 5]));
+  });
+
+  it('deselects the slice when the target is false, preserving the rest', () => {
+    const current = new Set([1, 2, 3, 4, 9]);
+    expect(applyRangeSelection(current, view(1, 2, 3, 4, 5), 3, 1, false)).toEqual(new Set([4, 9]));
+    expect(applyRangeSelection(current, view(1, 2, 3, 4, 5), 1, 3, false)).toEqual(new Set([4, 9]));
+    // A partially selected set still gets the full slice added: the
+    // component computes the target from the gesture row, not per id.
+    expect(applyRangeSelection(new Set([2]), view(1, 2, 3, 4, 5), 1, 4, true)).toEqual(
+      new Set([1, 2, 3, 4]),
+    );
+  });
+
+  it('returns the same reference when either endpoint is missing from the view', () => {
+    const current = new Set([1, 2]);
+    const entries = view(1, 2, 3);
+    // The component reads the by-reference result as its degradation signal
+    // (plain single toggle of the gesture row), so identity is the contract.
+    expect(applyRangeSelection(current, entries, 9, 2, true)).toBe(current);
+    expect(applyRangeSelection(current, entries, 1, 9, true)).toBe(current);
+    expect(applyRangeSelection(current, [], 1, 1, true)).toBe(current);
   });
 });

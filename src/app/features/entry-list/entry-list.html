@@ -172,11 +172,22 @@
     role="button"
     [attr.aria-label]="'Open entry ' + item.title"
   >
+    <!-- Range-selection gestures (task 20) live on this checkbox only:
+         shift+click is intercepted capture-phase (EntryList's delegated
+         listener — it must run before the input's own activation), the
+         long-press machinery rides the pointer bindings below. Plain
+         clicks keep the native (change) path. -->
     <mat-checkbox
       class="row-select"
+      [attr.data-entry-id]="item.id"
       [checked]="selection().has(item.id)"
       (change)="toggleRow(item, $event.checked)"
       (click)="$event.stopPropagation()"
+      (pointerdown)="onRowSelectPointerDown(item, $event)"
+      (pointermove)="onRowSelectPointerMove($event)"
+      (pointerup)="onRowSelectPointerUp()"
+      (pointercancel)="onRowSelectPointerCancel()"
+      (contextmenu)="onRowSelectContextMenu($event)"
       [attr.aria-label]="'Select ' + item.title"
     />
     <mat-icon class="drag-handle" cdkDragHandle>drag_indicator</mat-icon>

@@ -1,7 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import type { DebugElement } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { CdkVirtualForOf } from '@angular/cdk/scrolling';
 import { MatDialog } from '@angular/material/dialog';
+import { MatCheckbox } from '@angular/material/checkbox';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
@@ -10,7 +12,7 @@ import { ProjectActionsService } from '../shell/project-actions.service';
 import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
 import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { installMatchMediaStub } from '../../../testing/match-media-stub';
-import { EntryList } from './entry-list';
+import { EntryList, LONG_PRESS_MS } from './entry-list';
 import { BatchOperationsDialog } from './batch-operations-dialog';
 import { DelimiterDialog } from '../delimiters/delimiter-dialog';
 import { entryWith as entry, projectOf } from '../../../testing/project-fixtures';
@@ -61,6 +63,42 @@ describe('EntryList', () => {
   async function settleFilter(): Promise<void> {
     fixture.detectChanges();
     await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+  }
+
+  /**
+   * The i-th rendered row checkbox, in view order. The test viewport keeps
+   * small books (and small filtered views) fully rendered — keep DOM-driven
+   * specs within the rendered window.
+   */
+  function checkboxAt(index: number): DebugElement {
+    const checkbox = fixture.debugElement.queryAll(By.css('.row-select'))[index];
+    assert(checkbox);
+    return checkbox;
+  }
+
+  /** The native input Material renders inside a row checkbox. */
+  function checkboxInput(checkbox: DebugElement): HTMLInputElement {
+    const input: HTMLInputElement | null = checkbox.nativeElement.querySelector('input');
+    assert(input);
+    return input;
+  }
+
+  /**
+   * Dispatches a pointer event on a row checkbox. The handlers only read
+   * `pointerType`/`clientX`/`clientY` (plan 20 D4's dispatch contract); the
+   * test env's PointerEvent carries them natively.
+   */
+  function pointer(checkbox: DebugElement, type: string, init: PointerEventInit = {}): void {
+    checkbox.nativeElement.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, cancelable: true, ...init }),
+    );
+  }
+
+  /** Shift+click dispatched at a row checkbox's input, as a browser hits it. */
+  function shiftClick(checkbox: DebugElement): MouseEvent {
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: true });
+    checkboxInput(checkbox).dispatchEvent(event);
+    return event;
   }
 
   beforeEach(async () => {
@@ -634,5 +672,274 @@ describe('EntryList', () => {
     const list = await createList([entry(0)]);
     // No commits exist, so every entry differs from HEAD.
     expect(list['items']()[0]?.dirty).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Range selection gestures (task 20 D1–D3, row checkbox only)
+  // -------------------------------------------------------------------------
+
+  it('keeps the range anchor across gestures and resets it with the selection', async () => {
+    const list = await createList([entry(0), entry(1), entry(2), entry(3)]);
+    expect(list['selectionAnchor']()).toBeNull();
+
+    // A plain (change)-path toggle sets the anchor.
+    list['toggleRow'](itemAt(list, 1), true);
+    expect(list['selectionAnchor']()).toBe(1);
+
+    // A range gesture never moves the anchor: A→C then A→E covers A→E.
+    list['applyRangeGesture'](itemAt(list, 3));
+    expect(list['selection']()).toEqual(new Set([1, 2, 3]));
+    list['applyRangeGesture'](itemAt(list, 0)); // row 0 unselected → select 0..1
+    expect(list['selection']()).toEqual(new Set([0, 1, 2, 3]));
+    expect(list['selectionAnchor']()).toBe(1);
+
+    // toggleSelectAll deliberately leaves the anchor alone.
+    list.selectAllShown(false);
+    expect(list['selection']()).toEqual(new Set());
+    expect(list['selectionAnchor']()).toBe(1);
+
+    // clearSelection nulls it — and so does the project-switch reset.
+    list.clearSelection();
+    expect(list['selectionAnchor']()).toBeNull();
+    list['toggleRow'](itemAt(list, 0), true);
+    expect(list['selectionAnchor']()).toBe(0);
+    workspace.activeProject.set(seededProject([entry(0)], 'other-project'));
+    await settle();
+    expect(list['selectionAnchor']()).toBeNull();
+    expect(list['selection']().size).toBe(0);
+  });
+
+  it('degrades to a plain toggle when the anchor left the filtered view', async () => {
+    const list = await createList([
+      entry(0, { comment: 'Alpha' }),
+      entry(1, { comment: 'Beta' }),
+      entry(2, { comment: 'Gamma' }),
+    ]);
+    list['toggleRow'](itemAt(list, 0), true); // anchor 0 → {0}
+    list['filterModel'].set({ query: 'beta' });
+    await settleFilter();
+    expect(list['filtered']().map((i) => i.id)).toEqual([1]);
+
+    list['applyRangeGesture'](itemAt(list, 1));
+
+    // No range: the hidden anchor degrades to a plain toggle of the gesture
+    // row (the hidden selection 0 survives, as with any plain toggle), and
+    // the anchor moves to the gesture row.
+    expect(list['selection']()).toEqual(new Set([0, 1]));
+    expect(list['selectionAnchor']()).toBe(1);
+  });
+
+  it('range-selects from the anchor on checkbox shift-click, applying exactly once', async () => {
+    const list = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    const openSpy = vi.spyOn(workspace, 'openEntry');
+    list['toggleRow'](itemAt(list, 1), true); // plain path: anchor 1 → {1}
+
+    const shift = shiftClick(checkboxAt(2));
+    await settle();
+    // The activation was canceled, so `(change)` never fired and the D1
+    // application is the only mutation.
+    expect(shift.defaultPrevented).toBe(true);
+    expect(list['selection']()).toEqual(new Set([1, 2]));
+
+    // Exactly once, proven behaviorally: the anchor still sits on row 1, so
+    // shift-clicking the now-selected row 2 deselects 1..2. A double
+    // application (native toggleRow also firing) would have moved the
+    // anchor to 2 and deselected only row 2.
+    shiftClick(checkboxAt(2));
+    await settle();
+    expect(list['selection']()).toEqual(new Set());
+
+    // The row body's open() never saw a checkbox click.
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps plain checkbox clicks on the native (change) path byte-identically', async () => {
+    const list = await createList([entry(0), entry(1)]);
+    fixture.detectChanges();
+    const openSpy = vi.spyOn(workspace, 'openEntry');
+    const checkbox = checkboxAt(0);
+    const emitSpy = vi.spyOn(checkbox.injector.get(MatCheckbox).change, 'emit');
+
+    const plain = new MouseEvent('click', { bubbles: true, cancelable: true });
+    checkboxInput(checkbox).dispatchEvent(plain);
+    await settle();
+
+    // Nothing intercepted: activation not canceled, the change output fired
+    // exactly once, and the toggle went through the native path (which also
+    // moves the range anchor).
+    expect(plain.defaultPrevented).toBe(false);
+    expect(emitSpy).toHaveBeenCalledTimes(1);
+    expect(list['selection']()).toEqual(new Set([0]));
+    expect(list['selectionAnchor']()).toBe(0);
+    // ...and the row body never opened (the template's stopPropagation).
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('ranges over the filtered view and keeps selections hidden by the filter', async () => {
+    const list = await createList([
+      entry(0, { comment: 'Alpha' }),
+      entry(1, { comment: 'Hidden' }),
+      entry(2, { comment: 'Beta' }),
+      entry(3, { comment: 'Gamma' }),
+    ]);
+    list['toggleRow'](itemAt(list, 1), true); // hidden row selected first → {1}
+    list['toggleRow'](itemAt(list, 0), true); // plain toggle: anchor 0 → {0, 1}
+    list['filterModel'].set({ query: 'a' }); // view: Alpha, Beta, Gamma
+    await settleFilter();
+    expect(list['filtered']().map((i) => i.id)).toEqual([0, 2, 3]);
+
+    // Shift-click Gamma: the slice spans the FILTERED view only.
+    shiftClick(checkboxAt(2));
+    await settle();
+    expect(list['selection']()).toEqual(new Set([0, 1, 2, 3]));
+
+    // Deselect over the filtered view (anchor still 0): shift-clicking Beta
+    // drops 0 and 2 while the hidden selection 1 survives.
+    shiftClick(checkboxAt(1));
+    await settle();
+    expect(list['selection']()).toEqual(new Set([1, 3]));
+  });
+
+  it('long-press on a checkbox range-applies at LONG_PRESS_MS for touch pointers', async () => {
+    const list = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    list['toggleRow'](itemAt(list, 0), true); // anchor 0 → {0}
+
+    pointer(checkboxAt(2), 'pointerdown', { pointerType: 'touch', clientX: 10, clientY: 10 });
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS - 1);
+    expect(list['selection']()).toEqual(new Set([0]));
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(list['selection']()).toEqual(new Set([0, 1, 2]));
+    // The anchor does not move on a range gesture.
+    expect(list['selectionAnchor']()).toBe(0);
+  });
+
+  it('arms the long-press for touch and pen only, never the mouse', async () => {
+    const list = await createList([entry(0), entry(1)]);
+    fixture.detectChanges();
+
+    pointer(checkboxAt(0), 'pointerdown', { pointerType: 'mouse' });
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS * 2);
+    expect(list['selection']().size).toBe(0);
+
+    // Pen arms; firing with no anchor degrades to the plain single toggle
+    // of the gesture row and moves the anchor to it.
+    pointer(checkboxAt(1), 'pointerdown', { pointerType: 'pen' });
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+    expect(list['selection']()).toEqual(new Set([1]));
+    expect(list['selectionAnchor']()).toBe(1);
+  });
+
+  it('cancels the armed long-press on early release, pointercancel and drift', async () => {
+    const list = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+
+    // Early release: a plain tap — the native path owns it.
+    pointer(checkboxAt(0), 'pointerdown', { pointerType: 'touch' });
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS - 100);
+    pointer(checkboxAt(0), 'pointerup');
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+    expect(list['selection']().size).toBe(0);
+
+    // pointercancel: the virtual scroller taking over a drag — never fought.
+    pointer(checkboxAt(1), 'pointerdown', { pointerType: 'touch' });
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS - 100);
+    pointer(checkboxAt(1), 'pointercancel');
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+    expect(list['selection']().size).toBe(0);
+
+    // Drift within the slop does not cancel; beyond it does.
+    pointer(checkboxAt(2), 'pointerdown', { pointerType: 'touch', clientX: 100, clientY: 100 });
+    pointer(checkboxAt(2), 'pointermove', { pointerType: 'touch', clientX: 104, clientY: 104 });
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+    expect(list['selection']()).toEqual(new Set([2]));
+    pointer(checkboxAt(0), 'pointerdown', { pointerType: 'touch', clientX: 100, clientY: 100 });
+    pointer(checkboxAt(0), 'pointermove', { pointerType: 'touch', clientX: 130, clientY: 100 });
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+    expect(list['selection']()).toEqual(new Set([2])); // unchanged: canceled
+  });
+
+  it('swallows the post-long-press click exactly once', async () => {
+    const list = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    list['toggleRow'](itemAt(list, 0), true); // anchor 0 → {0}
+    const checkbox = checkboxAt(2);
+
+    pointer(checkbox, 'pointerdown', { pointerType: 'touch' });
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+    await settle();
+    expect(list['selection']()).toEqual(new Set([0, 1, 2]));
+
+    // The release synthesizes a click: swallowed before the input's own
+    // listener — no native toggle, no (change) emission.
+    const swallowed = new MouseEvent('click', { bubbles: true, cancelable: true });
+    checkboxInput(checkbox).dispatchEvent(swallowed);
+    await settle();
+    expect(swallowed.defaultPrevented).toBe(true);
+    expect(list['selection']()).toEqual(new Set([0, 1, 2]));
+
+    // Swallowed exactly once: the next plain click runs the native path and
+    // toggles row 2 back off through the real (change) binding.
+    const plain = new MouseEvent('click', { bubbles: true, cancelable: true });
+    checkboxInput(checkbox).dispatchEvent(plain);
+    await settle();
+    expect(plain.defaultPrevented).toBe(false);
+    expect(list['selection']()).toEqual(new Set([0, 1]));
+  });
+
+  it('clears the click swallow on the next pointerdown when no release click came', async () => {
+    const list = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    list['toggleRow'](itemAt(list, 2), true); // anchor 2 → {2}
+    const checkbox = checkboxAt(0);
+
+    // Long-press fires (range 2→0), then the release is canceled by the
+    // scroller: no click is ever synthesized, the flag would linger.
+    pointer(checkbox, 'pointerdown', { pointerType: 'touch' });
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+    await settle();
+    expect(list['selection']()).toEqual(new Set([0, 1, 2]));
+    pointer(checkbox, 'pointercancel');
+
+    // The next press clears the stale swallow flag; its own tap stays native.
+    pointer(checkbox, 'pointerdown', { pointerType: 'touch' });
+    pointer(checkbox, 'pointerup');
+    const tap = new MouseEvent('click', { bubbles: true, cancelable: true });
+    checkboxInput(checkbox).dispatchEvent(tap);
+    await settle();
+    expect(tap.defaultPrevented).toBe(false);
+    expect(list['selection']()).toEqual(new Set([1, 2])); // native toggle, row 0 off
+  });
+
+  it('suppresses the checkbox contextmenu only while a press is armed or fired', async () => {
+    const list = await createList([entry(0), entry(1)]);
+    fixture.detectChanges();
+    const contextmenu = (): MouseEvent => {
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      checkboxAt(0).nativeElement.dispatchEvent(event);
+      return event;
+    };
+
+    // Desktop right-click with no gesture in flight: untouched.
+    expect(contextmenu().defaultPrevented).toBe(false);
+
+    // Armed touch press: suppressed (Android fires it on hold).
+    pointer(checkboxAt(0), 'pointerdown', { pointerType: 'touch' });
+    expect(contextmenu().defaultPrevented).toBe(true);
+
+    // Fired and not yet swallowed: still suppressed.
+    await vi.advanceTimersByTimeAsync(LONG_PRESS_MS);
+    expect(list['selection']()).toEqual(new Set([0])); // no-anchor degradation
+    expect(contextmenu().defaultPrevented).toBe(true);
+
+    // The swallow click clears it again; mouse presses never suppress.
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    checkboxInput(checkboxAt(0)).dispatchEvent(click);
+    expect(contextmenu().defaultPrevented).toBe(false);
+    expect(list['selection']()).toEqual(new Set([0])); // swallowed: no second toggle
+    pointer(checkboxAt(0), 'pointerdown', { pointerType: 'mouse' });
+    expect(contextmenu().defaultPrevented).toBe(false);
   });
 });

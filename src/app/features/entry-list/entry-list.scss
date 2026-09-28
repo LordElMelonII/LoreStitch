@@ -142,6 +142,11 @@
 
   .row-select {
     flex: none;
+    // The checkbox long-press is a range-selection gesture (task 20 D3):
+    // keep the hold from starting a text selection or the iOS callout so
+    // the press stays a gesture, not a selection drag.
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   &.disabled-entry .item-title {

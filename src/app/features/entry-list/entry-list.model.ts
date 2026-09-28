@@ -40,3 +40,39 @@ export { entrySearchHaystack } from '../../core/services/entry-memo';
 export function matchesQuery(haystack: string, query: string): boolean {
   return haystack.includes(query);
 }
+
+/**
+ * Range-selection math for one gesture (task 20 D4): every id in the
+ * inclusive slice of `view` between `fromId` and `toId` — either direction —
+ * is added (`target: true`) or removed (`target: false`); ids outside the
+ * slice are preserved. Computed over the filtered view order, never the DOM,
+ * so rows outside the rendered virtual window are included. When either
+ * endpoint id is not in `view`, `current` is returned by reference: the
+ * component owns the degradation decision (plain single toggle of the
+ * gesture row), and the by-reference result is what signals it.
+ */
+export function applyRangeSelection(
+  current: ReadonlySet<number>,
+  view: EntryListItem[],
+  fromId: number,
+  toId: number,
+  target: boolean,
+): ReadonlySet<number> {
+  const from = view.findIndex((item) => item.id === fromId);
+  const to = view.findIndex((item) => item.id === toId);
+  if (from < 0 || to < 0) {
+    return current;
+  }
+  const next = new Set(current);
+  for (let i = Math.min(from, to); i <= Math.max(from, to); i += 1) {
+    const id = view[i]?.id;
+    if (id !== undefined) {
+      if (target) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+    }
+  }
+  return next;
+}
