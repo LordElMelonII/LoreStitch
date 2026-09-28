@@ -1009,4 +1009,40 @@ describe('App', () => {
     expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('360');
     expect(document.body.classList.contains('entries-resize-active')).toBe(false);
   });
+
+  it('recomputes content margins when the drawer width changes, and only then', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    // Let any boot-time margin recompute land (Material recomputes margins
+    // on its own open animation) before the spy is installed.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const container = app['workspaceContainer']();
+    assert(container);
+    const margins = vi.spyOn(container, 'updateContentMargins');
+    const handle = resizeHandle();
+
+    // A width change (keyboard step here) recomputes the container's content
+    // margins exactly once — without this the editor pane keeps the stale
+    // margin-left and a widened drawer overlaps the content until the drawer
+    // is closed and reopened.
+    handle.dispatchEvent(spiedKeydown('ArrowRight'));
+    await fixture.whenStable();
+    expect(margins).toHaveBeenCalledTimes(1);
+
+    // The recompute is width-driven, not a poll: settling the shell again
+    // with the signal unchanged recomputes nothing.
+    await fixture.whenStable();
+    expect(margins).toHaveBeenCalledTimes(1);
+
+    // The mobile band binds null and runs the drawer in over mode (no
+    // content margins to maintain): a width change there skips the
+    // recompute. The spy is cleared after the band flip settles so the close
+    // animation's own internal margin update does not pollute the pin.
+    await resizeTo('mobile');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    margins.mockClear();
+    app['entriesWidth'].set(400);
+    await fixture.whenStable();
+    expect(margins).not.toHaveBeenCalled();
+  });
 });

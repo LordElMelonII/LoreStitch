@@ -8,9 +8,10 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
-import { MatSidenavModule } from '@angular/material/sidenav';
+import { MatSidenavContainer, MatSidenavModule } from '@angular/material/sidenav';
 import { WorkspaceService } from './core/services/workspace.service';
 import { EntryList } from './features/entry-list/entry-list';
 import { EntryEditor } from './features/entry-editor/entry-editor';
@@ -108,6 +109,17 @@ export class App {
   private readonly workspaceEl: Signal<ElementRef<HTMLElement> | undefined> = viewChild(
     'workspaceEl',
     { read: ElementRef },
+  );
+
+  /**
+   * The same container element as `workspaceEl`, read as the
+   * `MatSidenavContainer` component instance: live drawer resizes must
+   * recompute the content margins Material host-binds onto the editor pane
+   * (see the resize effect in the constructor).
+   */
+  private readonly workspaceContainer: Signal<MatSidenavContainer | undefined> = viewChild(
+    'workspaceEl',
+    { read: MatSidenavContainer },
   );
   private readonly entriesPaneEl: Signal<ElementRef<HTMLElement> | undefined> = viewChild(
     'entriesPane',
@@ -241,6 +253,31 @@ export class App {
     effect(() => {
       this.viewport();
       this.endResizeDrag();
+    });
+
+    // A live inline width change on the docked drawer is invisible to
+    // Material: the container recomputes the editor pane's `margin-left`
+    // (host-bound to its `_contentMargins`) only via its public
+    // `updateContentMargins()`, which fires on drawer open/close animations,
+    // mode changes and window resizes — never on a style binding. Without
+    // this, a resize leaves the editor keeping the stale margin: the drawer
+    // overlaps the content until it is closed and reopened (user-reported,
+    // close/reopen is exactly Material's `_animationStarted` recompute).
+    // Effects run after render, so the inline width is already applied when
+    // the method reads the drawer's live width. During a pointer drag this
+    // fires per move — the method is cheap (read width, compare, emit) and
+    // Material's own `.mat-drawer-transition` gives the margin a smooth
+    // follow. The viewport read is untracked on purpose: band flips already
+    // recompute margins through Material's own resize handling, and keeping
+    // this effect strictly width-driven makes "no width change, no
+    // recompute" hold. The mobile band binds null and runs the drawer in
+    // over mode (no content margins to maintain), so it skips entirely.
+    effect(() => {
+      this.entriesWidth();
+      if (untracked(this.viewport) === 'mobile') {
+        return;
+      }
+      this.workspaceContainer()?.updateContentMargins();
     });
   }
 
