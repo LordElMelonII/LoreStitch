@@ -136,6 +136,10 @@ export class EntryList {
     destroyRef.onDestroy(() =>
       hostElement.removeEventListener('click', this.interceptCheckboxClick, true),
     );
+    // A destroy while a touch press is armed (or fired but unswallowed) must
+    // not fire the gesture against the dead component: drop the pending
+    // timer and the armed press with it (task 20 P2).
+    destroyRef.onDestroy(() => this.cancelLongPress());
 
     // Batch selection and tag filters are scoped to one project: opening
     // another project, importing a book or closing the project must drop
@@ -413,6 +417,9 @@ export class EntryList {
    * A fired long-press whose release click has not been swallowed yet (D3):
    * the capture interceptor drops the click a browser synthesizes on
    * release, so the native toggle cannot apply the range a second time.
+   * Deliberately not reset on destroy: the interceptor is unregistered then,
+   * so no click can ever consult a stale `true` (and the next pointerdown
+   * clears it regardless).
    */
   private suppressNextClick = false;
 
@@ -445,8 +452,8 @@ export class EntryList {
    * before the checkbox's own activation).
    */
   private readonly interceptCheckboxClick = (event: MouseEvent): void => {
-    const target = event.target;
-    if (!(target instanceof Element) || !target.closest('.row-select')) {
+    const row = event.target instanceof Element ? event.target.closest('.row-select') : null;
+    if (!row) {
       return;
     }
     if (this.suppressNextClick) {
@@ -467,8 +474,11 @@ export class EntryList {
     // input's own listener), then apply the range — the ONLY mutation.
     event.preventDefault();
     event.stopPropagation();
-    const rawId = target.closest<HTMLElement>('.row-select')?.getAttribute('data-entry-id');
-    const id = rawId === null || rawId === undefined || rawId === '' ? Number.NaN : Number(rawId);
+    // `data-entry-id` is stamped by the template; guard the empty string so
+    // `Number('') === 0` cannot alias an id-0 entry — it degrades to NaN
+    // like a missing attribute and the gesture is dropped.
+    const rawId = row.getAttribute('data-entry-id');
+    const id = rawId === null || rawId === '' ? Number.NaN : Number(rawId);
     const item = Number.isNaN(id) ? undefined : this.filtered().find((c) => c.id === id);
     if (item) {
       this.applyRangeGesture(item);
