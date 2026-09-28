@@ -49,6 +49,31 @@ with the same-commit `ui-responsiveness.spec.ts:585-651` migration.
 
 ## P1 — ui-specialist (three atomic commits)
 
+### P1.1 — `fix(entry-list): truncate long titles and key chips instead of scrolling` (2026-09-28)
+
+**Landed**: commit `817e736` — `src/styles.scss` (CDK wrapper `max-content` →
+`width: 100%`, export-dialog pattern; comments rewritten to the truncation
+contract), `entry-list.scss` (`.list-viewport` `overflow-x: auto` → `hidden`;
+`.item-actions` stale comment rewritten), `e2e/ui-responsiveness.spec.ts`
+(same-commit migration: test renamed `long entry names and key chips truncate
+with actions visible`; new approved pins — no viewport/page overflow,
+Duplicate rect inside viewport at `scrollLeft = 0`, `.item-title`
+`scrollWidth > clientWidth`; four per-fact `expect.poll` calls so a
+regression names the failing fact).
+
+**Gates**: build ✓ (26s) · unit+coverage ✓ (95s) · lint ✓ (25s) ·
+desktop-chrome smoke of `ui-responsiveness` ✓ 22/22 (82s, mobile leg
+confirms polls absorb the drawer slide-in).
+
+**Deviations**: none — D1 implemented exactly as locked.
+
+**Notes carried forward**: the spec's `document.querySelector('.list-viewport')`
+first-match assumption holds unless a second `app-entry-list` instance ever
+appears; truncation engages at every D3 width (320–480), so the D1 pins hold
+at min/mid/max resize.
+
+### P1.2 / P1.3
+
 _Not started._
 
 ## P2 — ts-reviewer
