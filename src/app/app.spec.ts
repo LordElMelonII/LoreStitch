@@ -976,4 +976,37 @@ describe('App', () => {
     fixture.destroy();
     expect(document.body.classList.contains('entries-resize-active')).toBe(false);
   });
+
+  it('ends an in-flight drag when the viewport band flips mid-drag (no commit, no leak)', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const handle = resizeHandle();
+    stubPointerCapture(handle);
+
+    handle.dispatchEvent(pointerEvent('pointerdown', 320));
+    handle.dispatchEvent(pointerEvent('pointermove', 400));
+    expect(app['entriesWidth']()).toBe(400);
+    expect(document.body.classList.contains('entries-resize-active')).toBe(true);
+
+    // The mobile band unmounts the handle mid-drag: the implicit capture
+    // release means pointerup never reaches the handler, so the band-flip
+    // cleanup must end the drag itself — uncommitted (pointercancel
+    // semantics), body chrome gone, drag state dropped.
+    await resizeTo('mobile');
+    fixture.detectChanges();
+    expect(document.body.classList.contains('entries-resize-active')).toBe(false);
+    expect(storage.has(ENTRIES_WIDTH_KEY)).toBe(false);
+    expect(app['entriesWidth']()).toBe(400);
+
+    // The stale drag must not wedge later gestures: back on desktop the
+    // (freshly rendered) handle takes a new pointerdown and commits.
+    await resizeTo('desktop');
+    const returned = resizeHandle();
+    stubPointerCapture(returned);
+    returned.dispatchEvent(pointerEvent('pointerdown', 320));
+    returned.dispatchEvent(pointerEvent('pointermove', 360));
+    returned.dispatchEvent(pointerEvent('pointerup', 360));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('360');
+    expect(document.body.classList.contains('entries-resize-active')).toBe(false);
+  });
 });

@@ -230,6 +230,18 @@ export class App {
         this.layout.focusMode.set(false);
       }
     });
+
+    // A viewport-band flip mid-drag tears the gesture's ground out from
+    // under it: the mobile band unmounts the handle entirely (implicitly
+    // releasing the pointer capture, so pointerup never reaches the
+    // handler) and any band change re-lays-out the drawer's geometry. End
+    // the drag there — no commit, the same contract as pointercancel — so
+    // `entries-resize-active` can never linger on <body> and a stale drag
+    // state can never swallow (or mis-serve) later gestures.
+    effect(() => {
+      this.viewport();
+      this.endResizeDrag();
+    });
   }
 
   protected toggleLeft(): void {
