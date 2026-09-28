@@ -127,9 +127,42 @@ invisible strip fails the affordance rule; visible in the AFTER captures.
 (reload-persistence observable only after release); drag = real mouse
 down/move/up, width tracks `clientX − drawer.left` clamped.
 
-## P2 — ts-reviewer
+## P2 — ts-reviewer (2026-09-28)
 
-_Not started._
+**Reviewed**: full P1 diff (`817e736` + `4732209` + `e60c94f`) — every hunk +
+whole-file reads of `app.ts`, `app.spec.ts`, `entry-list.ts`/`.spec.ts`.
+
+**Findings**: 1 should-fix, landed as commit `2ea657f` —
+`refactor(shell): end an in-flight drawer resize drag on viewport band flips`
+— a mid-drag band flip unmounted the handle (implicit capture release), so
+`pointerup` never reached the handler: `entries-resize-active` lingered on
+`<body>` and the stale drag swallowed later pointerdowns. Fix: constructor
+`effect` ends the drag on an actual band change (pointercancel semantics, no
+commit); spec pins chrome removal + no storage write + next-gesture recovery.
+Judgment calls ruled acceptable unchanged: `(keyup)` without `$event` (house
+style passes `$event` only when consumed; key-filtering would change the
+locked semantics), the single documented `as unknown as PointerEvent` in
+`app.spec.ts` (jsdom shadowed pointerId), `{ pointerId, handle } | null`
+state shape, `closeDrawer` wiring idempotence (second `closeLeft()` is a
+`set(false)` no-op + re-runnable settle).
+
+**Verified clean**: `entriesWidth` private to App; storage guarded both ways
+(garbage → NaN → default per ThemeService precedent); signals only, pure
+`computed()` aria mirrors; `$event` style elsewhere; ESLint clean; no `any`/
+non-null assertions (narrowing via `assert`).
+
+**Gates (after refactor)**: build ✓ (16s) · unit+coverage ✓ 1416/1416
+(src/app 93.35% stmts) · lint ✓.
+
+**Notes for P3**: selectors handle `[aria-label="Resize entries panel"]`
+(use `exact:true` — "Close/Toggle entries panel" neighbors), pane
+`.entries-sidenav` inline `style.width`, close button
+`[aria-label="Close entries panel"]`; drag math reads the pane rect per move
+(true geometry for Playwright mouse); keyboard commits on keyup (dispatch
+keyup before reading storage); drag commits on pointerup, no debounce;
+mid-drag viewport change now ends the gesture uncommitted — don't author a
+spec that resizes the window mid-drag and expects persistence;
+`entries-resize-active` on `<body>` only during a pointer drag.
 
 ## P3 — qa-auditor
 
