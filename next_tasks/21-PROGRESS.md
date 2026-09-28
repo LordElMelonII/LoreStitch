@@ -164,7 +164,33 @@ mid-drag viewport change now ends the gesture uncommitted — don't author a
 spec that resizes the window mid-drag and expects persistence;
 `entries-resize-active` on `<body>` only during a pointer drag.
 
-## P3 — qa-auditor
+## P3 — qa-auditor (2026-09-28)
+
+**Landed**: commit `dcaf963` — `test(e2e): pin drawer truncation, mobile
+full-width and resize contracts` — new `e2e/entries-drawer-resize.spec.ts`
+(351 lines, 8 tests). Docked band (desktop-chrome; skips on mobile projects):
+mouse drag live-tracks (two mid-gesture stops, aria-valuenow/min/max pinned),
+clamps at 320/480 (painted width), commit persists across reload, keyboard
+arrows/End/Home with the keyup-commit seam split asserted (storage null
+before keyup, written after), dblclick reset, rows keep rendering across the
+range (Fate fixture, 70 entries, 480→400→320 stops, virtual-list fill
+contract). Mobile band (mobile-chrome + mobile-safari; skips on desktop):
+full-width vs the live layout viewport, handle `toHaveCount(0)`, header close
+button releases the drawer (accessible-name assertions, no tooltip text on
+touch).
+
+**Gates**: build ✓ (20s) · unit+coverage ✓ 1416 (65s) · lint ✓ (16s) ·
+typecheck:e2e ✓ (5s) · desktop-chrome smoke `ui-responsiveness` +
+`entries-drawer-resize` ✓ 28 passed / 2 skipped by design (1m07s). Bonus
+beyond the gate: both mobile projects pre-run green (2 passed / 6 skipped
+each) so the phone legs are proven before the sweep.
+
+**In-task fix**: one spec bug (storage-asserting `page.evaluate` callbacks
+referenced a spec-scope constant — not serialized into the page; fixed by
+inlining the key literal). No app bug found; CDK row recovery works on its
+own (ResizeObserver → `checkViewportSize()`), no nudge needed.
+
+## Branch-final sweep
 
 _Not started._
 
