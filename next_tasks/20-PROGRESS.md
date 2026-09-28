@@ -52,3 +52,27 @@ Plan: `next_tasks/20-shift-range-selection.md` (D1–D5 locked, user decision 20
   a post-destroy fire only writes signals nothing reads — but P2's watch list
   requires the cleanup; flagged to ts-reviewer with the exact expectation.
 - **Next**: P2 — `ts-reviewer` typing/lint review of `de24635`.
+
+---
+
+## P2 — Typing/lint review (ts-reviewer)
+
+- **Status**: ✅ done — commit `44a1d4d`
+  `refactor(entry-list): clean up long-press state on destroy and tighten click-interceptor id parse`
+  (`entry-list.ts` only, +14/−4)
+- **Findings fixed**: (1) the P1-flagged gap — `destroyRef.onDestroy(() =>
+  this.cancelLongPress())` now clears an armed long-press at destroy; (2)
+  `interceptCheckboxClick` id parse tightened to one DOM query, `string | null`
+  exactly — the dead `undefined` branch removed, the `''` guard kept and
+  documented (`Number('') === 0` would alias an id-0 entry; fixtures use id 0).
+- **Judgment recorded**: `suppressNextClick` needs no destroy cleanup (the
+  capture listener is unregistered at destroy, and any new press clears it);
+  documented at the state declaration.
+- **Reviewed clean**: public surface unchanged (the eleven shell-driven
+  members); model stays pure; `(change)`/`(click)` template lines verified
+  byte-identical; specs typed without `any`/`as unknown as`; comments
+  load-bearing only.
+- **Orchestrator gates** (re-run post-commit): build ✅ · unit+coverage ✅
+  (exit 0, thresholds in-run) · lint ✅.
+- **Next**: P3 — `qa-auditor` authors `e2e/entry-list-selection.spec.ts` +
+  desktop-chrome smokes.
