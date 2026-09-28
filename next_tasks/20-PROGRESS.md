@@ -76,3 +76,35 @@ Plan: `next_tasks/20-shift-range-selection.md` (D1–D5 locked, user decision 20
   (exit 0, thresholds in-run) · lint ✅.
 - **Next**: P3 — `qa-auditor` authors `e2e/entry-list-selection.spec.ts` +
   desktop-chrome smokes.
+
+---
+
+## P3 — E2E specs + smokes (qa-auditor)
+
+- **Status**: ✅ done — commit `7eed009`
+  `test(e2e): pin shift-click and long-press range selection`
+  (`e2e/entry-list-selection.spec.ts` only, 349 lines)
+- **Desktop describe** (1280×800, project-gated skip on `mobile-*`): inclusive
+  range select with count + `.selected`; deselect path; anchor stays put
+  (A, shift-C, shift-E → 5 selected, plus the shift-C-again clears-only-A..C
+  discriminator); shift+click on row body still opens the editor; filtered
+  view range never escapes the filter (3 → 6, never 70).
+- **Mobile describe** (`hasTouch`, 390×844, 75 s suite timeout, skip on
+  `desktop-chrome`): tap A + long-press C → A..C with the mobile batch-bar
+  count and no double-apply through the release window; no-anchor long-press
+  degrades to a single toggle that still sets the anchor (follow-up range
+  1..3 pins the anchor move).
+- **Long-press synthesis**: `mobile-chrome` via CDP `Input.dispatchTouchEvent`
+  (engine synthesizes the release click — the swallow is proven by the count);
+  `mobile-safari` via cancelable DOM `PointerEvent(pointerType:'touch')` +
+  explicit `el.click()` release (synthetic activation, the swallow-flag
+  shape). **Both routes verified in-task — no project skip needed.** WebKit
+  evidence is one run per test; the branch-final sweep re-runs it.
+- **Gates**: build ✅ · unit+coverage ✅ (61 files; 96.14/90.98/91.49/97.22) ·
+  lint ✅ · `typecheck:e2e` ✅ · desktop-chrome smoke of the new spec 5
+  passed/2 skipped ✅ · untouched-flow smokes (`batch-and-tokens`,
+  `mobile-bottom-bar`) 7 passed/7 skipped ✅ · mobile long-press proofs:
+  mobile-chrome 2 passed, mobile-safari 2 passed ✅.
+- **Next**: branch-final sweep (orchestrator) — three-project Playwright
+  matrix per project + closing unit+coverage + lint, then push and stop for
+  user testing.
