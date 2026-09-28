@@ -492,9 +492,10 @@ app-entry-editor .entry-tabs .mat-mdc-tab-header {
   -webkit-user-select: none;
 }
 
-// While a finger drags the strip, drop the programmatic scroll easing so the
-// tabs track the finger 1:1 instead of trailing behind it. The class is
-// toggled on the component host by entry-editor.ts.
+// While a finger drags the strip — and while the release fling coasts — drop
+// the programmatic scroll easing so the position tracks the gesture 1:1
+// instead of trailing behind it. The class is toggled on the component host
+// by entry-editor.ts and stays on until the fling settles.
 app-entry-editor.strip-dragging .entry-tabs .mat-mdc-tab-list {
   transition: none;
 }

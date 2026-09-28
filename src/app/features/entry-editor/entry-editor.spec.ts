@@ -1,7 +1,12 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TAB_STRIP_DRAG_SLOP_PX, EDIT_COMMIT_DEBOUNCE_MS } from './entry-editor.constants';
-import { EntryEditor, TabStripDragScroller, scrollTabStripOnWheel } from './entry-editor';
+import {
+  EntryEditor,
+  TabStripDragScroller,
+  TabStripFrameScheduler,
+  scrollTabStripOnWheel,
+} from './entry-editor';
 import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
 
@@ -232,6 +237,194 @@ describe('TabStripDragScroller', () => {
     );
     expect(drag.onPointerMove(header, pointerEvent({ pointerId: 2, clientX: 100 }))).toBe(false);
     expect(header.scrollDistance).toBe(5);
+  });
+
+  describe('momentum fling', () => {
+    /** Manual rAF stand-in: frames queue up and are pumped at chosen times. */
+    function manualScheduler() {
+      const queued: { id: number; callback: (time: number) => void }[] = [];
+      let nextId = 0;
+      return {
+        scheduler: {
+          requestFrame: (callback: (time: number) => void): number => {
+            const id = nextId++;
+            queued.push({ id, callback });
+            return id;
+          },
+          cancelFrame: (handle: number): void => {
+            const index = queued.findIndex((entry) => entry.id === handle);
+            if (index >= 0) {
+              queued.splice(index, 1);
+            }
+          },
+        } satisfies TabStripFrameScheduler,
+        get pending(): number {
+          return queued.length;
+        },
+        /** Runs every queued frame at `time` (each may queue its successor). */
+        pump(time: number): void {
+          for (const { callback } of queued.splice(0)) callback(time);
+        },
+      };
+    }
+
+    it('coasts with decaying momentum after a fast release', () => {
+      const header = { scrollDistance: 0 };
+      const manual = manualScheduler();
+      const settled = vi.fn();
+      const drag = new TabStripDragScroller({ scheduler: manual.scheduler, onFlingSettled: settled });
+
+      drag.onPointerDown(header, pointerEvent({ clientX: 300, timeStamp: 0, target: headerTarget(true) }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 260, timeStamp: 40 }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 220, timeStamp: 80 }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 200, timeStamp: 100 }));
+      // A lift from another finger must not end the gesture.
+      expect(drag.onPointerUp(pointerEvent({ pointerId: 9, clientX: 200, timeStamp: 100 }))).toBe(false);
+      // The drag itself scrolled 100px forward; release speed is 1 px/ms.
+      expect(drag.onPointerUp(pointerEvent({ clientX: 200, timeStamp: 100 }))).toBe(true);
+
+      // Frame 1 (t=116) only initializes the animation clock; frame 2 covers
+      // 16ms at 1 px/ms: 16px of coast on top of the drag's 100.
+      manual.pump(116);
+      expect(header.scrollDistance).toBe(100);
+      manual.pump(132);
+      expect(header.scrollDistance).toBe(116);
+
+      // Fixed 16ms frames until the decay crosses the stop threshold.
+      let previous = header.scrollDistance;
+      for (let time = 148; manual.pending > 0 && time < 5000; time += 16) {
+        manual.pump(time);
+        expect(header.scrollDistance).toBeGreaterThanOrEqual(previous);
+        previous = header.scrollDistance;
+      }
+      expect(manual.pending).toBe(0);
+      expect(settled).toHaveBeenCalledOnce();
+      // Exponential decay (τ = 225ms) integrates to ≈ v·τ of travel:
+      // ~100px of drag + ~220px of coast.
+      expect(header.scrollDistance).toBeGreaterThan(280);
+      expect(header.scrollDistance).toBeLessThan(340);
+    });
+
+    it('releases without momentum when the drag was slow (deliberate positioning)', () => {
+      const header = { scrollDistance: 0 };
+      const manual = manualScheduler();
+      const drag = new TabStripDragScroller({ scheduler: manual.scheduler });
+
+      drag.onPointerDown(header, pointerEvent({ clientX: 200, timeStamp: 0, target: headerTarget(true) }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 195, timeStamp: 50 }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 190, timeStamp: 100 }));
+      // 5px over the last 50ms = 0.1 px/ms — below the fling threshold.
+      expect(drag.onPointerUp(pointerEvent({ clientX: 190, timeStamp: 100 }))).toBe(false);
+      expect(manual.pending).toBe(0);
+      expect(header.scrollDistance).toBe(10);
+    });
+
+    it('does not fling on speed from before the velocity window', () => {
+      const header = { scrollDistance: 0 };
+      const manual = manualScheduler();
+      const drag = new TabStripDragScroller({ scheduler: manual.scheduler });
+
+      drag.onPointerDown(header, pointerEvent({ clientX: 200, timeStamp: 0, target: headerTarget(true) }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 100, timeStamp: 20 })); // fast, but stale
+      drag.onPointerMove(header, pointerEvent({ clientX: 100, timeStamp: 160 })); // held still
+      expect(drag.onPointerUp(pointerEvent({ clientX: 100, timeStamp: 170 }))).toBe(false);
+      expect(manual.pending).toBe(0);
+    });
+
+    it('ends a fast swipe without momentum on pointercancel', () => {
+      const header = { scrollDistance: 0 };
+      const manual = manualScheduler();
+      const drag = new TabStripDragScroller({ scheduler: manual.scheduler });
+
+      drag.onPointerDown(header, pointerEvent({ clientX: 300, timeStamp: 0, target: headerTarget(true) }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 240, timeStamp: 60 }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 200, timeStamp: 100 }));
+      drag.onPointerCancel(pointerEvent({ clientX: 200, timeStamp: 100 }));
+      expect(manual.pending).toBe(0);
+      expect(header.scrollDistance).toBe(100);
+    });
+
+    it('stops the coast at the strip edge (a clamped write ends it)', () => {
+      const max = 100;
+      const header = {
+        distance: 0,
+        get scrollDistance(): number {
+          return this.distance;
+        },
+        set scrollDistance(value: number) {
+          this.distance = Math.max(0, Math.min(max, value));
+        },
+      };
+      const manual = manualScheduler();
+      const settled = vi.fn();
+      const drag = new TabStripDragScroller({ scheduler: manual.scheduler, onFlingSettled: settled });
+
+      drag.onPointerDown(header, pointerEvent({ clientX: 300, timeStamp: 0, target: headerTarget(true) }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 240, timeStamp: 60 }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 200, timeStamp: 100 })); // clamps at 100
+      expect(drag.onPointerUp(pointerEvent({ clientX: 200, timeStamp: 100 }))).toBe(true);
+      manual.pump(116); // clock init
+      manual.pump(132); // the write clamps back to 100, unchanged → coast over
+      expect(header.scrollDistance).toBe(max);
+      expect(manual.pending).toBe(0);
+      expect(settled).toHaveBeenCalledOnce();
+    });
+
+    it('a fresh grab on the strip catches a coasting fling', () => {
+      const header = { scrollDistance: 0 };
+      const manual = manualScheduler();
+      const settled = vi.fn();
+      const drag = new TabStripDragScroller({ scheduler: manual.scheduler, onFlingSettled: settled });
+
+      drag.onPointerDown(header, pointerEvent({ clientX: 300, timeStamp: 0, target: headerTarget(true) }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 240, timeStamp: 60 }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 200, timeStamp: 100 }));
+      expect(drag.onPointerUp(pointerEvent({ clientX: 200, timeStamp: 100 }))).toBe(true);
+      manual.pump(116);
+      expect(manual.pending).toBe(1);
+
+      const atGrab = header.scrollDistance;
+      drag.onPointerDown(header, pointerEvent({ clientX: 120, timeStamp: 116, target: headerTarget(true) }));
+      expect(manual.pending).toBe(0); // the grab halted the coast
+      expect(settled).toHaveBeenCalledOnce();
+
+      // The new drag scrolls from where the strip was caught.
+      drag.onPointerMove(header, pointerEvent({ clientX: 80, timeStamp: 150 }));
+      expect(header.scrollDistance).toBe(atGrab + 40);
+    });
+
+    it('flings backward after a rightward flick', () => {
+      const header = { scrollDistance: 300 };
+      const manual = manualScheduler();
+      const drag = new TabStripDragScroller({ scheduler: manual.scheduler });
+
+      drag.onPointerDown(header, pointerEvent({ clientX: 200, timeStamp: 0, target: headerTarget(true) }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 260, timeStamp: 60 }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 300, timeStamp: 100 }));
+      expect(drag.onPointerUp(pointerEvent({ clientX: 300, timeStamp: 100 }))).toBe(true);
+      manual.pump(116); // clock init
+      manual.pump(132);
+      // The drag scrolled back 100 (300 → 200); the coast keeps going back.
+      expect(header.scrollDistance).toBe(184);
+    });
+
+    it('stopFling halts a coast and is a no-op when none is running', () => {
+      const header = { scrollDistance: 0 };
+      const manual = manualScheduler();
+      const settled = vi.fn();
+      const drag = new TabStripDragScroller({ scheduler: manual.scheduler, onFlingSettled: settled });
+
+      drag.stopFling(); // no coast: nothing to settle
+      expect(settled).not.toHaveBeenCalled();
+
+      drag.onPointerDown(header, pointerEvent({ clientX: 300, timeStamp: 0, target: headerTarget(true) }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 240, timeStamp: 60 }));
+      drag.onPointerMove(header, pointerEvent({ clientX: 200, timeStamp: 100 }));
+      drag.onPointerUp(pointerEvent({ clientX: 200, timeStamp: 100 }));
+      drag.stopFling(); // external intent (wheel, tab selection, teardown)
+      expect(manual.pending).toBe(0);
+      expect(settled).toHaveBeenCalledOnce();
+    });
   });
 });
 
