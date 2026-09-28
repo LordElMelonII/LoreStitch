@@ -1,6 +1,7 @@
 import {
   Component,
   DestroyRef,
+  DOCUMENT,
   ElementRef,
   computed,
   effect,
@@ -61,7 +62,12 @@ export class EntryKeys {
    * `+N` chip, its measured width feeds the fit, and when the fit lands on a
    * hidden count with a different digit count the probe relabels and the
    * measurement repeats. The chain is monotone (a wider counter only ever
-   * hides more chips), so the loop converges instead of oscillating.
+   * hides more chips), so the loop converges instead of oscillating. That
+   * monotone step is a font-metric assumption: it holds because the strip's
+   * font figures share a uniform advance (Roboto's tabular default digits),
+   * so more digits always measure wider — a proportional-digit font could
+   * oscillate an exact-fit boundary pair (`+9` ⇄ `+10`); bound the relabels
+   * before adopting one.
    */
   protected readonly probeCount = signal(0);
 
@@ -100,6 +106,8 @@ export class EntryKeys {
   constructor() {
     const host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
     const destroyRef = inject(DestroyRef);
+    // DOCUMENT token, never the global: testable and SSR-safe (house rule).
+    const document = inject(DOCUMENT);
     // Standard in every browser; skip exotic environments (e.g. bare jsdom)
     // rather than crash — same guard idiom as the list viewport's observers.
     if (typeof ResizeObserver !== 'undefined') {
