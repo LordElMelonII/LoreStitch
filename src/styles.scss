@@ -563,16 +563,18 @@ app-entry-content-field .content-field .mat-mdc-form-field-infix {
   flex-direction: column;
 }
 
-// --- Entry list: fit-content virtual-scroll wrapper (horizontal scroll) ---
+// --- Entry list: full-width virtual-scroll wrapper (row truncation) ---
 
 // The CDK's absolutely-positioned content wrapper defaults to shrink-to-fit
-// sizing, which used to clip row actions off-canvas on narrow drawers. The
-// sidebar is now deliberately horizontally scrollable for long titles and
-// key chips: the wrapper hugs its widest row (never narrower than the
-// viewport) and the viewport scrolls the overflow instead of the page.
+// sizing, which would lay each row out at its untruncated width and push the
+// row actions off-canvas. Pin the wrapper to the viewport width instead, so
+// rows lay out at the drawer's width and the row's own truncation engages
+// (`flex: 1; min-width: 0` on `.item-main` ellipsizes the title, `.item-keys`
+// clips the chips, `flex: none` keeps `.item-actions` pinned right). CDK
+// internals are unreachable from scoped styles, hence the global rule — the
+// same pattern the export-selected dialog uses below.
 app-entry-list .list-viewport .cdk-virtual-scroll-content-wrapper {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
 }
 
 // Same CDK shrink-to-fit guard for the export-selected dialog's picker: the

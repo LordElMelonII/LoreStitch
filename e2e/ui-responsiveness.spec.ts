@@ -582,7 +582,7 @@ test.describe('responsive studio shell', () => {
         await expect(page.locator('.mat-mdc-tab-header')).toBeInViewport();
       });
 
-      test('long entry names and key chips keep row actions inside the panel', async ({ page }) => {
+      test('long entry names and key chips truncate with actions visible', async ({ page }) => {
         await createProject(page);
         await addEntry(page, vp.kind);
 
@@ -606,48 +606,62 @@ test.describe('responsive studio shell', () => {
           await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
         }
 
-        // Long titles and key chips now scroll the list viewport horizontally
-        // instead of truncating, so the containment contract changed: the
-        // overflow must stay inside the list viewport (never reach the page),
-        // and scrolling to the far right must bring the duplicate/delete
-        // actions fully into view. Poll instead of sleeping out the drawer's
-        // slide-in transition: intermediate animation frames can transiently
-        // mis-measure.
+        // Truncation contract: every row lays out at the drawer's own width —
+        // the title ellipsizes and the key chips clip inside it, the
+        // duplicate/delete actions stay pinned right, and no horizontal
+        // overflow exists at the list viewport or the page. Per-fact polls
+        // instead of sleeping out the drawer's slide-in transition:
+        // intermediate animation frames can transiently mis-measure.
+        const measure = () =>
+          page.evaluate(() => {
+            const query = (selector: string): Element => {
+              const el = document.querySelector(selector);
+              if (!el) {
+                throw new Error(`${selector} not rendered`);
+              }
+              return el;
+            };
+            const doc = document.documentElement;
+            const viewport = query('.list-viewport');
+            const title = query('.item-title');
+            const viewportRect = viewport.getBoundingClientRect();
+            const duplicate = query(
+              'app-entry-list [aria-label="Duplicate entry"]',
+            ).getBoundingClientRect();
+            return {
+              viewportOverflow: viewport.scrollWidth - viewport.clientWidth,
+              pageOverflow: doc.scrollWidth - doc.clientWidth,
+              actionsInside:
+                duplicate.right <= viewportRect.right + 1 &&
+                duplicate.left >= viewportRect.left - 1,
+              titleTruncated: title.scrollWidth > title.clientWidth,
+            };
+          });
+
         await expect
-          .poll(
-            () =>
-              page.evaluate(() => {
-                const query = (selector: string): Element => {
-                  const el = document.querySelector(selector);
-                  if (!el) {
-                    throw new Error(`${selector} not rendered`);
-                  }
-                  return el;
-                };
-                const doc = document.documentElement;
-                const viewport = query('.list-viewport');
-                const pageOverflow = doc.scrollWidth - doc.clientWidth;
-                // Scrolling the viewport to its end must reveal the row
-                // actions; a boolean is enough — pixel-perfect alignment is
-                // not part of the contract.
-                viewport.scrollLeft = viewport.scrollWidth;
-                const viewportRect = viewport.getBoundingClientRect();
-                const duplicate = query(
-                  'app-entry-list [aria-label="Duplicate entry"]',
-                ).getBoundingClientRect();
-                const actionsReachable =
-                  duplicate.right <= viewportRect.right + 1 &&
-                  duplicate.left >= viewportRect.left - 1;
-                viewport.scrollLeft = 0;
-                return actionsReachable ? pageOverflow : 1;
-              }),
-            {
-              timeout: 5_000,
-              message:
-                'row actions must stay reachable via horizontal scroll and overflow must not leak to the page',
-            },
-          )
+          .poll(async () => (await measure()).viewportOverflow, {
+            timeout: 5_000,
+            message: 'the list viewport itself must not overflow horizontally',
+          })
           .toBeLessThanOrEqual(0);
+        await expect
+          .poll(async () => (await measure()).pageOverflow, {
+            timeout: 5_000,
+            message: 'the overflow must never reach the page',
+          })
+          .toBeLessThanOrEqual(0);
+        await expect
+          .poll(async () => (await measure()).actionsInside, {
+            timeout: 5_000,
+            message: 'the duplicate action must sit fully inside the list viewport',
+          })
+          .toBe(true);
+        await expect
+          .poll(async () => (await measure()).titleTruncated, {
+            timeout: 5_000,
+            message: 'the title must ellipsize (truncation engaged, not off-canvas clipping)',
+          })
+          .toBe(true);
       });
 
       test('no element overflows the viewport width', async ({ page }) => {

@@ -91,10 +91,10 @@
 .list-viewport {
   flex: 1;
   min-height: 0;
-  // Long titles and key chips scroll horizontally instead of being cut off —
-  // the CDK content wrapper is sized to its widest row via the global
-  // `app-entry-list` rule in src/styles.scss.
-  overflow-x: auto;
+  // Rows truncate to the drawer's width (title ellipsizes, key chips clip)
+  // via the global `app-entry-list` wrapper rule in src/styles.scss, so
+  // nothing overflows horizontally — this is only a rendering guard.
+  overflow-x: hidden;
 }
 
 .entry-item {
@@ -220,8 +220,10 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    // Never shrink: the actions stay inside the row even when the key chips
-    // crowd the item main area, so no horizontal scrolling is ever needed.
+    // Never shrink: the actions stay pinned right while the truncation
+    // contract (`flex: 1` + `min-width: 0` on `.item-main`) squeezes the
+    // title and key chips inside the drawer's width instead of pushing the
+    // actions off-canvas.
     flex: none;
 
     .token-count {
