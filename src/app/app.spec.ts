@@ -68,10 +68,82 @@ function installViewportStub(): { setViewport: (viewport: ViewportClass) => void
   };
 }
 
+/** The localStorage key App persists the entries drawer width under (task 21 D3). */
+const ENTRIES_WIDTH_KEY = 'lorestitch.entries-drawer-width';
+
+let nativeStorage: PropertyDescriptor | undefined;
+
+/**
+ * Swaps window.localStorage for a Map-backed stub: the drawer-width specs
+ * must never touch real browser storage (values would leak across runs),
+ * and the stub lets specs seed and inspect the exact stored bytes. The
+ * original property descriptor is restored in afterEach.
+ */
+function installStorageStub(): Map<string, string> {
+  // Capture the pristine descriptor once, before any stub is installed, so
+  // afterEach can put the real jsdom storage back.
+  nativeStorage ??= Object.getOwnPropertyDescriptor(window, 'localStorage');
+  const store = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+      clear: () => store.clear(),
+    },
+  });
+  return store;
+}
+
+/** Replaces the storage stub with one whose every access throws (private mode). */
+function installThrowingStorage(): void {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: () => {
+        throw new Error('storage denied');
+      },
+      setItem: () => {
+        throw new Error('storage denied');
+      },
+    },
+  });
+}
+
+/**
+ * jsdom has no PointerEvent constructor, so the drag specs synthesize
+ * pointer events from MouseEvents and shadow the pointerId — the same
+ * idiom the Escape specs use for keyCode.
+ */
+function pointerEvent(type: string, clientX = 0, pointerId = 1): PointerEvent {
+  const event = new MouseEvent(type, { clientX, bubbles: true });
+  Object.defineProperty(event, 'pointerId', { value: pointerId });
+  return event as unknown as PointerEvent;
+}
+
+/**
+ * jsdom has no pointer-capture methods at all (calling one is a TypeError),
+ * so the drag specs stub them on the handle element: `captured` tracks the
+ * state App's guarded release path observes, across multiple gestures.
+ */
+function stubPointerCapture(handle: HTMLElement): { captured: boolean } {
+  const state = { captured: false };
+  handle.setPointerCapture = () => {
+    state.captured = true;
+  };
+  handle.hasPointerCapture = () => state.captured;
+  handle.releasePointerCapture = () => {
+    state.captured = false;
+  };
+  return state;
+}
+
 describe('App', () => {
   let workspace: WorkspaceService;
   let layout: LayoutService;
   let viewport: { setViewport: (viewport: ViewportClass) => void };
+  let storage: Map<string, string>;
 
   /**
    * Resizes the fake window: fires the CDK observer's change events, waits
@@ -91,7 +163,35 @@ describe('App', () => {
     return fixture.componentInstance;
   }
 
+  /** The D3 resize handle inside the docked entries drawer (desktop/tablet only). */
+  function resizeHandle(): HTMLElement {
+    const handle = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '[aria-label="Resize entries panel"]',
+    );
+    assert(handle);
+    return handle;
+  }
+
+  /** The drawer pane's live inline width, e.g. "328px" (empty when unbound). */
+  function entriesPaneInlineWidth(): string {
+    const pane = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '.entries-sidenav',
+    );
+    assert(pane);
+    return pane.style.width;
+  }
+
+  /** A KeyboardEvent with a spied preventDefault, for the handled-keys pins. */
+  function spiedKeydown(key: string): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', { key, cancelable: true });
+    vi.spyOn(event, 'preventDefault');
+    return event;
+  }
+
   beforeEach(async () => {
+    // The drawer-width specs must never touch real browser storage: every
+    // test gets a fresh Map-backed stub, restored in afterEach.
+    storage = installStorageStub();
     viewport = installViewportStub();
     await TestBed.configureTestingModule({
       imports: [App],
@@ -113,6 +213,14 @@ describe('App', () => {
     layout = TestBed.inject(LayoutService);
     // Allow the workspace's async init() to settle before mounting the shell.
     await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  afterEach(() => {
+    // Put the real jsdom storage back so specs outside the drawer-width
+    // block (and future ones) observe the platform, not a stale stub.
+    if (nativeStorage) {
+      Object.defineProperty(window, 'localStorage', nativeStorage);
+    }
   });
 
   it('renders the welcome screen and no studio surfaces without a project', async () => {
@@ -616,5 +724,256 @@ describe('App', () => {
     await app['runBatchBarAction']('select-all-shown');
     expect(selectAllSpy).toHaveBeenLastCalledWith(false);
     expect(list.selectionCount()).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // Entries drawer resize (task 21 D3): clamp, keyboard steps, persistence
+  // and the handle's band presence. The pointer-drag specs stub the capture
+  // methods (jsdom has none) and drive synthetic pointer events — jsdom has
+  // no layout, so the drawer's rect is 0 and the width under the pointer is
+  // the pointer's clientX, clamped.
+  // -------------------------------------------------------------------------
+
+  it('reads the persisted drawer width at startup, clamped into the 320-480 range', async () => {
+    const cases: [string, number][] = [
+      ['456', 456],
+      ['9999', 480],
+      ['100', 320],
+      ['not-a-number', 320],
+      ['', 320],
+    ];
+    for (const [stored, expected] of cases) {
+      storage.set(ENTRIES_WIDTH_KEY, stored);
+      const app = await createApp();
+      expect(app['entriesWidth'](), `stored "${stored}"`).toBe(expected);
+      fixture.destroy();
+    }
+
+    // No stored value: the designed 320px default.
+    const app = await createApp();
+    expect(app['entriesWidth']()).toBe(320);
+  });
+
+  it('renders the resize handle on non-mobile bands with the locked a11y contract and removes it on mobile', async () => {
+    await workspace.createProject('Fuyuki');
+    await createApp();
+    const host = fixture.nativeElement as HTMLElement;
+    const selector = '[aria-label="Resize entries panel"]';
+
+    // Desktop default: present, with the full a11y contract.
+    const handle = host.querySelector<HTMLElement>(selector);
+    assert(handle);
+    expect(handle.getAttribute('role')).toBe('separator');
+    expect(handle.getAttribute('aria-orientation')).toBe('vertical');
+    expect(handle.getAttribute('aria-valuemin')).toBe('320');
+    expect(handle.getAttribute('aria-valuemax')).toBe('480');
+    expect(handle.getAttribute('aria-valuenow')).toBe('320');
+    expect(handle.getAttribute('tabindex')).toBe('0');
+
+    // Mobile band: removed from the DOM (responsive-shape contract), never
+    // display:none — and the inline width binding yields null there so the
+    // CSS full-width contract stands.
+    await resizeTo('mobile');
+    fixture.detectChanges();
+    expect(host.querySelector(selector)).toBeNull();
+    const pane = host.querySelector<HTMLElement>('.entries-sidenav');
+    assert(pane);
+    expect(pane.style.width).toBe('');
+
+    // Back on desktop the handle returns, still bound to the live width.
+    await resizeTo('desktop');
+    fixture.detectChanges();
+    const returned = host.querySelector<HTMLElement>(selector);
+    assert(returned);
+    expect(returned.getAttribute('aria-valuenow')).toBe('320');
+  });
+
+  it('steps the width live with the arrow keys but persists only on keyup', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const handle = resizeHandle();
+
+    // ArrowRight steps +8px live and reaches the drawer's inline style...
+    handle.dispatchEvent(spiedKeydown('ArrowRight'));
+    expect(app['entriesWidth']()).toBe(328);
+    fixture.detectChanges();
+    expect(entriesPaneInlineWidth()).toBe('328px');
+    // ...but the storage write waits for keyup (the keyup-commit contract).
+    expect(storage.has(ENTRIES_WIDTH_KEY)).toBe(false);
+
+    handle.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowRight' }));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('328');
+
+    // A keyup with no keyboard resize in flight writes nothing.
+    handle.dispatchEvent(new KeyboardEvent('keyup', { key: 'a' }));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('328');
+  });
+
+  it('clamps keyboard resizing at the 320 and 480 bounds (Home/End and arrows beyond)', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const handle = resizeHandle();
+
+    // End jumps to the max; further ArrowRight presses stay clamped there.
+    handle.dispatchEvent(spiedKeydown('End'));
+    handle.dispatchEvent(spiedKeydown('ArrowRight'));
+    expect(app['entriesWidth']()).toBe(480);
+    handle.dispatchEvent(new KeyboardEvent('keyup', { key: 'End' }));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('480');
+
+    // Home jumps to the min; further ArrowLeft presses stay clamped there.
+    handle.dispatchEvent(spiedKeydown('Home'));
+    handle.dispatchEvent(spiedKeydown('ArrowLeft'));
+    expect(app['entriesWidth']()).toBe(320);
+    handle.dispatchEvent(new KeyboardEvent('keyup', { key: 'Home' }));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('320');
+  });
+
+  it('preventDefaults exactly the resize keys so the page never scrolls mid-resize', async () => {
+    await workspace.createProject('Fuyuki');
+    await createApp();
+    const handle = resizeHandle();
+
+    for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      const down = spiedKeydown(key);
+      handle.dispatchEvent(down);
+      expect(down.preventDefault).toHaveBeenCalledTimes(1);
+    }
+
+    // Any other key keeps its native behavior.
+    const other = spiedKeydown('a');
+    handle.dispatchEvent(other);
+    expect(other.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('round-trips a committed width through storage into a fresh shell', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const handle = resizeHandle();
+
+    handle.dispatchEvent(spiedKeydown('End'));
+    handle.dispatchEvent(new KeyboardEvent('keyup', { key: 'End' }));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('480');
+    fixture.detectChanges();
+    expect(entriesPaneInlineWidth()).toBe('480px');
+    void app;
+
+    // A fresh shell reads the committed width back, still applied inline.
+    fixture.destroy();
+    await createApp();
+    fixture.detectChanges();
+    expect(entriesPaneInlineWidth()).toBe('480px');
+  });
+
+  it('swallows storage failures on both the startup read and the commit write', async () => {
+    installThrowingStorage();
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    // The startup read threw: the designed default survives.
+    expect(app['entriesWidth']()).toBe(320);
+
+    const handle = resizeHandle();
+    handle.dispatchEvent(spiedKeydown('End'));
+    expect(app['entriesWidth']()).toBe(480);
+    // The commit write threw too: swallowed, the width lasts the session.
+    expect(() => handle.dispatchEvent(new KeyboardEvent('keyup', { key: 'End' }))).not.toThrow();
+    expect(app['entriesWidth']()).toBe(480);
+  });
+
+  it('resizes by pointer drag with live clamping and commits on release', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const handle = resizeHandle();
+    stubPointerCapture(handle);
+
+    // Stray moves/releases/cancels with no drag in flight are ignored.
+    handle.dispatchEvent(pointerEvent('pointermove', 400));
+    expect(app['entriesWidth']()).toBe(320);
+    handle.dispatchEvent(pointerEvent('pointerup', 400));
+    expect(storage.has(ENTRIES_WIDTH_KEY)).toBe(false);
+    handle.dispatchEvent(pointerEvent('pointercancel', 400));
+    expect(app['entriesWidth']()).toBe(320);
+
+    handle.dispatchEvent(pointerEvent('pointerdown', 320));
+    expect(document.body.classList.contains('entries-resize-active')).toBe(true);
+    // pointerdown alone never resizes; the first move does. Live clamps:
+    handle.dispatchEvent(pointerEvent('pointermove', 400));
+    expect(app['entriesWidth']()).toBe(400);
+    handle.dispatchEvent(pointerEvent('pointermove', 9999));
+    expect(app['entriesWidth']()).toBe(480);
+    handle.dispatchEvent(pointerEvent('pointermove', 5));
+    expect(app['entriesWidth']()).toBe(320);
+
+    handle.dispatchEvent(pointerEvent('pointerup', 5));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('320');
+    expect(document.body.classList.contains('entries-resize-active')).toBe(false);
+  });
+
+  it('ignores a second pointer while a drag is in flight', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const handle = resizeHandle();
+    stubPointerCapture(handle);
+
+    handle.dispatchEvent(pointerEvent('pointerdown', 320));
+    // A second pointer must not hijack the active drag: the later move/up
+    // still track pointer 1, so the width follows them, not the 2nd down.
+    handle.dispatchEvent(pointerEvent('pointerdown', 9999, 2));
+    handle.dispatchEvent(pointerEvent('pointermove', 350));
+    expect(app['entriesWidth']()).toBe(350);
+    handle.dispatchEvent(pointerEvent('pointerup', 350));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('350');
+    expect(document.body.classList.contains('entries-resize-active')).toBe(false);
+  });
+
+  it('ends a cancelled drag without committing and keeps the next drag working', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const handle = resizeHandle();
+    stubPointerCapture(handle);
+
+    handle.dispatchEvent(pointerEvent('pointerdown', 320));
+    handle.dispatchEvent(pointerEvent('pointermove', 400));
+    handle.dispatchEvent(pointerEvent('pointercancel', 400));
+    // The live width stays, but the gesture was not committed...
+    expect(app['entriesWidth']()).toBe(400);
+    expect(storage.has(ENTRIES_WIDTH_KEY)).toBe(false);
+    expect(document.body.classList.contains('entries-resize-active')).toBe(false);
+
+    // ...and the next gesture starts cleanly.
+    handle.dispatchEvent(pointerEvent('pointerdown', 320));
+    handle.dispatchEvent(pointerEvent('pointermove', 350));
+    handle.dispatchEvent(pointerEvent('pointerup', 350));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('350');
+  });
+
+  it('resets to the 320px default on double-click and commits the reset', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const handle = resizeHandle();
+    stubPointerCapture(handle);
+
+    handle.dispatchEvent(pointerEvent('pointerdown', 320));
+    handle.dispatchEvent(pointerEvent('pointermove', 440));
+    handle.dispatchEvent(pointerEvent('pointerup', 440));
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('440');
+
+    handle.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(app['entriesWidth']()).toBe(320);
+    expect(storage.get(ENTRIES_WIDTH_KEY)).toBe('320');
+  });
+
+  it('cleans the body drag chrome when the shell is destroyed mid-drag', async () => {
+    await workspace.createProject('Fuyuki');
+    await createApp();
+    const handle = resizeHandle();
+    stubPointerCapture(handle);
+
+    handle.dispatchEvent(pointerEvent('pointerdown', 320));
+    expect(document.body.classList.contains('entries-resize-active')).toBe(true);
+
+    // DestroyRef cleanup: no leaked body styles after a mid-drag teardown.
+    fixture.destroy();
+    expect(document.body.classList.contains('entries-resize-active')).toBe(false);
   });
 });

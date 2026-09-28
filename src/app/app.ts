@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   DOCUMENT,
   ElementRef,
   Signal,
@@ -24,6 +25,52 @@ import {
 } from './features/shell/mobile-bottom-bar/mobile-bottom-bar';
 import { LayoutService } from './shared/services/layout.service';
 import { ProjectActionsService } from './features/shell/project-actions.service';
+
+/**
+ * Entries drawer resize clamp (task 21 D3, user-locked): the user decides,
+ * the app clamps. 320px is the batch-bar capacity floor the drawer is
+ * designed around; 480px keeps the editor column readable. No per-band
+ * scaling — the same range applies on tablet and desktop.
+ */
+const ENTRIES_WIDTH_MIN = 320;
+const ENTRIES_WIDTH_MAX = 480;
+const ENTRIES_WIDTH_DEFAULT = ENTRIES_WIDTH_MIN;
+/** Keyboard resize step per ArrowLeft/ArrowRight press. */
+const ENTRIES_KEYBOARD_STEP_PX = 8;
+/** localStorage key for the drawer width — a shell UI preference, never project state. */
+const ENTRIES_WIDTH_STORAGE_KEY = 'lorestitch.entries-drawer-width';
+/**
+ * Body class while a pointer drag resizes the drawer (added on pointerdown,
+ * removed on drag end/cancel/destroy): gives the whole page a col-resize
+ * cursor and suppresses text selection under the dragged pointer. Styled in
+ * styles.scss — `<body>` belongs to no component.
+ */
+const ENTRIES_RESIZE_ACTIVE_CLASS = 'entries-resize-active';
+
+/** Clamps a raw width into the D3 range, rounded to whole pixels; non-finite garbage falls back to the default. */
+function clampEntriesWidth(value: number): number {
+  if (!Number.isFinite(value)) {
+    return ENTRIES_WIDTH_DEFAULT;
+  }
+  return Math.min(ENTRIES_WIDTH_MAX, Math.max(ENTRIES_WIDTH_MIN, Math.round(value)));
+}
+
+/**
+ * Startup read of the persisted width, already clamped. Guarded because
+ * storage access can throw (private modes, disabled storage) — the same
+ * contract ThemeService's restore follows.
+ */
+function restoreEntriesWidth(): number {
+  try {
+    const stored = localStorage.getItem(ENTRIES_WIDTH_STORAGE_KEY);
+    if (stored !== null) {
+      return clampEntriesWidth(Number(stored));
+    }
+  } catch {
+    // Storage unavailable — fall through to the default.
+  }
+  return ENTRIES_WIDTH_DEFAULT;
+}
 
 /** Studio shell: top bar, entry sidenav, tabbed editor, commit history drawer. */
 @Component({
@@ -72,6 +119,7 @@ export class App {
   );
 
   private readonly document = inject(DOCUMENT);
+  private readonly destroyRef = inject(DestroyRef);
 
   /**
    * The active responsive window class (mobile < 768px, tablet
@@ -82,6 +130,36 @@ export class App {
 
   protected readonly leftOpened = signal(true);
   protected readonly rightOpened = signal(true);
+
+  /**
+   * Docked entries-drawer width in px (task 21 D3, user-locked): the user
+   * decides, the app clamps to 320–480 (see the module-head constants). A
+   * shell UI preference — it never routes through `WorkspaceService` or
+   * project state; it persists straight to localStorage and is read +
+   * clamped at startup. The template applies it to `.entries-sidenav` via
+   * an inline `[style.width.px]` binding whenever the viewport is not
+   * mobile — on the mobile band the binding yields `null` so the D2 CSS
+   * full-width contract wins instead.
+   */
+  protected readonly entriesWidth = signal<number>(restoreEntriesWidth());
+
+  /** D3 clamp bounds, mirrored for the resize handle's aria-valuemin/max contract. */
+  protected readonly entriesWidthMin = ENTRIES_WIDTH_MIN;
+  protected readonly entriesWidthMax = ENTRIES_WIDTH_MAX;
+
+  /**
+   * Live pointer-drag state, null while idle: the captured pointer id and
+   * the handle it was captured on. `setPointerCapture` retargets every later
+   * pointermove/up/cancel to the handle, so the template bindings on the
+   * handle see the whole gesture even when the pointer leaves its bounds.
+   */
+  private drag: { pointerId: number; handle: HTMLElement } | null = null;
+
+  /**
+   * True from the first handled resize keydown until keyup: the keyboard
+   * path updates the width live per key press but persists once, on keyup.
+   */
+  private keyboardResizeActive = false;
 
   /** Whether either sidenav drawer overlays the editor right now. */
   protected readonly anyDrawerOpen = computed(() => this.leftOpened() || this.rightOpened());
@@ -117,6 +195,10 @@ export class App {
   );
 
   constructor() {
+    // A mid-drag teardown must not leak the body-level drag chrome or a
+    // stale drag state — the pointer capture itself dies with the element.
+    this.destroyRef.onDestroy(() => this.endResizeDrag());
+
     // Re-apply the per-class defaults when the window class changes. User
     // toggles stay sticky until the layout class itself flips.
     effect(() => {
@@ -242,6 +324,124 @@ export class App {
 
   protected onHistoryDrawerOpened(): void {
     this.focusPaneOnPhone(this.historyPaneEl());
+  }
+
+  // -------------------------------------------------------------------------
+  // Entries drawer resize (task 21 D3, user-locked). The docked drawer's
+  // width is a shell UI preference owned by `entriesWidth`: the handle's
+  // pointer drag updates it live and commits on release, the keyboard steps
+  // it live and commits on keyup, and a double-click resets it to the
+  // 320px default. Every commit persists to localStorage (guarded — storage
+  // can throw in private modes); pointercancel ends a drag WITHOUT
+  // committing, and dropping the drag state keeps future gestures clean.
+  // -------------------------------------------------------------------------
+
+  protected onResizePointerDown(event: PointerEvent): void {
+    // A second pointer (multi-touch) must not hijack an active drag.
+    if (this.drag) {
+      return;
+    }
+    const handle = event.currentTarget;
+    if (!(handle instanceof HTMLElement)) {
+      return;
+    }
+    this.drag = { pointerId: event.pointerId, handle };
+    handle.setPointerCapture(event.pointerId);
+    this.document.body.classList.add(ENTRIES_RESIZE_ACTIVE_CLASS);
+  }
+
+  protected onResizePointerMove(event: PointerEvent): void {
+    if (this.drag?.pointerId !== event.pointerId) {
+      return;
+    }
+    this.entriesWidth.set(this.entriesWidthAtPointer(event.clientX));
+  }
+
+  protected onResizePointerUp(event: PointerEvent): void {
+    if (this.drag?.pointerId !== event.pointerId) {
+      return;
+    }
+    this.endResizeDrag();
+    this.persistEntriesWidth();
+  }
+
+  protected onResizePointerCancel(event: PointerEvent): void {
+    if (this.drag?.pointerId !== event.pointerId) {
+      return;
+    }
+    // A cancelled gesture keeps the live width but is not committed — the
+    // drag state is dropped so the next gesture starts cleanly.
+    this.endResizeDrag();
+  }
+
+  protected onResizeKeydown(event: KeyboardEvent): void {
+    switch (event.key) {
+      case 'ArrowLeft':
+        this.entriesWidth.update((width) => clampEntriesWidth(width - ENTRIES_KEYBOARD_STEP_PX));
+        break;
+      case 'ArrowRight':
+        this.entriesWidth.update((width) => clampEntriesWidth(width + ENTRIES_KEYBOARD_STEP_PX));
+        break;
+      case 'Home':
+        this.entriesWidth.set(ENTRIES_WIDTH_MIN);
+        break;
+      case 'End':
+        this.entriesWidth.set(ENTRIES_WIDTH_MAX);
+        break;
+      default:
+        // Not a resize key — keep its native behavior.
+        return;
+    }
+    this.keyboardResizeActive = true;
+    // Handled keys must not scroll the page or move focus mid-resize.
+    event.preventDefault();
+  }
+
+  protected onResizeKeyup(): void {
+    if (!this.keyboardResizeActive) {
+      return;
+    }
+    this.keyboardResizeActive = false;
+    this.persistEntriesWidth();
+  }
+
+  /** Double-click reset: back to the designed 320px default, committed. */
+  protected resetEntriesWidth(): void {
+    this.entriesWidth.set(ENTRIES_WIDTH_DEFAULT);
+    this.persistEntriesWidth();
+  }
+
+  /** Width under a dragged pointer: the pointer's distance from the drawer's left edge, clamped. */
+  private entriesWidthAtPointer(clientX: number): number {
+    const pane = this.entriesPaneEl()?.nativeElement;
+    const left = pane?.getBoundingClientRect().left ?? 0;
+    return clampEntriesWidth(clientX - left);
+  }
+
+  /**
+   * Ends the active drag: drops the gesture state so future drags start
+   * clean, releases the pointer capture (guarded — the browser may have
+   * released it implicitly already and a stray release throws), and removes
+   * the body-level drag chrome. Doubles as the DestroyRef cleanup path.
+   */
+  private endResizeDrag(): void {
+    const drag = this.drag;
+    if (!drag) {
+      return;
+    }
+    this.drag = null;
+    if (drag.handle.hasPointerCapture(drag.pointerId)) {
+      drag.handle.releasePointerCapture(drag.pointerId);
+    }
+    this.document.body.classList.remove(ENTRIES_RESIZE_ACTIVE_CLASS);
+  }
+
+  private persistEntriesWidth(): void {
+    try {
+      localStorage.setItem(ENTRIES_WIDTH_STORAGE_KEY, String(this.entriesWidth()));
+    } catch {
+      // Storage unavailable (private mode etc.) — the width lasts the session.
+    }
   }
 
   /**

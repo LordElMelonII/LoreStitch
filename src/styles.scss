@@ -667,3 +667,17 @@ app-linter-dialog .jump-button .mdc-button__label {
     --mat-chip-container-height: var(--touch-target-mobile);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Entries drawer resize drag chrome (task 21 D3): while a pointer drag
+// resizes the docked drawer, App toggles this class on <body> from
+// pointerdown until drag end/cancel (and on mid-drag teardown). The
+// col-resize cursor reads as the resize affordance everywhere the pointer
+// travels, and selection is suppressed so the drag never paints a text
+// selection across the shell. `<body>` belongs to no component — hence this
+// global home.
+// ---------------------------------------------------------------------------
+body.entries-resize-active {
+  cursor: col-resize;
+  user-select: none;
+}

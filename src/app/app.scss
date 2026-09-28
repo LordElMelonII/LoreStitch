@@ -20,6 +20,55 @@
   background: var(--mat-sys-surface-container-low);
 }
 
+// Task 21 D3: the docked drawer is user-resizable in the 320–480px clamp
+// (320 is the batch-bar capacity floor the drawer is designed around; 480
+// keeps the editor column readable). The live width arrives as an inline
+// [style.width.px] binding from App.entriesWidth; these min/max rules only
+// repeat the clamp as belt-and-braces behind it. They are scoped to the
+// non-mobile host class on purpose: an unscoped max-width: 480px would cap
+// the mobile band's locked full-width contract (below) at 480px on
+// 481–767px viewports. Keep in sync with the clamp constants in app.ts.
+:host(:not(.mobile)) .entries-sidenav {
+  min-width: 320px;
+  max-width: 480px;
+}
+
+// The D3 resize handle: a 6px strip on the drawer's inner (right) edge.
+// Its containing block is the sidenav host itself (Material's .mat-drawer is
+// positioned; the inner container it projects into is not), so the strip
+// spans the full drawer height and never scrolls away with the content. It
+// stacks above the entry list so it — not the row beneath — receives the
+// pointer, and `touch-action: none` keeps touch drags from being eaten by
+// scrolling. The affordance stays quiet: no visual of its own until hover
+// or keyboard focus surfaces a centered 2px line in the system primary
+// (interactive, not a decorative divider).
+.entries-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 6px;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 2px;
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    background: var(--mat-sys-primary);
+  }
+}
+
 .history-sidenav {
   width: 340px;
   background: var(--mat-sys-surface-container-low);
@@ -53,6 +102,11 @@
 // tap, which is why EntryList's header carries its own close button on the
 // mobile band. The history drawer stays a peek surface at min(88vw, 340px):
 // it keeps a scrim sliver for its tap-to-dismiss return.
+//
+// D3's resize clamp lives ONLY on the non-mobile band (:host(:not(.mobile))
+// above): the clamp governs the docked drawer the user can resize, while the
+// mobile overlay is always full-width regardless of the persisted width —
+// the two contracts must never see each other's values.
 :host(.mobile) .entries-sidenav {
   width: 100%;
 }

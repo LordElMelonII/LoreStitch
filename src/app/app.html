@@ -1,11 +1,16 @@
 <app-topbar (toggleEntries)="toggleLeft()" (toggleHistory)="toggleRight()" />
 
 <mat-sidenav-container class="workspace" #workspaceEl>
+  <!-- D3: the docked drawer's live width (App.entriesWidth, clamped
+       320–480). The binding yields null on the mobile band so the CSS
+       full-width contract wins; CSS min/max-width repeat the clamp as
+       belt-and-braces behind this binding (app.scss). -->
   <mat-sidenav
     class="entries-sidenav"
     #entriesPane
     [mode]="viewport() === 'mobile' ? 'over' : 'side'"
     [opened]="leftOpened()"
+    [style.width.px]="viewport() === 'mobile' ? null : entriesWidth()"
     (opened)="onEntriesDrawerOpened()"
     (closed)="closeLeft()"
   >
@@ -20,6 +25,31 @@
       }
     } @else {
       <div class="side-placeholder"></div>
+    }
+    @if (viewport() !== 'mobile') {
+      <!-- D3 resize handle: a 6px strip on the drawer's inner (right) edge,
+           next to the projected entry list inside the sidenav. Rendered only
+           on non-mobile bands — removed from the DOM on phones, never
+           display:none (responsive-shape contract). Pointer capture on
+           pointerdown retargets the whole drag gesture onto this element;
+           the keyboard path steps the width and commits on keyup. -->
+      <div
+        class="entries-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        [attr.aria-valuemin]="entriesWidthMin"
+        [attr.aria-valuemax]="entriesWidthMax"
+        [attr.aria-valuenow]="entriesWidth()"
+        tabindex="0"
+        aria-label="Resize entries panel"
+        (pointerdown)="onResizePointerDown($event)"
+        (pointermove)="onResizePointerMove($event)"
+        (pointerup)="onResizePointerUp($event)"
+        (pointercancel)="onResizePointerCancel($event)"
+        (keydown)="onResizeKeydown($event)"
+        (keyup)="onResizeKeyup()"
+        (dblclick)="resetEntriesWidth()"
+      ></div>
     }
   </mat-sidenav>
 
