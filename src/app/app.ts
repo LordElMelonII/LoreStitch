@@ -4,6 +4,7 @@ import {
   DOCUMENT,
   ElementRef,
   Signal,
+  afterRenderEffect,
   computed,
   effect,
   inject,
@@ -263,16 +264,30 @@ export class App {
     // this, a resize leaves the editor keeping the stale margin: the drawer
     // overlaps the content until it is closed and reopened (user-reported,
     // close/reopen is exactly Material's `_animationStarted` recompute).
-    // Effects run after render, so the inline width is already applied when
-    // the method reads the drawer's live width. During a pointer drag this
-    // fires per move — the method is cheap (read width, compare, emit) and
-    // Material's own `.mat-drawer-transition` gives the margin a smooth
-    // follow. The viewport read is untracked on purpose: band flips already
-    // recompute margins through Material's own resize handling, and keeping
-    // this effect strictly width-driven makes "no width change, no
-    // recompute" hold. The mobile band binds null and runs the drawer in
-    // over mode (no content margins to maintain), so it skips entirely.
-    effect(() => {
+    //
+    // This must be `afterRenderEffect`, not a plain `effect`: the hook runs
+    // in the after-render phase of the same change-detection pass that
+    // applied the `[style.width.px]` binding, so the forced-layout
+    // `offsetWidth` read inside `updateContentMargins` (`MatSidenav
+    // ._getWidth`) sees the width JUST applied. A plain effect re-ran before
+    // the binding write in the same flush, so a single-jump change (keyboard
+    // End/Home, dblclick reset) computed the margin from the PREVIOUS width —
+    // and the change check in `updateContentMargins` then locked the stale
+    // margin in, because nothing re-fires it. Measured on the dev server
+    // before this switch: End left the editor at the 320px margin under a
+    // 480px drawer (full overlap), Home left a 160px dead gap, and a drag
+    // settled one move-step behind. The in-repo precedent for post-render
+    // hooks is the entry-keys in-place editor (`entry-keys.ts`).
+    //
+    // During a pointer drag this fires per move — the method is cheap (read
+    // width, compare, emit) and Material's own `.mat-drawer-transition` gives
+    // the margin a smooth follow. The viewport read is untracked on purpose:
+    // band flips already recompute margins through Material's own resize
+    // handling, and keeping this effect strictly width-driven makes "no
+    // width change, no recompute" hold. The mobile band binds null and runs
+    // the drawer in over mode (no content margins to maintain), so it skips
+    // entirely.
+    afterRenderEffect(() => {
       this.entriesWidth();
       if (untracked(this.viewport) === 'mobile') {
         return;

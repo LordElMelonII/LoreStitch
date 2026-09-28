@@ -1010,24 +1010,40 @@ describe('App', () => {
     expect(document.body.classList.contains('entries-resize-active')).toBe(false);
   });
 
-  it('recomputes content margins when the drawer width changes, and only then', async () => {
+  it('recomputes content margins after the width binding applies, and only when it changes', async () => {
     await workspace.createProject('Fuyuki');
     const app = await createApp();
     // Let any boot-time margin recompute land (Material recomputes margins
-    // on its own open animation) before the spy is installed.
+    // on its own open animation, and the shell's after-render hook fires one
+    // on boot) before the spy is installed.
     await new Promise((resolve) => setTimeout(resolve, 50));
     const container = app['workspaceContainer']();
     assert(container);
-    const margins = vi.spyOn(container, 'updateContentMargins');
+    // The spy records the drawer's inline width AS THE RECOMPUTE OBSERVES
+    // IT, then runs the real method: the recompute must fire only after the
+    // [style.width.px] binding has applied the new width. A recompute that
+    // ran before the binding write would measure the PREVIOUS width through
+    // Material's forced-layout offsetWidth read, and the change check in
+    // `updateContentMargins` would then lock the stale margin in (the
+    // full-overlap / dead-gap bug this ordering pins against — jsdom has no
+    // layout, but the style write itself is real and observable).
+    const widthsSeenByRecompute: string[] = [];
+    const realUpdate = container.updateContentMargins.bind(container);
+    const margins = vi.spyOn(container, 'updateContentMargins').mockImplementation(() => {
+      widthsSeenByRecompute.push(entriesPaneInlineWidth());
+      realUpdate();
+    });
     const handle = resizeHandle();
 
     // A width change (keyboard step here) recomputes the container's content
     // margins exactly once — without this the editor pane keeps the stale
     // margin-left and a widened drawer overlaps the content until the drawer
-    // is closed and reopened.
+    // is closed and reopened. And it fires AFTER the binding: the recompute
+    // sees the new 328px inline width, never the previous 320px.
     handle.dispatchEvent(spiedKeydown('ArrowRight'));
     await fixture.whenStable();
     expect(margins).toHaveBeenCalledTimes(1);
+    expect(widthsSeenByRecompute).toEqual(['328px']);
 
     // The recompute is width-driven, not a poll: settling the shell again
     // with the signal unchanged recomputes nothing.
@@ -1041,6 +1057,7 @@ describe('App', () => {
     await resizeTo('mobile');
     await new Promise((resolve) => setTimeout(resolve, 50));
     margins.mockClear();
+    widthsSeenByRecompute.length = 0;
     app['entriesWidth'].set(400);
     await fixture.whenStable();
     expect(margins).not.toHaveBeenCalled();
