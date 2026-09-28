@@ -72,7 +72,29 @@ first-match assumption holds unless a second `app-entry-list` instance ever
 appears; truncation engages at every D3 width (320–480), so the D1 pins hold
 at min/mid/max resize.
 
-### P1.2 / P1.3
+### P1.2 — `feat(entry-list): full-width mobile entries drawer with close button` (2026-09-28)
+
+**Landed**: commit `4732209` — `app.scss` mobile block split into two surface
+contracts (`entries-sidenav` `width: 100%`; `history-sidenav` keeps
+`min(88vw, 340px)`, scrim-tap return intact; stale comment rewritten);
+`entry-list.html` close `matIconButton` in `.title-row` after "New entry"
+behind `@if (layout.isMobile())` (removed from DOM on tablet/desktop);
+`entry-list.ts` new `closeDrawer = output<void>()`; `app.html` wires
+`(closeDrawer)="closeLeft()"` inside the `@defer` (idempotent with the
+sidenav's own `(closed)` route). Unit specs: presence/absence across mobile ↔
+desktop band flips (real-timer 10ms idiom, CDK debounce needs a real
+scheduler) + click emits once via `OutputEmitterRef.subscribe`.
+
+**Gates**: build ✓ (26s) · unit+coverage ✓ 1403 passed (92s; coverage drift
+checked — all new statements covered) · lint ✓ (22s).
+
+**Deviations**: none — D2 exactly as locked.
+
+**Notes carried forward**: `App.closeLeft()` at `app.ts:161` reused unchanged;
+entry-list.html line refs after the button block shifted +3; the D2 comment
+block in `app.scss` is where D3's clamp range comment extends.
+
+### P1.3
 
 _Not started._
 
