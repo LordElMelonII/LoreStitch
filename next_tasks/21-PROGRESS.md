@@ -190,10 +190,48 @@ referenced a spec-scope constant — not serialized into the page; fixed by
 inlining the key literal). No app bug found; CDK row recovery works on its
 own (ResizeObserver → `checkViewportSize()`), no nudge needed.
 
-## Branch-final sweep
+## Branch-final sweep (2026-09-28)
 
-_Not started._
+**AFTER captures** (`__screenshots__/21-entry-drawer-ux/after/`, identical
+pinned conditions — same script, contexts, theme, fixture, settle): 9 shots —
+`01-entries-drawer` per viewport plus desktop/tablet `02-resize-max-480` /
+`03-resize-min-320` / `04-resize-mid-400` driven by keyboard on the real
+handle. Capture-hygiene note (task-12 precedent): after-set suppresses
+`.mat-mdc-tooltip-panel` capture-side; no pinned condition changes.
 
-## Branch-final sweep
+**After-state probe** (probe-after.mjs, same conditions as the before probe):
 
-_Not started._
+| viewport | list overflow | Duplicate beyond viewport @ scrollLeft=0 | title ellipsizes | drawer width |
+|---|---|---|---|---|
+| desktop 1280×800 | 0px | inside by 64px | yes | 320px |
+| tablet 1024×768 | 0px | inside by 64px | yes | 320px |
+| mobile 390×844 | 0px | inside by 68px | yes | 390px (full width) |
+
+**Full three-project Playwright matrix** (one project per command):
+
+- `desktop-chrome`: 83 passed, 20 skipped (3.7m)
+- `mobile-chrome`: 50 passed, 53 skipped (2.8m)
+- `mobile-safari`: 48 passed, 55 skipped (4.0m)
+
+Skips are by design (phone-pinned tests skip on desktop and vice versa). No
+red spec — no fix-forward loop needed.
+
+**Closing gates**: `CI=true npm test -- --watch=false --coverage` ✓ 61 files,
+1416/1416, thresholds enforced in-run · `npm run lint` ✓ all files pass.
+
+**Branch pushed** for user testing: `origin/feature/21-entry-drawer-ux`.
+Never self-merged — `git merge --ff-only` into `develop` waits for the user's
+explicit go. On the go: archive this ledger beside the plan (Task 02
+precedent), flip the README row. Release cut is NOT part of this task.
+
+### Commits on the branch
+
+| SHA | Message |
+|---|---|
+| `1c6b03f` | docs(next_tasks): plan task 21 entry drawer ux |
+| `817e736` | fix(entry-list): truncate long titles and key chips instead of scrolling |
+| `4732209` | feat(entry-list): full-width mobile entries drawer with close button |
+| `e60c94f` | feat(shell): resizable docked entries drawer |
+| `2ea657f` | refactor(shell): end an in-flight drawer resize drag on viewport band flips |
+| `dcaf963` | test(e2e): pin drawer truncation, mobile full-width and resize contracts |
+| (+ per-phase `docs(next_tasks)` ledger commits) | |

@@ -20,7 +20,7 @@ archival move.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
-| 21 | [21-entry-drawer-ux.md](./21-entry-drawer-ux.md) | Row truncation (horizontal scroll removed), full-width mobile entries drawer + close button, resizable docked drawer (320–480px, persisted) | 🟡 Planned (design user-approved 2026-09-28; preempts 10/11 like task 20) |
+| 21 | [21-entry-drawer-ux.md](./21-entry-drawer-ux.md) | Row truncation (horizontal scroll removed), full-width mobile entries drawer + close button, resizable docked drawer (320–480px, persisted) | 🟢 Implemented on `feature/21-entry-drawer-ux`, branch-final sweep green 2026-09-28 — awaiting user testing |
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
 | 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
 
