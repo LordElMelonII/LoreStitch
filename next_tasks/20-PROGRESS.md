@@ -108,3 +108,23 @@ Plan: `next_tasks/20-shift-range-selection.md` (D1–D5 locked, user decision 20
 - **Next**: branch-final sweep (orchestrator) — three-project Playwright
   matrix per project + closing unit+coverage + lint, then push and stop for
   user testing.
+
+---
+
+## Branch-final sweep (orchestrator)
+
+- **Status**: ✅ green across the board — 2026-09-28
+  - `npx playwright test --project=desktop-chrome`: **77 passed / 18
+    skipped** (4.4 m) — skips are phone-pinned specs by design.
+  - `npx playwright test --project=mobile-chrome`: **48 passed / 47
+    skipped** (3.3 m) — includes the CDP long-press legs.
+  - `npx playwright test --project=mobile-safari`: **46 passed / 49
+    skipped** (4.6 m) — includes the synthetic-PointerEvent long-press legs
+    (the single-run WebKit caveat from P3 is now sweep-confirmed).
+  - Closing `CI=true npm test -- --watch=false --coverage`: exit 0
+    (thresholds enforced in-run).
+  - Closing `npm run lint`: exit 0.
+- **Task state**: branch work complete at `20bb378` + this commit; pushed to
+  `origin/feature/20-shift-range-selection`. **Stopped for user testing** —
+  merge to `develop` (`git merge --ff-only`) only on the user's explicit go,
+  per the task-branch convention.
