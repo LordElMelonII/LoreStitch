@@ -72,18 +72,18 @@ The editor mirrors SillyTavern's World Info fields one-to-one, so nothing is los
 ### Batch tools
 
 - **Search & replace** across entry contents, keys, and names, with regex mode, whole-word and case-sensitive matching (filter chips), and a per-entry hit preview before applying.
-- **Delimiter tools** to add, change, or remove content delimiters (`<tag>…</tag>`, `[name=…]`, `---` separators, or none) for a single entry or the whole book, using each entry's own name, its first primary key, or a fixed one — with a live diff preview before applying.
+- **Delimiter tools** to add, change, or remove content delimiters (`<tag>…</tag>`, `[name=…]`, `---` separators, a Markdown heading, or none) for a single entry, the checked selection, or the whole book, using each entry's own name, its first primary key, or a fixed one — with a live diff preview before applying.
 - Per-entry actions: add, duplicate, delete, and drag-and-drop reordering (kept in sync with SillyTavern's display index).
 
 ### Health check
 
-- One click on the topbar shield (or "Health check…" in the More menu) scans the whole lorebook and groups what it finds into errors, warnings, and notes, each naming the entry it concerns — duplicate keys, ignored secondary keys, entries that can never activate, recursion loops, invalid regex keys, and malformed whole-content wrappers, detected with the same matching rules SillyTavern itself applies. A count badge on the shield shows how much is waiting.
+- One click on the topbar shield (or "Health check…" in the More menu) scans the whole lorebook and groups what it finds into errors, warnings, and notes, each naming the entry it concerns — duplicate keys, ignored secondary keys, entries that can never activate, recursion loops, invalid regex keys, and malformed whole-content wrappers, detected with the same matching rules SillyTavern itself applies. A count badge on the shield shows how much is waiting; recursion loops and self-triggers join the count when the health pane opens and the full pass runs.
 - Every finding's buttons jump straight to the offending entry; when several entries share a finding, each gets its own named button.
 - **You decide what matters** — mute a whole kind of check with the filter chips, or mark a single finding "not an issue". Both are remembered in the saved project, and "Undo all" brings everything back.
 
 ### Interface
 
-- **Focus mode** (desktop only) narrows the editor column to a comfortable reading measure with one click on the topbar button.
+- **Focus mode** (desktop only) narrows the editor column to a comfortable reading measure with one click on the button beside the entry's content field.
 - Diff viewers with **previous/next change** navigation, so long diffs can be stepped through hunk by hunk.
 - Material Design 3 theming with light (azure blue), dark (cyan-orange), and system-follow modes.
 - Fully responsive layout with touch support (touch-draggable tab strip, mobile-friendly panels), so it works comfortably on phones and tablets.

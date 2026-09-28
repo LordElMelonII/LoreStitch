@@ -14,11 +14,12 @@ same review, was completed and archived 2026-09-23 (shipped as v1.5.0). Task
 2026-09-25 (shipped as v1.6.0). Task 12 (delimiters selection + markdown) entered
 2026-09-26 from the user's improvements doc and **preempts 10/11** (user decision:
 "priority over every other task"); the sketch queue numbers shifted (undo → 13,
-pinned drawer → 15 — 14 stays retired).
+pinned drawer → 15 — 14 stays retired). Task 12 was completed 2026-09-26
+(shipped as v1.7.0); its plan and ledger still sit in this folder pending the
+archival move.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
-| 12 | [12-delimiters-selection-and-markdown.md](./12-delimiters-selection-and-markdown.md) | Delimiters batch action on the entry selection + Markdown wrapper style (level picker, optional trailing `---`, name-matched detection, malformed shapes) + responsive bottom-sheet migration | ✅ Ready (checkpoints 12-1 after P1, 12-2 after P2) — **preempts 10/11** |
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
 | 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
 

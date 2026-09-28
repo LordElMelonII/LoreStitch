@@ -1,6 +1,6 @@
 # features/linter/
 
-Health-check UI (v1.2.0): `linter-dialog.ts` (dual-container pane: findings grouped by severity, mute chips, per-issue ignore, jump-to-entry buttons) and `linter-state.ts` (the `@Service()` wrapper holding scan results + mute/ignore prefs, persisted in the `.stproj` archive via `WorkspaceService`).
+Health-check UI (v1.2.0): `linter-dialog.ts` (dual-container pane: findings grouped by severity, mute chips, per-issue ignore, jump-to-entry buttons) and `linter-state.ts` (the `@Service()` wrapper: the topbar badge's graph-free sync pass (`entryDiagnostics`), the pane's async chunked health run with progress (`healthRun`, `HEALTH_RUN_YIELD` — v1.8.0), and the mute/ignore prefs, persisted in the `.stproj` archive via `WorkspaceService`).
 
 **Hints**
 
