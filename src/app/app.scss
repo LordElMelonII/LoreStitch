@@ -39,9 +39,11 @@
 // spans the full drawer height and never scrolls away with the content. It
 // stacks above the entry list so it — not the row beneath — receives the
 // pointer, and `touch-action: none` keeps touch drags from being eaten by
-// scrolling. The affordance stays quiet: no visual of its own until hover
-// or keyboard focus surfaces a centered 2px line in the system primary
-// (interactive, not a decorative divider).
+// scrolling. The affordance is persistent but quiet (user feedback: a
+// hover-only line hid the resizability entirely): a 2px line in the
+// outline-variant tone always marks the edge — visible structure, not a
+// highlight — and hover or keyboard focus upgrades that same line to the
+// system primary (interactive emphasis, not a decorative divider).
 .entries-resize-handle {
   position: absolute;
   top: 0;
@@ -60,7 +62,7 @@
     right: 2px;
     width: 2px;
     border-radius: 1px;
-    background: transparent;
+    background: var(--mat-sys-outline-variant);
   }
 
   &:hover::after,
