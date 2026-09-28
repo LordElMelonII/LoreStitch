@@ -1,6 +1,8 @@
 # Task 20 — Entry list shift-click + long-press range selection (checkbox only)
 
-**Status**: 🟢 In progress (branch `feature/20-shift-range-selection`)
+**Status**: ✅ Merged to `develop` (`f562ad0`, user go 2026-09-28 — branch-final
+sweep green: 77/48/46 passed across desktop-chrome/mobile-chrome/mobile-safari,
+0 failures)
 **Source**: direct user request 2026-09-28 — preempts the pending queue (task 12
 intake precedent).
 **Grounded at**: `develop` @ `b0eff6c`, re-grounded 2026-09-28 before phase 1 —

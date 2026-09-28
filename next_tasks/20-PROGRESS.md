@@ -128,3 +128,11 @@ Plan: `next_tasks/20-shift-range-selection.md` (D1–D5 locked, user decision 20
   `origin/feature/20-shift-range-selection`. **Stopped for user testing** —
   merge to `develop` (`git merge --ff-only`) only on the user's explicit go,
   per the task-branch convention.
+
+---
+
+## Close-out
+
+- **Status**: ✅ merged — user go 2026-09-28; `git merge --ff-only` brought
+  `develop` to `f562ad0` (the exact branch-final-swept tip; no new tree
+  state, so no gate re-run needed by the ff-only convention).
