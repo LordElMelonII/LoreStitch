@@ -272,3 +272,42 @@ ui-specialist as atomic commits (fast gate green between each):
 sliced + never-compressed badges/counts; content not overlapped after live
 resize with the 400ms margin transition settled), then branch-final sweep
 round 2 (refreshed AFTER captures + probe) and re-push.
+
+## Round 3 — chip feedback clarified (2026-09-28)
+
+**User rejected the round-2 chip fix** (per-chip ellipsis was not the intent):
+"show the full chips, and the ones not fitting the rows would go in the
+counter where you can hover for the tooltip". ts-reviewer had passed R2 clean
+(verdict: no findings — the rejection is design, not code quality). The
+cancelled R2 qa dispatch left no tree state (verified clean).
+
+**Landed**: commit `cf18871` — `fix(entry-list): fit whole key chips and
+count the overflow in the +N chip` — new per-row `EntryKeys` component
+(`entry-keys.ts/.html/.scss`, host keeps the `.item-keys` class): hidden
+`max-content` measurement row (all chips + `+N` probe), ResizeObserver →
+`containerWidth` signal, tracked effect measures + calls the pure fit in
+`entry-keys.model.ts` (`fitKeyChips` — descending-scan counter reservation,
+immune to the 2-cycle a fixed-point loop can hit at exact-fit boundaries),
+visible row renders full chips + dynamic `+N` whose tooltip lists hidden
+keys. Static `slice(0, 3)` cap removed; round-2 shrink/ellipsis CSS fully
+reverted; one-shot `document.fonts.ready` re-measure for the font-swap
+re-metric. Specs: 16 model (fit truth tables) + 10 component (hide/count/
+tooltip/widen/RO wiring) — 1443/1443 unit.
+
+**Gates**: build ✓ (22.5s) · unit+coverage ✓ (new files 94.8-100% stmts) ·
+lint ✓. Two in-task fix-forwards were spec bugs (one real: a shared-jsdom
+non-configurable RO stub from entry-editor.spec — descriptor-aware
+install/restore added).
+
+**Deviations**: none from the user's round-3 contract. Refinement inside the
+recommended architecture: descending-scan fit instead of fixed-point loop
+(equivalent + provably non-oscillating).
+
+**Notes for qa**: `.key-chip` selects VISIBLE chips only (measurers are
+`.measure-chip`); counter is `.key-chip.more` with text `+N`; fit is monotone
+in width (widen never removes a visible chip); at 480 many more than 3 chips
+show; no existing e2e pins chip DOM — pins are qa's to author.
+
+**Next**: ts-reviewer over `137d298..HEAD`, then qa-auditor (full-chips/+N
+pins AND the still-unlanded content-margin recovery pin from the cancelled
+R2 dispatch), then branch-final round 3.
