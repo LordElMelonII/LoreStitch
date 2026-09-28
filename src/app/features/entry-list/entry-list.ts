@@ -7,6 +7,7 @@ import {
   computed,
   effect,
   inject,
+  output,
   signal,
   untracked,
   viewChild,
@@ -93,6 +94,15 @@ export class EntryList {
   private readonly dialog = inject(MatDialog);
   private readonly overlays = inject(ResponsiveOverlayService);
   private readonly snackBar = inject(MatSnackBar);
+
+  /**
+   * Request to close the drawer, emitted by the header close button (task 21
+   * D2). The button renders on the mobile band only — the full-width overlay
+   * has no scrim sliver left to tap — and the shell binds this output to
+   * `closeLeft()`; on tablet/desktop the drawer is docked and needs no close
+   * affordance, so neither button nor output fire there.
+   */
+  readonly closeDrawer = output<void>();
 
   private readonly viewport = viewChild.required(CdkVirtualScrollViewport);
 

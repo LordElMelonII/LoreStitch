@@ -12,6 +12,20 @@
     >
       <mat-icon>add</mat-icon>
     </button>
+    <!-- Mobile only (removed from the DOM on tablet/desktop): the full-width
+         overlay drawer has no scrim left to tap, so the close affordance
+         lives in the pane itself. The shell routes the output to closeLeft(). -->
+    @if (layout.isMobile()) {
+      <button
+        matIconButton
+        type="button"
+        (click)="closeDrawer.emit()"
+        matTooltip="Close entries panel"
+        aria-label="Close entries panel"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    }
   </div>
 
   <mat-form-field subscriptSizing="dynamic" appearance="fill" class="filter-field">

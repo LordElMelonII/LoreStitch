@@ -11,7 +11,10 @@
   >
     @if (workspace.activeProject()) {
       @defer (on immediate) {
-        <app-entry-list />
+        <!-- closeDrawer: the mobile drawer's in-pane close button (the
+             full-width overlay has no scrim to tap) routes to the same
+             closeLeft() the sidenav's (closed) event uses. -->
+        <app-entry-list (closeDrawer)="closeLeft()" />
       } @placeholder {
         <div class="side-placeholder"></div>
       }

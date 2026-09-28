@@ -401,6 +401,51 @@ describe('EntryList', () => {
     expect(fixture.nativeElement.querySelector('.batch-bar')).toBeTruthy();
   });
 
+  it('renders the drawer close button on the mobile band only (task 21 D2)', async () => {
+    await createList([entry(0)]);
+    fixture.detectChanges();
+
+    // Desktop default: absent from the DOM — the responsive-shape contract
+    // removes it (@if), never display:none.
+    const selector = '[aria-label="Close entries panel"]';
+    expect(fixture.nativeElement.querySelector(selector)).toBeNull();
+
+    // Phones get it: the full-width overlay drawer has no scrim sliver left
+    // to tap, so the close affordance lives in the pane's header. The flip
+    // rides CDK's debounced re-emit on a real-timer scheduler (see the
+    // batch-toolbar flip test above).
+    vi.useRealTimers();
+    viewport.setMobile(true);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector(selector)).toBeTruthy();
+
+    // Back on desktop the button is removed again.
+    viewport.setMobile(false);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector(selector)).toBeNull();
+  });
+
+  it('emits closeDrawer when the header close button is clicked on the mobile band', async () => {
+    await createList([entry(0)]);
+    fixture.detectChanges();
+
+    vi.useRealTimers();
+    viewport.setMobile(true);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    fixture.detectChanges();
+
+    const button = fixture.debugElement.query(By.css('[aria-label="Close entries panel"]'));
+    assert(button);
+    let closed = 0;
+    fixture.componentInstance.closeDrawer.subscribe(() => closed++);
+    button.nativeElement.click();
+    await settle();
+
+    expect(closed).toBe(1);
+  });
+
   it('prunes selected ids that no longer exist (rollback / batch delete)', async () => {
     const list = await createList([entry(0), entry(1), entry(2)]);
     list['toggleRow'](itemAt(list, 0), true);

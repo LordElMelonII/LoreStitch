@@ -47,8 +47,16 @@
   height: 100%;
 }
 
-// Mobile: sidenav overlays get full-width panels
-:host(.mobile) .entries-sidenav,
+// Mobile drawer widths follow the surface contract (task 21 D2): the entries
+// drawer is a work surface — select, batch, reorder — not a peek, so its
+// overlay opens full-width. A full-width panel has no scrim sliver left to
+// tap, which is why EntryList's header carries its own close button on the
+// mobile band. The history drawer stays a peek surface at min(88vw, 340px):
+// it keeps a scrim sliver for its tap-to-dismiss return.
+:host(.mobile) .entries-sidenav {
+  width: 100%;
+}
+
 :host(.mobile) .history-sidenav {
   width: min(88vw, 340px);
 }
