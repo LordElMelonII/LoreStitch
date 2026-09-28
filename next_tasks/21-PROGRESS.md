@@ -94,9 +94,38 @@ checked — all new statements covered) · lint ✓ (22s).
 entry-list.html line refs after the button block shifted +3; the D2 comment
 block in `app.scss` is where D3's clamp range comment extends.
 
-### P1.3
+### P1.3 — `feat(shell): resizable docked entries drawer` (2026-09-28)
 
-_Not started._
+**Landed**: commit `e60c94f` — `app.ts` (clamp constants 320/480/320, step 8,
+storage key `lorestitch.entries-drawer-width`, pure `clampEntriesWidth` +
+guarded `restoreEntriesWidth`, `entriesWidth` signal, pointer drag with
+`setPointerCapture` + live clamp, keyboard ±8 / Home / End committing on
+keyup, dblclick reset, body `entries-resize-active` chrome removed on end +
+`DestroyRef`), `app.html` (`[style.width.px]` unbound at mobile; handle with
+the exact locked a11y contract), `app.scss` (`:host(:not(.mobile))` clamp so
+D2's 100% is never capped at 481–767px; 6px handle strip, col-resize,
+touch-action none, z-index 2), `styles.scss` (global body resize chrome),
+`app.spec.ts` (12 new specs: startup clamp table, presence/a11y + mobile-band
+removal, keyboard steps + keyup commit, storage round-trip/throwing-storage,
+pointer drag + second-pointer guard + pointercancel recovery, dblclick reset,
+mid-drag destroy cleanup; Map-backed localStorage stub, jsdom-safe synthetic
+pointer events).
+
+**Gates**: build ✓ (~16s) · unit+coverage ✓ 1415 passed (~3-4min; app.ts
+92.3% stmts / 89.2% branches / 95.1% funcs — uncovered are pre-existing
+exhaustiveness throws + two unreachable defensive arms) · lint ✓.
+
+**Deviations**: none in contract. Two implementation choices inside D3's
+unspecified space, flagged: (1) handle shows a quiet 2px primary line on
+hover/`focus-visible` — D3 fixes geometry/cursor/touch-action only and an
+invisible strip fails the affordance rule; visible in the AFTER captures.
+(2) `(keyup)` commits any keyup while a keyboard resize is in flight.
+
+**Notes for P3**: handle selector `[aria-label="Resize entries panel"]`
+(unique; use exact:true next to "Close/Toggle entries panel"); live width =
+`.entries-sidenav` inline `style.width`; localStorage write lands on keyup
+(reload-persistence observable only after release); drag = real mouse
+down/move/up, width tracks `clientX − drawer.left` clamped.
 
 ## P2 — ts-reviewer
 
