@@ -1,0 +1,76 @@
+// One entry row's key strip (task 21, round-3 contract): whole chips only.
+//
+// The chips that fit the strip's measured width render at their full natural
+// width — never compressed, never ellipsized — and the rest are not rendered;
+// the +N counter names them in its tooltip. The `overflow: hidden` on the
+// strip is only the transient first-frame guard (before the first measurement
+// every chip renders): the fit, not the clip, is the steady-state contract.
+:host {
+  display: flex;
+  // Must match KEY_CHIP_GAP_PX (entry-keys.model.ts) — the fit counts the
+  // same gaps the layout renders.
+  gap: 4px;
+  // Anchors the out-of-flow measurement row to the strip.
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+// Shared chip geometry for both rows: the measurement row must measure exactly
+// what the visible row renders. Colors differ between the rows (and never
+// affect width), so the measurement chips stay classless shadows of the real
+// ones — `.item-keys .key-chip` keeps matching only the visible chips.
+%chip {
+  font: var(--mat-sys-label-small);
+  border-radius: var(--mat-sys-corner-full);
+  padding: 0 6px;
+  white-space: nowrap;
+  // Whole chips never compress — the fit already guarantees they fit.
+  flex: none;
+}
+
+.key-chip {
+  @extend %chip;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+
+  &.constant {
+    background: var(--mat-sys-tertiary-container);
+    color: var(--mat-sys-on-tertiary-container);
+  }
+  &.vectorized {
+    background: var(--mat-sys-primary-container);
+    color: var(--mat-sys-on-primary-container);
+  }
+  &.more {
+    background: transparent;
+  }
+}
+
+// Zero-size and out of flow: it must never affect the row's layout. It needs
+// `width: max-content` — an absolutely-positioned box would otherwise
+// shrink-to-fit below its content and compress the very chips being measured.
+// No flex gap here: gap never enters a chip's own offsetWidth, so the fit's
+// gap math (KEY_CHIP_GAP_PX) is the only gap accounting.
+.measure-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: max-content;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+
+  .measure-chip {
+    @extend %chip;
+  }
+}
+
+.no-keys {
+  font: var(--mat-sys-label-small);
+  font-style: italic;
+  color: var(--mat-sys-outline);
+  flex: none;
+}

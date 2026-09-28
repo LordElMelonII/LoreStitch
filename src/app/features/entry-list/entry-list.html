@@ -212,34 +212,10 @@
         }
         {{ item.title }}
       </div>
-      <div class="item-keys">
-        @switch (item.state) {
-          @case ('constant') {
-            <span class="key-chip constant" matTooltip="Always inserted, ignores keys">
-              constant
-            </span>
-          }
-          @case ('vectorized') {
-            <span
-              class="key-chip vectorized"
-              matTooltip="Allowed to be inserted by embedding similarity (Vector Storage)"
-            >
-              vector
-            </span>
-          }
-        }
-        @for (key of item.keys.slice(0, 3); track key) {
-          <span class="key-chip" [matTooltip]="key">{{ key }}</span>
-        }
-        @if (item.keys.length > 3) {
-          <span class="key-chip more" [matTooltip]="item.keys.slice(3).join(', ')">
-            +{{ item.keys.length - 3 }}
-          </span>
-        }
-        @if (!item.keys.length && item.state === 'normal') {
-          <span class="no-keys">no keys</span>
-        }
-      </div>
+      <!-- Whole-chip key strip (task 21, round-3 feedback): the strip itself
+           measures its width, renders every key chip that fits whole, and
+           counts the rest in a +N chip whose tooltip names them. -->
+      <app-entry-keys [keys]="item.keys" [state]="item.state" />
     </div>
     <div class="item-actions">
       <span class="token-count" matTooltip="Estimated tokens when activated">

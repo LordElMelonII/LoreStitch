@@ -1,0 +1,52 @@
+<!-- Hidden measurement row: every chip at its full natural width, always laid
+     out so the fit can measure chips the visible row currently does not render
+     — and the always-present probe counter closes the "+N width" loop. It is
+     zero-height, out of flow and invisible, so it never affects layout, and it
+     carries no tooltips (aria-hidden). Chip geometry is shared with the visible
+     row via the %chip placeholder (entry-keys.scss) — the widths measured here
+     are exactly the widths the visible chips render at. -->
+<span class="measure-row" aria-hidden="true">
+  @switch (state()) {
+    @case ('constant') {
+      <span class="measure-chip" #measureChip>constant</span>
+    }
+    @case ('vectorized') {
+      <span class="measure-chip" #measureChip>vector</span>
+    }
+  }
+  @for (key of keys(); track $index) {
+    <span class="measure-chip" #measureChip>{{ key }}</span>
+  }
+  <span class="measure-chip measure-counter" #probeChip>+{{ probeCount() }}</span>
+</span>
+
+<!-- Visible row: the state chip (always, never compressed), the whole key
+     chips the fit keeps, and the +N counter whose tooltip names every key it
+     stands in for. Nothing here is ever ellipsized — overflow is counted, not
+     sliced. -->
+@switch (state()) {
+  @case ('constant') {
+    <span class="key-chip constant" matTooltip="Always inserted, ignores keys">
+      constant
+    </span>
+  }
+  @case ('vectorized') {
+    <span
+      class="key-chip vectorized"
+      matTooltip="Allowed to be inserted by embedding similarity (Vector Storage)"
+    >
+      vector
+    </span>
+  }
+}
+@for (key of shownKeys(); track $index) {
+  <span class="key-chip" [matTooltip]="key">{{ key }}</span>
+}
+@if (hiddenKeys().length > 0) {
+  <span class="key-chip more" [matTooltip]="hiddenKeys().join(', ')">
+    +{{ hiddenKeys().length }}
+  </span>
+}
+@if (!keys().length && state() === 'normal') {
+  <span class="no-keys">no keys</span>
+}

@@ -36,6 +36,7 @@ import { LayoutService } from '../../shared/services/layout.service';
 import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { debouncedSignal } from '../../shared/util/debounced-signal';
 import { matchesQuery, applyRangeSelection, type EntryListItem } from './entry-list.model';
+import { EntryKeys } from './entry-keys';
 import { type BatchOperationsDialogData } from './batch-operations-dialog';
 import { type DelimiterDialogData } from '../delimiters/delimiter-dialog.model';
 
@@ -76,6 +77,7 @@ const LONG_PRESS_SLOP_PX = 8;
     MatInputModule,
     MatMenuModule,
     MatTooltipModule,
+    EntryKeys,
   ],
   templateUrl: './entry-list.html',
   styleUrl: './entry-list.scss',

@@ -569,10 +569,11 @@ app-entry-content-field .content-field .mat-mdc-form-field-infix {
 // sizing, which would lay each row out at its untruncated width and push the
 // row actions off-canvas. Pin the wrapper to the viewport width instead, so
 // rows lay out at the drawer's width and the row's own truncation engages
-// (`flex: 1; min-width: 0` on `.item-main` ellipsizes the title, `.item-keys`
-// clips the chips, `flex: none` keeps `.item-actions` pinned right). CDK
-// internals are unreachable from scoped styles, hence the global rule — the
-// same pattern the export-selected dialog uses below.
+// (`flex: 1; min-width: 0` on `.item-main` ellipsizes the title, the
+// `app-entry-keys` strip fits whole chips and counts the overflow in its
+// +N chip, `flex: none` keeps `.item-actions` pinned right). CDK internals
+// are unreachable from scoped styles, hence the global rule — the same
+// pattern the export-selected dialog uses below.
 app-entry-list .list-viewport .cdk-virtual-scroll-content-wrapper {
   width: 100%;
 }
