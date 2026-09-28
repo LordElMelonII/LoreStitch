@@ -177,3 +177,19 @@ imported title overflows any clamp; D1 holds at every width D3 can produce.
   (`.zcode/agents/rules/conventional-commits.md`).
 - If any new icon ligature appears (none expected — `close` is already subsetted):
   `npm run icons:refresh` and stage the regenerated font with the feature commit.
+
+## Post-test feedback (round 2, 2026-09-28 — user-directed refinements)
+
+User testing of the branch reported three issues; these refine the locked
+design by the user's own direction and are implemented, not relitigated:
+
+- D1 refinement: key chips **ellipsize their labels** (per-chip
+  `flex: 0 1 auto; min-width: 0` + text-overflow) instead of being sliced by
+  the `.item-keys` clip; state badges and the `+N` count never compress.
+- D3 refinement: the resize handle carries a **persistent** quiet
+  `--mat-sys-outline-variant` 2px line (primary on hover/focus) — the
+  user-approved "thicker right border" reading.
+- D3 bugfix: a live width change now calls the container's public
+  `updateContentMargins()` (side-mode content margins were stale until
+  close/reopen — Material recomputes them only on open/close animations,
+  mode changes and window resizes).

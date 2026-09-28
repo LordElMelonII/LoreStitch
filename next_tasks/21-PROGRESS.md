@@ -235,3 +235,40 @@ precedent), flip the README row. Release cut is NOT part of this task.
 | `2ea657f` | refactor(shell): end an in-flight drawer resize drag on viewport band flips |
 | `dcaf963` | test(e2e): pin drawer truncation, mobile full-width and resize contracts |
 | (+ per-phase `docs(next_tasks)` ledger commits) | |
+
+## Round 2 — user testing feedback (2026-09-28)
+
+The user tested `ece35d9` and reported three issues; all three fixed by
+ui-specialist as atomic commits (fast gate green between each):
+
+1. **Key chips sliced mid-chip** (D1 shipped `overflow: hidden` clipping) —
+   `5989f8c` `fix(entry-list): ellipsize key chip labels instead of slicing
+   chips`: `.key-chip` gets `flex: 0 1 auto; min-width: 0` + per-chip
+   ellipsis; `.constant`/`.vectorized`/`.more` stay `flex: none` (status
+   badges and the +N count never compress); tooltips already carry full text.
+   This refines D1's "key chips clip" wording per the user's direction —
+   recorded as a user-revised refinement, not an orchestrator deviation.
+2. **No visible resize affordance** — `93785fa` `fix(shell): give the
+   entries resize handle a persistent visible affordance`: the handle's 2px
+   line is now persistent quiet `--mat-sys-outline-variant`, upgrading to
+   primary on hover/focus-visible. The user pre-approved "thicker right
+   border or a handle"; the border reading chosen.
+3. **Editor content overlapped by the drawer after a live resize; close/
+   reopen fixed it** — root cause verified in Material source: side-mode
+   content margins (`_contentMargins` host-bound to
+   `style.margin-left`) recompute only via the container's public
+   `updateContentMargins()`, which fires on open/close animations, mode
+   changes, window resizes — never on an inline width change (autosize off).
+   `c045f19` `fix(shell): recompute content margins as the entries drawer
+   resizes`: second `#workspaceEl` viewChild read as `MatSidenavContainer` +
+   a width-driven constructor effect (viewport read via `untracked`) calls
+   the public method; mobile band skipped (over-mode, null binding). Spec:
+   spy pins exactly-one call on a width change, none when unchanged, none at
+   mobile band. 1417 unit tests.
+
+**Gates per commit**: build ✓ · unit+coverage ✓ (1416 → 1417) · lint ✓.
+
+**Next**: ts-reviewer over `ece35d9..HEAD`, then qa-auditor pins (chips not
+sliced + never-compressed badges/counts; content not overlapped after live
+resize with the 400ms margin transition settled), then branch-final sweep
+round 2 (refreshed AFTER captures + probe) and re-push.
