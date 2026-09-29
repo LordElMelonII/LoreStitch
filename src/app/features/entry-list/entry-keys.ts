@@ -29,7 +29,10 @@ import { KEY_CHIP_GAP_PX, digitsOf, fitKeyChips } from './entry-keys.model';
  * the strip's live width (the drawer is user-resizable), and the pure fit in
  * `entry-keys.model.ts` divides the width greedily. The strip is a per-row
  * component because the virtual scroll re-materializes rows as it scrolls —
- * each instance owns its DOM and its measurement.
+ * each instance owns its DOM and its measurement. On the phone band the
+ * drawer cycle collapses the strip to a zero box while closed and restores
+ * it on reopen; the observer carries both transitions (zero → null → width),
+ * so the fit re-arms itself across a reopen without any shell hook.
  */
 @Component({
   selector: 'app-entry-keys',
@@ -48,10 +51,13 @@ export class EntryKeys {
   readonly state = input.required<WiTriggerState>();
 
   /**
-   * Content-box width of the strip, from the `ResizeObserver`. `null` until
-   * the first measurement (and permanently where ResizeObserver is missing,
-   * e.g. jsdom): the strip then renders every chip and its `overflow: hidden`
-   * guards the transient — the fit, not the clip, is the steady state.
+   * Content-box width of the strip, from the `ResizeObserver`. `null` means
+   * unmeasured — either never measured (and permanently where ResizeObserver
+   * is missing, e.g. jsdom) or not measurable right now, because the strip's
+   * box is collapsed to zero (the closed phone drawer's `display: none`): a
+   * zero-size delivery stores `null`, never a stale width. While unmeasured
+   * the strip renders every chip and its `overflow: hidden` guards the
+   * transient — the fit, not the clip, is the steady state.
    */
   protected readonly containerWidth = signal<number | null>(null);
 
@@ -113,10 +119,16 @@ export class EntryKeys {
     if (typeof ResizeObserver !== 'undefined') {
       const observer = new ResizeObserver((entries) => {
         // A zero-size report (the strip display:none inside a closed drawer)
-        // is not a width to fit against — skip it; reopening reports the box.
+        // is stored as "unmeasured", not skipped. Skipping it would leave a
+        // stale width in the signal while the drawer is closed — the fit
+        // keeps running against a hidden measurement row (every chip reads
+        // zero) — and the reopen delivery then carries the SAME width the
+        // signal already held, a signal-equality no-op: the broken fit would
+        // never re-run. Storing null makes the null → width reopen delivery
+        // a real change that re-arms the fit even at an unchanged width.
         const width = entries.at(-1)?.contentRect.width;
-        if (width) {
-          this.containerWidth.set(width);
+        if (width !== undefined) {
+          this.containerWidth.set(width > 0 ? width : null);
         }
       });
       observer.observe(host);
@@ -147,6 +159,17 @@ export class EntryKeys {
         (chip) => chip.nativeElement.offsetWidth,
       );
       const counterWidth = this.probeChip()?.nativeElement.offsetWidth ?? 0;
+      // Defense in depth against the interleaving where a live width pairs
+      // with an unlayoutable measurement row (the zero-size delivery for the
+      // collapse has not landed yet): with every chip reading zero the fit
+      // would count all of them as free. Render everything instead of
+      // trusting garbage; the next real delivery re-fits. A laid-out chip
+      // never measures zero (it carries padding and text), so the all-zero
+      // signature is unambiguous.
+      if (counterWidth === 0 && keyWidths.every((keyWidth) => keyWidth === 0)) {
+        untracked(() => this.visibleCount.set(null));
+        return;
+      }
       // The state chip owns its width plus one gap up front; the fit divides
       // the rest among key chips and the counter.
       const available = width - (stateChipWidth > 0 ? stateChipWidth + KEY_CHIP_GAP_PX : 0);
