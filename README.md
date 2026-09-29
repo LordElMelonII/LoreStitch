@@ -74,6 +74,7 @@ The editor mirrors SillyTavern's World Info fields one-to-one, so nothing is los
 - **Search & replace** across entry contents, keys, and names, with regex mode, whole-word and case-sensitive matching (filter chips), and a per-entry hit preview before applying.
 - **Delimiter tools** to add, change, or remove content delimiters (`<tag>…</tag>`, `[name=…]`, `---` separators, a Markdown heading, or none) for a single entry, the checked selection, or the whole book, using each entry's own name, its first primary key, or a fixed one — with a live diff preview before applying.
 - Per-entry actions: add, duplicate, delete, and drag-and-drop reordering (kept in sync with SillyTavern's display index).
+- **Range selection** — shift-click a checkbox (press-and-hold on a touch screen) and every entry between it and the last one you tapped is selected or cleared with it, in either direction.
 
 ### Health check
 
@@ -86,7 +87,7 @@ The editor mirrors SillyTavern's World Info fields one-to-one, so nothing is los
 - **Focus mode** (desktop only) narrows the editor column to a comfortable reading measure with one click on the button beside the entry's content field.
 - Diff viewers with **previous/next change** navigation, so long diffs can be stepped through hunk by hunk.
 - Material Design 3 theming with light (azure blue), dark (cyan-orange), and system-follow modes.
-- Fully responsive layout with touch support (touch-draggable tab strip, mobile-friendly panels), so it works comfortably on phones and tablets.
+- Fully responsive layout with touch support (touch-draggable tab strip, mobile-friendly panels, a resizable entries drawer on desktops and tablets that covers the whole screen on phones), so it works comfortably on phones and tablets.
 - Installable as a PWA and fully usable offline.
 
 ## Tech stack

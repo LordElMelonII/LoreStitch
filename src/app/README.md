@@ -6,7 +6,7 @@ The Angular application in three layers:
 - `features/` — user-facing surfaces (shell, editor, dialogs), one folder per feature.
 - `shared/` — cross-feature components, directives, constants, and UI-coupled services.
 
-`app.ts` mounts the shell (topbar, drawers, mobile bottom bar); `app.config.ts` provides the service worker, Material defaults, and the icon-font sanitizer. State is Signals-only (see `AGENTS.md`).
+`app.ts` mounts the shell (topbar, drawers, mobile bottom bar) and owns the entries drawer's resize (320–480 px, persisted in localStorage; full-width on phones); `app.config.ts` provides the service worker, Material defaults, and the icon-font sanitizer. State is Signals-only (see `AGENTS.md`).
 
 **Hints**
 

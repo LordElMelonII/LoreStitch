@@ -15,12 +15,12 @@ same review, was completed and archived 2026-09-23 (shipped as v1.5.0). Task
 2026-09-26 from the user's improvements doc and **preempts 10/11** (user decision:
 "priority over every other task"); the sketch queue numbers shifted (undo → 13,
 pinned drawer → 15 — 14 stays retired). Task 12 was completed 2026-09-26
-(shipped as v1.7.0); its plan and ledger still sit in this folder pending the
-archival move.
+(shipped as v1.7.0). Tasks 16–19 followed (shipped as v1.8.0, 2026-09-28), then
+tasks 20 and 21 (shipped as v1.9.0, 2026-09-29); their plans and ledgers also
+still sit in this folder pending the archival move.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
-| 21 | [21-entry-drawer-ux.md](./21-entry-drawer-ux.md) | Row truncation (horizontal scroll removed), full-width mobile entries drawer + close button, resizable docked drawer (320–480px, persisted) | 🟢 Implemented on `feature/21-entry-drawer-ux`, branch-final sweep green 2026-09-28 — awaiting user testing |
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
 | 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
 

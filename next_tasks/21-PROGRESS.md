@@ -418,3 +418,11 @@ precedent), flip the README row. Release cut is NOT part of this task.
 | `2e9ccb6` | fix(entry-list): recover the key-strip fit when the drawer reopens |
 | `3935762` | test(e2e): pin full-chip overflow counting and content-margin recovery |
 | (+ per-phase `docs(next_tasks)` ledger commits) | |
+
+---
+
+## Close-out
+
+- **Status**: ✅ merged — user go 2026-09-29; released the same day as v1.9.0
+  (`e6db8f0`, annotated tag `v1.9.0`). The plan and this ledger still sit in
+  `next_tasks/` pending the archival move (the 12/16–20 precedent).
