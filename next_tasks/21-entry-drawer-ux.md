@@ -1,8 +1,9 @@
 # Task 21 — Entry drawer UX: truncate rows, full-width mobile drawer, resizable drawer
 
 **Status**: 🟢 Implemented on `feature/21-entry-drawer-ux` — branch-final
-sweep green 2026-09-28, pushed and awaiting user testing (ledger:
-[21-PROGRESS.md](./21-PROGRESS.md)).
+sweep round 3 green 2026-09-29 (two rounds of user feedback incorporated;
+see the post-test sections below and the ledger), pushed and awaiting user
+testing (ledger: [21-PROGRESS.md](./21-PROGRESS.md)).
 **Source**: direct user request 2026-09-28 ("The entry list sidebar looks horrible honestly,
 because I have to scroll to the right to see the actions if the entry titles are long") —
 preempts the pending queue (task 20 intake precedent). Design settled in a plan-mode

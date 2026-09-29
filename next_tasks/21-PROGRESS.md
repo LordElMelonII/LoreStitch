@@ -352,3 +352,69 @@ green twice consecutively, no retries consumed.
 **Pending**: quick ts-review pass over `9238784..2e9ccb6` (both fixes are
 P2-watchpoint code), then branch-final round 3 (refreshed AFTER captures +
 probe, full matrix, closing gates).
+
+## Branch-final sweep, round 3 (2026-09-29)
+
+**ts-review pass over the two post-review fixes** (`ec48990`, `2e9ccb6`):
+clean — no commits. Verified no effect write-read cycles (render-all is a
+write to a signal the fit effect does not read; measurement row renders
+unconditionally), `null` is the single unmeasured sentinel (0 never stored),
+the all-zero guard is exact (padded chips measure ≥12px), afterRenderEffect
+auto-disposes, `mixedReadWrite` phase is correct for the fused
+read+write Material call. Both fixed behaviors contractually unchanged.
+
+**AFTER captures refreshed** (`__screenshots__/21-entry-drawer-ux/after/`,
+9 shots, identical pinned conditions — same script/contexts/theme/fixture/
+settle) on the final tree (`3935762`). Capture-script adjustments (logged
+per the task-12 hygiene precedent; no pinned condition — viewport/theme/
+fixture/settle — changed): key adds are now paced (qa's zoneless-flush
+finding — a machine-speed Enter loop drops keys) and the settled-state gate
+pins counter CONSISTENCY (`+N` = 6 − visible) instead of the round-1 magic
+`+3`, which the dynamic fit made width-dependent; on phones the gate runs
+after the drawer reopens (the unmeasured closed-drawer state renders all
+chips with no counter by design).
+
+**After-state probe** (probe-after.mjs, same conditions as the before probe):
+
+| viewport | list overflow | Duplicate beyond viewport @ scrollLeft=0 | title ellipsizes | drawer width |
+|---|---|---|---|---|
+| desktop 1280×800 | 0px | inside by 64px | yes | 320px |
+| tablet 1024×768 | 0px | inside by 64px | yes | 320px |
+| mobile 390×844 | 0px | inside by 68px | yes | 390px (full width) |
+
+**Full three-project Playwright matrix** (one project per command):
+
+- `desktop-chrome`: 86 passed, 20 skipped (4.5m)
+- `mobile-chrome`: 50 passed, 56 skipped (3.2m)
+- `mobile-safari`: 48 passed, 58 skipped (4.6m)
+
+No red spec — no fix-forward loop needed at the sweep.
+
+**Closing gates**: `CI=true npm test -- --watch=false --coverage` ✓ 63
+files, 1446/1446, thresholds enforced in-run · `npm run lint` ✓ all files
+pass.
+
+**Branch pushed** for user testing: `origin/feature/21-entry-drawer-ux`.
+Never self-merged — `git merge --ff-only` into `develop` waits for the user's
+explicit go. On the go: archive this ledger beside the plan (Task 02
+precedent), flip the README row. Release cut is NOT part of this task.
+
+### Commits on the branch
+
+| SHA | Message |
+|---|---|
+| `1c6b03f` | docs(next_tasks): plan task 21 entry drawer ux |
+| `817e736` | fix(entry-list): truncate long titles and key chips instead of scrolling |
+| `4732209` | feat(entry-list): full-width mobile entries drawer with close button |
+| `e60c94f` | feat(shell): resizable docked entries drawer |
+| `2ea657f` | refactor(shell): end an in-flight drawer resize drag on viewport band flips |
+| `dcaf963` | test(e2e): pin drawer truncation, mobile full-width and resize contracts |
+| `5989f8c` | fix(entry-list): ellipsize key chip labels instead of slicing chips (round 2; superseded by round 3) |
+| `93785fa` | fix(shell): give the entries resize handle a persistent visible affordance |
+| `c045f19` | fix(shell): recompute content margins as the entries drawer resizes (superseded by ec48990) |
+| `cf18871` | fix(entry-list): fit whole key chips and count the overflow in the +N chip |
+| `9238784` | refactor(entry-keys): route fonts access through the DOCUMENT token |
+| `ec48990` | fix(shell): recompute content margins after the width binding applies |
+| `2e9ccb6` | fix(entry-list): recover the key-strip fit when the drawer reopens |
+| `3935762` | test(e2e): pin full-chip overflow counting and content-margin recovery |
+| (+ per-phase `docs(next_tasks)` ledger commits) | |
