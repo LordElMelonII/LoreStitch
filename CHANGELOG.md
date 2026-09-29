@@ -3,6 +3,45 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.9.0 — September 29, 2026
+
+The drawer release. The entries list got a top-to-bottom rethink: rows keep
+their actions in view no matter how long the names run, keys fold into a
+counter when the row runs out of room, the drawer takes whatever width you
+ask of it — and picking a whole run of entries is down to one gesture.
+
+### Highlights
+
+- **Select a range in one gesture** — checking a run of entries no longer
+  means visiting every checkbox. Shift-click one — or, on a touch screen,
+  press and hold it — and every entry between it and the last checkbox you
+  tapped fills in with it: tick an unticked row and the whole run selects,
+  untick a ticked one and the whole run clears, in either direction. Plain
+  clicks, and tapping a row to open it, work exactly as before.
+- **Long titles stop pushing the actions away** — an entry with a sprawling
+  name now shortens with an ellipsis, and its Duplicate and Delete buttons
+  stay pinned at the row's edge. The sideways scroll the list used to grow
+  is gone entirely.
+- **Key chips fit whole, with a counter for the rest** — keys render as
+  whole chips, and the ones the row can't hold fold into a "+N" chip that
+  lists them in its tooltip. Give the drawer more room and more chips move
+  in.
+- **A drawer that takes the width you give it** — on desktops and tablets,
+  the entries drawer resizes: drag the line on its edge anywhere between
+  320 and 480 pixels, or focus it and nudge with the arrow keys (Home and
+  End jump to the limits, a double-click snaps back to the default). The
+  width is remembered between sessions, and the editor beside it follows
+  along as you drag.
+- **The phone drawer is a full panel** — on phones, the entries drawer now
+  covers the whole screen and carries its own close button. Select, batch
+  and reorder with room to breathe.
+
+### Fixed
+
+- **Tab strips coast after a flick** — on touch, swiping the editor's tab
+  strip used to stop dead the instant your finger lifted; it now glides on
+  with the speed of your swipe.
+
 ## 1.8.0 — September 28, 2026
 
 The big-book release. Lorebooks with hundreds of entries now get the same
