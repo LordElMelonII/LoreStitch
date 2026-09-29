@@ -327,6 +327,91 @@ export async function readEntryContent(page: Page): Promise<string> {
 }
 
 // -----------------------------------------------------------------------------
+// Entry-row key strip (task 21 round 3: whole chips + counted overflow)
+// -----------------------------------------------------------------------------
+
+/** The whole DOM contract of one entry row's key strip, read in one pass. */
+export interface KeyStripMeasure {
+  /** Visible key chips — state and counter chips excluded. */
+  readonly keyChipCount: number;
+  /** The `+N` counter's text, or null while every key fits (no counter). */
+  readonly counterText: string | null;
+  /** Every rendered chip's painted box stays inside `.item-main` (±1px). */
+  readonly chipsFitMain: boolean;
+  /** Every rendered chip paints its full label (`scrollWidth === clientWidth`). */
+  readonly noEllipsis: boolean;
+  /** Hidden measurement-row chips (all keys + the probe counter). */
+  readonly measureChipCount: number;
+  /** Elements carrying both chip classes — must always be 0. */
+  readonly doubleClassedChips: number;
+}
+
+/**
+ * Reads the key strip of an entry row (truncation suite + drawer-resize
+ * suite, which must not drift apart on the counting contract). `.key-chip`
+ * matches VISIBLE chips only — the hidden measurement row's shadows carry
+ * `.measure-chip` — so the counts below can never double-count a measurer.
+ * Both suites stage a single entry row, so the first-match `.item-keys`
+ * query is unambiguous.
+ */
+export async function measureKeyStrip(page: Page): Promise<KeyStripMeasure> {
+  return page.evaluate(() => {
+    const host = document.querySelector('.item-keys');
+    if (!host) {
+      throw new Error('.item-keys (entry key strip) not rendered');
+    }
+    const main = host.closest('.item-main');
+    if (!main) {
+      throw new Error('.item-main (entry row main area) not rendered');
+    }
+    const mainRect = main.getBoundingClientRect();
+    const chips = [...host.querySelectorAll('.key-chip')];
+    const keyChips = chips.filter(
+      (c) =>
+        !c.classList.contains('more') &&
+        !c.classList.contains('constant') &&
+        !c.classList.contains('vectorized'),
+    );
+    const counter = host.querySelector('.key-chip.more');
+    return {
+      keyChipCount: keyChips.length,
+      counterText: counter ? (counter.textContent ?? '').trim() : null,
+      chipsFitMain:
+        chips.length > 0 &&
+        chips.every((c) => c.getBoundingClientRect().right <= mainRect.right + 1),
+      noEllipsis: chips.length > 0 && chips.every((c) => c.scrollWidth === c.clientWidth),
+      measureChipCount: host.querySelectorAll('.measure-chip').length,
+      doubleClassedChips: host.querySelectorAll('.key-chip.measure-chip').length,
+    };
+  });
+}
+
+/**
+ * Adds keys to the active entry through the editor's options accordion,
+ * waiting for each chip to render before the next add. The wait is
+ * load-bearing: `EntryUpdatesService.addKey` reads the entry through the
+ * accordion's `entry()` input, which in the zoneless app refreshes only on
+ * a render flush — a machine-speed Enter loop outruns it and stale reads
+ * drop keys. Humans cannot type that fast; a test can.
+ */
+export async function addKeysToActiveEntry(
+  page: Page,
+  keys: readonly string[],
+): Promise<void> {
+  await page.locator('[aria-label="Toggle entry options"]').click();
+  const keyInput = page.getByPlaceholder('Add key…').last();
+  await keyInput.waitFor({ state: 'visible' });
+  const grid = page.locator('mat-chip-grid[aria-label="Primary keys"]');
+  for (const [i, key] of keys.entries()) {
+    await keyInput.fill(key);
+    await keyInput.press('Enter');
+    // Keys are unique, so each accepted add grows the grid by exactly one.
+    await expect(grid.locator('mat-chip-row')).toHaveCount(i + 1, { timeout: 5_000 });
+  }
+  await page.locator('[aria-label="Toggle entry options"]').click();
+}
+
+// -----------------------------------------------------------------------------
 // Character-card PNG byte fidelity (plan 15 §3.6 e2e row)
 // -----------------------------------------------------------------------------
 

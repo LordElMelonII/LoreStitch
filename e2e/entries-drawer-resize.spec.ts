@@ -1,6 +1,19 @@
 import { expect, type Page, test } from '@playwright/test';
 import { strict as assert } from 'node:assert';
-import { createProject, FATE_PATH, importLorebook } from './helpers';
+import {
+  addKeysToActiveEntry,
+  createProject,
+  FATE_PATH,
+  importLorebook,
+  measureKeyStrip,
+} from './helpers';
+
+/**
+ * The round-3 chip repro key set (short keys, six of them): more than the
+ * key strip can show at any drawer width in the 320–480 clamp, so the fit
+ * always hides some behind the +N counter and the count responds to resizes.
+ */
+const RESIZE_KEYS = ['human', 'humans', 'servant', 'camelot', 'peerage', 'edict'];
 
 /**
  * Entries drawer width contracts (task 21, user-locked D2/D3).
@@ -119,6 +132,25 @@ test.describe('docked drawer resize (tablet/desktop band)', () => {
       'the first row must paint inside the resized drawer',
     ).toBeLessThanOrEqual(drawerBox.x + drawerBox.width + 1);
   }
+
+  /**
+   * The drawer-to-editor seam: `gap` is the editor content's left edge minus
+   * the drawer's right edge — 0 when the content sits flush against the
+   * resized drawer, negative when the drawer overlaps it (the user-reported
+   * bug a live width change used to leave behind). One pass, so both edges
+   * are measured in the same frame.
+   */
+  const geometry = (page: Page) =>
+    page.evaluate(() => {
+      const drawer = document.querySelector('.entries-sidenav');
+      const editor = document.querySelector('.editor-content');
+      if (!drawer || !editor) {
+        throw new Error('shell not rendered');
+      }
+      const drawerRect = drawer.getBoundingClientRect();
+      const editorRect = editor.getBoundingClientRect();
+      return { gap: editorRect.left - drawerRect.right, editorLeft: editorRect.left };
+    });
 
   test('mouse drag resizes the drawer and the painted width tracks the pointer', async ({
     page,
@@ -285,6 +317,133 @@ test.describe('docked drawer resize (tablet/desktop band)', () => {
     await expectRowsRecovered(page);
     await dragHandleTo(page, 320);
     await expectRowsRecovered(page);
+  });
+
+  test('key chips: visible count grows and the counter shrinks as the drawer widens', async ({
+    page,
+  }) => {
+    await createProject(page, 'Drawer resize E2E');
+
+    // One row carrying the repro key set — the spec's other tests stage
+    // empty books, so the key-strip projection has exactly one `.item-keys`
+    // to read and the counts below are that row's.
+    await page.locator('app-entry-list [aria-label="New entry"]').click();
+    await expect(page.locator('app-entry-editor .entry-tabs')).toBeVisible({ timeout: 15_000 });
+    await page.locator('input[placeholder="Entry name…"]').last().fill('Key chip resize contract');
+    await addKeysToActiveEntry(page, RESIZE_KEYS);
+
+    // Deterministic floor, then the settled fit at 320: the counter must be
+    // rendered (six keys never fit the ~105px strip) — its presence proves
+    // the width-driven fit ran.
+    const handle = page.locator(HANDLE);
+    await handle.press('Home');
+    await expect
+      .poll(() => storedWidth(page), { timeout: 5_000, message: 'Home commits 320' })
+      .toBe('320');
+    await expect
+      .poll(async () => (await measureKeyStrip(page)).counterText, {
+        timeout: 5_000,
+        message: 'the +N counter must render at the 320px floor',
+      })
+      .toBeTruthy();
+    const at320 = await measureKeyStrip(page);
+    expect(at320.keyChipCount, 'at least one key chip fits the narrow strip').toBeGreaterThan(0);
+    expect(at320.counterText).toBe(`+${RESIZE_KEYS.length - at320.keyChipCount}`);
+
+    // Widen 320 → 400 → 480 with real drags. The fit is monotone in width —
+    // widening never hides a shown chip, so even a not-yet-refitted read can
+    // only under-count and the intermediate sample pins non-decreasing for
+    // free — while the final strict-increase poll doubles as proof the 480
+    // re-fit rendered: a stale 320-fit read would fail it.
+    await dragHandleTo(page, 400);
+    await expect
+      .poll(async () => (await measureKeyStrip(page)).counterText, {
+        timeout: 5_000,
+        message: 'the counter must still render at 400 (six keys cannot fit)',
+      })
+      .toBeTruthy();
+    const at400 = await measureKeyStrip(page);
+    expect(at400.keyChipCount).toBeGreaterThanOrEqual(at320.keyChipCount);
+    expect(at400.counterText).toBe(`+${RESIZE_KEYS.length - at400.keyChipCount}`);
+
+    await dragHandleTo(page, 480);
+    await expect
+      .poll(async () => (await measureKeyStrip(page)).keyChipCount, {
+        timeout: 5_000,
+        message: 'more chips must be visible at 480 than at 320',
+      })
+      .toBeGreaterThan(at320.keyChipCount);
+    const at480 = await measureKeyStrip(page);
+    expect(
+      at480.keyChipCount,
+      'the visible count is monotone non-decreasing across the stops',
+    ).toBeGreaterThanOrEqual(at400.keyChipCount);
+    if (at480.counterText === null) {
+      // Everything fit — the counter correctly disappeared.
+      expect(at480.keyChipCount).toBe(RESIZE_KEYS.length);
+    } else {
+      expect(at480.counterText).toBe(`+${RESIZE_KEYS.length - at480.keyChipCount}`);
+    }
+  });
+
+  test('editor content margin follows a live drag (the drawer never overlaps it)', async ({
+    page,
+  }) => {
+    await createProject(page, 'Drawer resize E2E');
+
+    // `.editor-content` is the container's mat-sidenav-content host — the
+    // margin carrier exists with or without an open entry.
+    const handle = page.locator(HANDLE);
+    await handle.press('Home');
+    await expect
+      .poll(() => storedWidth(page), { timeout: 5_000, message: 'Home commits 320' })
+      .toBe('320');
+
+    // A real mouse drag 320 → 480 WITHOUT closing the drawer. The recompute
+    // is width-driven and Material transitions the margin over ~400ms
+    // (.mat-drawer-transition), so the poll carries a budget well past it.
+    await dragHandleTo(page, 480);
+    await expect
+      .poll(async () => Math.abs((await geometry(page)).gap), {
+        timeout: 2_000,
+        message:
+          'the editor content must settle flush with the resized drawer (±2px), not keep the pre-drag margin',
+      })
+      .toBeLessThanOrEqual(2);
+
+    // Negative repro of the user-reported bug: the editor's left edge must
+    // have MOVED with the drag, not stay parked at the pre-drag position —
+    // for 320→480 that is anything past 320 plus rounding slack.
+    const settled = await geometry(page);
+    expect(
+      settled.editorLeft,
+      'the editor left edge must follow the drag instead of staying at the pre-drag position',
+    ).toBeGreaterThan(320 + 10);
+  });
+
+  test('editor content margin follows a keyboard resize too', async ({ page }) => {
+    await createProject(page, 'Drawer resize E2E');
+    const handle = page.locator(HANDLE);
+    await handle.focus();
+    // Single jumps are the sharpest repro shape: one width change, one
+    // recompute — no intermediate moves to trail behind.
+    await handle.press('Home');
+    await expect
+      .poll(() => storedWidth(page), { timeout: 5_000, message: 'Home commits 320' })
+      .toBe('320');
+    await handle.press('End');
+    await expect
+      .poll(async () => Math.abs((await geometry(page)).gap), {
+        timeout: 2_000,
+        message:
+          'the editor content must settle flush with the jumped-to width (±2px) after a single-jump resize',
+      })
+      .toBeLessThanOrEqual(2);
+    const settled = await geometry(page);
+    expect(
+      settled.editorLeft,
+      'the editor left edge must follow the keyboard resize, not stay at the pre-jump position',
+    ).toBeGreaterThan(320 + 10);
   });
 });
 

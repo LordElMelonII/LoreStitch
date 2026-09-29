@@ -1,6 +1,12 @@
 import { devices, expect, type Locator, type Page, test } from '@playwright/test';
 import { strict as assert } from 'node:assert';
-import { FATE_PATH, importLorebook, selectFirstTwoRows } from './helpers';
+import {
+  addKeysToActiveEntry,
+  FATE_PATH,
+  importLorebook,
+  measureKeyStrip,
+  selectFirstTwoRows,
+} from './helpers';
 
 /**
  * Responsive architecture suite for the LoreStitch studio shell.
@@ -40,6 +46,14 @@ const LONG_CONTENT = Array.from(
     `Entry line ${i}: Gensokyo is modern but sealed; villagers trade, youkai visit, ` +
     'incidents end over tea, and danmaku can be playful under fragile rules.',
 ).join('\n');
+
+/**
+ * The round-3 chip repro key set: six short keys whose chips can never all
+ * fit the ~105px strip of the default 320px drawer (nor the ~240px strip of
+ * a full-width phone drawer), so the fit always hides some behind the +N
+ * counter. Setup and expectations share one constant.
+ */
+const TRUNCATION_KEYS = ['human', 'humans', 'servant', 'camelot', 'peerage', 'edict'];
 
 /** Creates a project through the welcome screen so the studio shell appears. */
 async function createProject(page: Page): Promise<void> {
@@ -586,20 +600,17 @@ test.describe('responsive studio shell', () => {
         await createProject(page);
         await addEntry(page, vp.kind);
 
-        // Reproduce an imported-lorebook row: a long nowrap title plus enough
-        // keys to render three chips and a "+N" badge.
+        // Reproduce an imported-lorebook row: a long nowrap title plus more
+        // keys than any drawer width can show, so the whole-chip fit hides
+        // some behind the "+N" counter. The key adds are paced (each waits
+        // for its chip to render) — machine-speed Enters outrun the
+        // zoneless render flush addKey reads through and drop keys, and the
+        // chip pins below depend on the exact key count.
         await page
           .locator('input[placeholder="Entry name…"]')
           .last()
           .fill('Human Servant Status & The Edicts of Camelot Concerning Peerage');
-        await page.locator('[aria-label="Toggle entry options"]').click();
-        const keyInput = page.getByPlaceholder('Add key…').last();
-        await keyInput.waitFor({ state: 'visible' });
-        for (const key of ['human', 'humans', 'servant', 'camelot', 'peerage', 'edict']) {
-          await keyInput.fill(key);
-          await keyInput.press('Enter');
-        }
-        await page.locator('[aria-label="Toggle entry options"]').click();
+        await addKeysToActiveEntry(page, TRUNCATION_KEYS);
 
         if (vp.kind === 'mobile') {
           await page.locator('[aria-label="Toggle entries panel"]').click();
@@ -662,6 +673,71 @@ test.describe('responsive studio shell', () => {
             message: 'the title must ellipsize (truncation engaged, not off-canvas clipping)',
           })
           .toBe(true);
+
+        // Whole-chip contract (task 21 round 3): the strip renders every key
+        // chip that fits at its full natural width and counts the rest in a
+        // +N chip — nothing is ever sliced mid-chip or ellipsized. The
+        // counter only renders once the width-driven fit has run, so its
+        // consistency poll is also the settle gate for the two facts below.
+        // (The round-2 draft pinned the OPPOSITE ellipsis behavior here; the
+        // user rejected that design — full labels are the contract.)
+        await expect
+          .poll(
+            async () => {
+              const strip = await measureKeyStrip(page);
+              return (
+                strip.counterText !== null &&
+                strip.counterText === `+${TRUNCATION_KEYS.length - strip.keyChipCount}` &&
+                strip.keyChipCount + Number(strip.counterText.slice(1)) ===
+                  TRUNCATION_KEYS.length &&
+                strip.measureChipCount === TRUNCATION_KEYS.length + 1 &&
+                strip.doubleClassedChips === 0
+              );
+            },
+            {
+              timeout: 5_000,
+              message:
+                'the +N counter must name exactly the hidden keys, with every key measured and no measurer counted',
+            },
+          )
+          .toBe(true);
+
+        await expect
+          .poll(async () => (await measureKeyStrip(page)).chipsFitMain, {
+            timeout: 5_000,
+            message: 'every rendered chip must fit whole inside .item-main (never sliced)',
+          })
+          .toBe(true);
+
+        await expect
+          .poll(async () => (await measureKeyStrip(page)).noEllipsis, {
+            timeout: 5_000,
+            message: 'no chip may compress or ellipsize — overflow is counted, not sliced',
+          })
+          .toBe(true);
+
+        // The counter's tooltip names every key it stands in for. Hover-only:
+        // the touch legs fire tooltips on long-press (batch-and-tokens
+        // precedent), so they pin the structural facts above only.
+        if (vp.kind !== 'mobile') {
+          const strip = await measureKeyStrip(page);
+          const hiddenKeys = TRUNCATION_KEYS.slice(strip.keyChipCount).join(', ');
+          await page.locator('.item-keys .key-chip.more').hover();
+          // The row title carries its own tooltip and the hover path can
+          // leave that panel mid-dismiss, so match a visible panel by its
+          // full text instead of picking one by position.
+          await expect
+            .poll(
+              () =>
+                page.evaluate(() =>
+                  [...document.querySelectorAll('.mat-mdc-tooltip-panel')]
+                    .filter((p) => p.checkVisibility())
+                    .map((p) => (p.textContent ?? '').trim()),
+                ),
+              { timeout: 5_000, message: 'the counter tooltip must list the hidden keys' },
+            )
+            .toContain(hiddenKeys);
+        }
       });
 
       test('no element overflows the viewport width', async ({ page }) => {
