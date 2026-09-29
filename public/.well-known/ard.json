@@ -1,0 +1,84 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "LoreStitch",
+    "documentationUrl": "https://lorestitch.pages.dev/llms.txt",
+    "logoUrl": "https://lorestitch.pages.dev/icons/icon-512x512.png",
+    "trustManifest": {
+      "identity": "https://lorestitch.pages.dev",
+      "identityType": "https"
+    }
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:lorestitch.pages.dev:app:editor",
+      "displayName": "LoreStitch lorebook editor",
+      "type": "text/html",
+      "url": "https://lorestitch.pages.dev/",
+      "description": "Offline studio for authoring SillyTavern lorebooks (World Info) with Git-like versioning. A single-page application that runs entirely in the browser: projects stay in local IndexedDB and no user data ever leaves the device. Imports and exports SillyTavern World Info JSON (plus V2-spec character books, PNG or JSON character cards, and .stproj archives), preserving unknown fields so files round-trip untouched. Requires a browser with JavaScript enabled; there is no server API to call.",
+      "capabilities": [
+        "import",
+        "export",
+        "validate",
+        "lint",
+        "version-control",
+        "guided-repair",
+        "character-cards"
+      ],
+      "tags": [
+        "sillytavern",
+        "lorebook",
+        "world-info",
+        "character-cards",
+        "editor",
+        "local-first",
+        "offline",
+        "version-control"
+      ],
+      "representativeQueries": [
+        "edit a SillyTavern World Info lorebook in the browser",
+        "lint lorebook entries for recursion and key problems",
+        "keep git-like version history of a character book",
+        "export a lorebook without losing unknown fields"
+      ],
+      "version": "1.9.0",
+      "updatedAt": "2026-09-29T11:00:46Z"
+    },
+    {
+      "identifier": "urn:air:lorestitch.pages.dev:docs:llms-txt",
+      "displayName": "LoreStitch llms.txt overview",
+      "type": "text/markdown",
+      "url": "https://lorestitch.pages.dev/llms.txt",
+      "description": "Machine-readable overview of what LoreStitch is and is not: a browser application rather than a content site, its local-first data guarantees, and the lorebook formats it reads and writes.",
+      "tags": [
+        "llms-txt",
+        "documentation",
+        "sillytavern",
+        "lorebook",
+        "world-info"
+      ],
+      "representativeQueries": [
+        "does LoreStitch send lorebook data to a server",
+        "which lorebook formats can LoreStitch import and export"
+      ]
+    },
+    {
+      "identifier": "urn:air:lorestitch.pages.dev:source:repository",
+      "displayName": "LoreStitch source code and documentation",
+      "type": "text/html",
+      "url": "https://github.com/LordElMelonII/LoreStitch",
+      "description": "Source code, README, changelog and roadmap for the LoreStitch editor — Angular 22, local-first, no backend.",
+      "tags": [
+        "source-code",
+        "documentation",
+        "changelog",
+        "roadmap",
+        "angular"
+      ],
+      "representativeQueries": [
+        "where is LoreStitch's source code hosted",
+        "what changed in the latest LoreStitch release"
+      ]
+    }
+  ]
+}

@@ -50,6 +50,12 @@
     />
 
     <link rel="manifest" href="manifest.webmanifest" />
+
+    <!-- Agent Resource Discovery (ARD) catalog. ard.json is the spec's
+         canonical path; ai-catalog.json is the predecessor path still fetched
+         by older validators (same document, served at both). -->
+    <link rel="ard" href="/.well-known/ard.json" />
+    <link rel="ai-catalog" href="/.well-known/ai-catalog.json" />
   </head>
   <body>
     <app-root></app-root>
