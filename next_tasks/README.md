@@ -17,7 +17,10 @@ same review, was completed and archived 2026-09-23 (shipped as v1.5.0). Task
 pinned drawer → 15 — 14 stays retired). Task 12 was completed 2026-09-26
 (shipped as v1.7.0). Tasks 16–19 followed (shipped as v1.8.0, 2026-09-28), then
 tasks 20 and 21 (shipped as v1.9.0, 2026-09-29); their plans and ledgers also
-still sit in this folder pending the archival move.
+still sit in this folder pending the archival move. Task 22 (ARD
+agent-discovery manifests — urgent intake: a validator reported the live
+site's `ai-catalog.json` path serving the SPA fallback) completed 2026-09-29
+on `feature/22-ard-ai-catalog-manifest`, awaiting user merge + deploy.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
