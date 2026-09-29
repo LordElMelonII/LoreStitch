@@ -311,3 +311,44 @@ show; no existing e2e pins chip DOM — pins are qa's to author.
 **Next**: ts-reviewer over `137d298..HEAD`, then qa-auditor (full-chips/+N
 pins AND the still-unlanded content-margin recovery pin from the cancelled
 R2 dispatch), then branch-final round 3.
+
+## Round 3b — qa found two more app bugs; both fixed (2026-09-29)
+
+The R3 qa dispatch (killed once by a machine shutdown; its completed e2e
+authoring was audited and landed unchanged) gated against live app behavior
+and caught:
+
+1. **Margin recompute ran before the width binding applied** — the R2
+   `c045f19` effect read the drawer's width one step behind: single-jump
+   resizes (End/Home/dblclick) left the editor margin at the previous width
+   (full overlap / dead gap); drags masked it by re-firing per move. Fixed
+   `ec48990` `fix(shell): recompute content margins after the width binding
+   applies` — `afterRenderEffect` (entry-keys precedent) runs after the
+   template-binding phase; probe-verified exact on End/Home/drag (3 runs);
+   unit spec gained an ordering discriminator (records the pane's inline
+   width at each call).
+2. **Key strip froze unmeasured across phone drawer close/reopen** — keys
+   staged while the drawer was closed (the natural phone flow) then reopen:
+   close skipped the 0×0 RO delivery leaving a stale width; keys staged
+   against the `display:none` measurement row fit "everything"; the reopen
+   delivery was an equal-value no-op, freezing the garbage fit. Fixed
+   `2e9ccb6` `fix(entry-list): recover the key-strip fit when the drawer
+   reopens` — zero-size RO deliveries store `null` (unmeasured) so both
+   transitions are real changes, plus an all-zero-metrics fit guard;
+   probe-verified (minimal repro settles at poll 0, twice, no nudge); 4 new
+   RO-path unit specs (1446/1446 total).
+
+**QA landed**: commit `3935762` `test(e2e): pin full-chip overflow counting
+and content-margin recovery` — `measureKeyStrip`/`addKeysToActiveEntry`
+helpers (paced adds against the zoneless flush), chip-contract pins on all
+ui-responsiveness legs (whole chips, no ellipsis, counter consistency,
+hidden-keys tooltip desktop-only), count-grows-on-widen (320→400→480 real
+drags, monotone), margin-follows-drag + margin-follows-keyboard (settled
+±2px past the 400ms transition, negative repro). Gates all green: the
+previously failing mobile-390 leg 22/22, build/unit 1446/lint/typecheck ✓,
+combined smoke 31 passed, both mobile projects green; timing-sensitive polls
+green twice consecutively, no retries consumed.
+
+**Pending**: quick ts-review pass over `9238784..2e9ccb6` (both fixes are
+P2-watchpoint code), then branch-final round 3 (refreshed AFTER captures +
+probe, full matrix, closing gates).
