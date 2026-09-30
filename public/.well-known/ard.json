@@ -41,8 +41,8 @@
         "keep git-like version history of a character book",
         "export a lorebook without losing unknown fields"
       ],
-      "version": "1.9.0",
-      "updatedAt": "2026-09-29T11:00:46Z"
+      "version": "1.9.1",
+      "updatedAt": "2026-09-30T08:01:06Z"
     },
     {
       "identifier": "urn:air:lorestitch.pages.dev:docs:llms-txt",
