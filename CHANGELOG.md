@@ -3,6 +3,34 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.10.0 — September 30, 2026
+
+The multi-tab release. A project now belongs to one tab at a time: open the
+same project in a second tab and it offers to take over — saving the other
+tab's work first — instead of letting two tabs quietly overwrite each other's
+edits.
+
+### Highlights
+
+- **One project, one tab — your call which** — opening a project that's
+  already being edited in another tab now asks before anything happens:
+  take over and edit here (the other tab pauses as read-only, after its
+  latest changes are saved), or stay read-only yourself and keep browsing.
+  Either way, no edit is thrown away.
+- **A read-only tab says so** — the paused tab shows a "Read-only" marker in
+  the toolbar and a paused editor that explains why, each with a one-click
+  way to ask for the project back. A stray edit attempt gets a gentle
+  explanation instead of a silent no-op.
+- **A closed tab no longer swallows your last words** — closing or hiding a
+  tab right after typing used to lose whatever was still waiting to be
+  saved; those final keystrokes are now written on the way out.
+- **The lock heals itself** — if the tab holding the project closes or
+  crashes, a read-only tab picks the project back up the moment you return
+  to it, latest saved edits included.
+- **Re-imports can't clobber a live project** — importing a `.stproj`
+  archive whose project is open in another tab is refused with an
+  explanation instead of quietly overwriting that tab's work.
+
 ## 1.9.1 — September 30, 2026
 
 A quiet patch that ships the paperwork: the license now lives in the app, and
