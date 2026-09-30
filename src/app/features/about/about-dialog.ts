@@ -22,7 +22,8 @@ import { OPEN_SOURCE_GROUPS } from './open-source';
 
 /**
  * In-app "About" pane: version & build metadata, a casual-user changelog
- * parsed from the bundled CHANGELOG.md asset, and open-source credits. The
+ * parsed from the bundled CHANGELOG.md asset, open-source credits, and the
+ * full license text fetched from the bundled LICENSE asset. The
  * same component renders inside a centered `MatDialog` (tablet/desktop) and a
  * `MatBottomSheet` (phones) — whichever container opened it provides its ref,
  * so both are injected optionally.
@@ -67,7 +68,7 @@ export class AboutDialog {
   protected readonly runMode = isDevMode() ? 'Development' : 'Production';
 
   protected readonly changelogResource = resource({
-    loader: ({ abortSignal }) => this.loadChangelog(abortSignal),
+    loader: ({ abortSignal }) => this.loadTextAsset('CHANGELOG.md', abortSignal),
   });
 
   protected readonly releases = computed(() =>
@@ -76,15 +77,29 @@ export class AboutDialog {
 
   protected readonly changelogFailed = computed(() => this.changelogResource.error() != null);
 
+  protected readonly licenseResource = resource({
+    loader: ({ abortSignal }) => this.loadTextAsset('LICENSE', abortSignal),
+  });
+
+  protected readonly licenseText = computed(() =>
+    this.licenseResource.hasValue() ? this.licenseResource.value() : null,
+  );
+
+  protected readonly licenseFailed = computed(() => this.licenseResource.error() != null);
+
+  /** Canonical copy of the license for readers who want annotated HTML. */
+  protected readonly agplUrl = 'https://www.gnu.org/licenses/agpl-3.0.html';
+
   /**
-   * Fetches the bundled CHANGELOG.md asset. The service worker precaches it,
-   * so the changelog reads fine offline; the repo-root file stays the single
-   * source of truth (angular.json copies it into the build output).
+   * Fetches a bundled root asset (CHANGELOG.md, LICENSE). Both are precached
+   * by the service worker, so they read fine offline; the repo-root files
+   * stay the single source of truth (angular.json copies them into the
+   * build output).
    */
-  private async loadChangelog(abortSignal: AbortSignal): Promise<string> {
-    const response = await fetch('CHANGELOG.md', { signal: abortSignal });
+  private async loadTextAsset(file: string, abortSignal: AbortSignal): Promise<string> {
+    const response = await fetch(file, { signal: abortSignal });
     if (!response.ok) {
-      throw new Error(`Changelog unavailable (HTTP ${response.status})`);
+      throw new Error(`${file} unavailable (HTTP ${response.status})`);
     }
     return response.text();
   }

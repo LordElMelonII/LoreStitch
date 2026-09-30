@@ -38,9 +38,34 @@ The formatting release.
 - Version control \`built in\`.
 `;
 
-/** Installs a fetch stub returning a canned changelog response. */
+/** A canned license response — only the shape the viewer needs is real. */
+const LICENSE = `                    GNU AFFERO GENERAL PUBLIC LICENSE
+                       Version 3, 19 November 2007
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as
+  published by the Free Software Foundation, version 3 only.
+`;
+
+/**
+ * Installs a fetch stub returning a canned response per bundled asset: the
+ * LICENSE fetch answers with the canned license, everything else with the
+ * canned changelog — unless the stub carries an explicit body, which wins
+ * for both (how the degenerate-asset tests drive one asset at a time).
+ */
 function stubFetch(response: { ok: boolean; status?: number; text?: string }): void {
-  vi.stubGlobal('fetch', vi.fn(async () => ({ ...response, text: async () => response.text ?? CHANGELOG })));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: RequestInfo | URL) => {
+      const file = typeof url === 'string' ? url : url instanceof URL ? url.pathname : url.url;
+      const body = response.text ?? (file.endsWith('LICENSE') ? LICENSE : CHANGELOG);
+      return {
+        ok: response.ok,
+        status: response.status ?? (response.ok ? 200 : 404),
+        text: async () => body,
+      };
+    }),
+  );
 }
 
 describe('AboutDialog', () => {
@@ -196,6 +221,9 @@ describe('AboutDialog', () => {
     const pane = await selectTab('Open Source');
     const text = pane.textContent ?? '';
 
+    expect(text).toContain('Ported source');
+    expect(text).toContain('SillyTavern');
+    expect(text).toContain('AGPL-3.0');
     expect(text).toContain('Runtime');
     expect(text).toContain('Build & testing');
     expect(text).toContain('Angular');
@@ -206,6 +234,44 @@ describe('AboutDialog', () => {
     // Dependency names link out to their projects.
     const link = pane.querySelector<HTMLAnchorElement>('a.oss-name[href="https://angular.dev"]');
     expect(link).toBeTruthy();
+    const stLink = pane.querySelector<HTMLAnchorElement>(
+      'a.oss-name[href="https://github.com/SillyTavern/SillyTavern"]',
+    );
+    expect(stLink).toBeTruthy();
+  });
+
+  it('renders the license summary and full text on the License tab', async () => {
+    await createDialog({ version: '1.0.0' });
+    const pane = await selectTab('License');
+    const text = pane.textContent ?? '';
+
+    expect(text).toContain('GNU Affero General Public License v3.0');
+    expect(text).toContain('GNU AFFERO GENERAL PUBLIC LICENSE');
+    expect(text).toContain('version 3 only');
+    // The canonical license link points at gnu.org's annotated copy.
+    const link = pane.querySelector<HTMLAnchorElement>(
+      'a[href="https://www.gnu.org/licenses/agpl-3.0.html"]',
+    );
+    expect(link).toBeTruthy();
+  });
+
+  it('falls back gracefully when the license asset cannot be fetched', async () => {
+    stubFetch({ ok: false, status: 404 });
+    await createDialog({ version: '1.0.0' });
+    const pane = await selectTab('License');
+
+    expect(pane.textContent).toContain('could not be loaded');
+    expect(pane.textContent).toContain('Read it on GitHub');
+    // While errored the computed offers no license text for the pane to render.
+    expect(fixture.componentInstance['licenseText']()).toBeNull();
+  });
+
+  it('shows a degenerate state when the license asset resolves empty', async () => {
+    stubFetch({ ok: true, text: '' });
+    await createDialog({ version: '1.0.0' });
+    const pane = await selectTab('License');
+
+    expect(pane.textContent).toContain('The license file is empty.');
   });
 
   it('closes through the dialog ref when hosted in a MatDialog', async () => {

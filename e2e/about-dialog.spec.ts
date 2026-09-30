@@ -1,8 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 
 /**
- * About pane suite: version/build metadata, the changelog viewer and the
- * open-source credits.
+ * About pane suite: version/build metadata, the changelog viewer, the
+ * open-source credits and the license viewer.
  *
  * The same About component adapts to the viewport (topbar.openAbout):
  * - >= 768px opens a centered MatDialog (pane class `app-about-dialog`).
@@ -47,7 +47,7 @@ test.describe('about dialog (tablet/desktop)', () => {
     // The version row must carry a semver; the dev-server build additionally
     // shows a "development build" chip next to it.
     await expect(pane.locator('.meta-row', { hasText: 'Version' })).toContainText(SEMVER);
-    for (const tab of ['About', 'Changelog', 'Open Source']) {
+    for (const tab of ['About', 'Changelog', 'Open Source', 'License']) {
       await expect(pane.getByRole('tab', { name: tab })).toBeVisible();
     }
   });
@@ -74,7 +74,9 @@ test.describe('about dialog (tablet/desktop)', () => {
     await expect(pane.locator('.release-section').first()).toBeVisible();
   });
 
-  test('open source tab credits Angular under the MIT license', async ({ page }) => {
+  test('open source tab credits Angular under MIT and SillyTavern as ported source', async ({
+    page,
+  }) => {
     await openAboutFromTopbar(page);
     const pane = aboutDialogPane(page);
     await expect(pane).toBeVisible();
@@ -83,6 +85,25 @@ test.describe('about dialog (tablet/desktop)', () => {
     await expect(pane.locator('.oss-name', { hasText: /^Angular$/ })).toBeVisible();
     // Several runtime entries share the MIT license; one rendered entry suffices.
     await expect(pane.locator('.oss-license', { hasText: 'MIT' }).first()).toBeVisible();
+    // The SillyTavern credit leads the tab: world-info.js was ported from it.
+    await expect(pane.locator('.oss-name', { hasText: 'SillyTavern' })).toBeVisible();
+    await expect(pane.locator('.oss-license', { hasText: 'AGPL-3.0' })).toBeVisible();
+  });
+
+  test('license tab renders the AGPL text behind the canonical link', async ({ page }) => {
+    await openAboutFromTopbar(page);
+    const pane = aboutDialogPane(page);
+    await expect(pane).toBeVisible();
+
+    await pane.getByRole('tab', { name: 'License' }).click();
+    // The license is fetched from /LICENSE when the dialog opens; the
+    // visibility waits below own the loading-spinner window.
+    await expect(pane.locator('.license-text')).toContainText(
+      'GNU AFFERO GENERAL PUBLIC LICENSE',
+    );
+    await expect(
+      pane.locator('a[href="https://www.gnu.org/licenses/agpl-3.0.html"]'),
+    ).toBeVisible();
   });
 
   test('escape closes the dialog', async ({ page }) => {

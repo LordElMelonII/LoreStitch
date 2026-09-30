@@ -1,8 +1,9 @@
 /**
  * Curated credits for the About dialog's "Open Source" tab. This is a
  * hand-maintained summary of the meaningful runtime and build dependencies
- * (see package.json for the machine-readable source of truth), not an
- * exhaustive auto-generated inventory.
+ * (see package.json for the machine-readable source of truth) plus upstream
+ * projects whose source LoreStitch ports, not an exhaustive auto-generated
+ * inventory.
  */
 
 /** A single credited open-source dependency. */
@@ -23,6 +24,18 @@ export interface OpenSourceGroup {
 }
 
 export const OPEN_SOURCE_GROUPS: readonly OpenSourceGroup[] = [
+  {
+    title: 'Ported source',
+    dependencies: [
+      {
+        name: 'SillyTavern',
+        license: 'AGPL-3.0-only',
+        author: 'SillyTavern contributors',
+        url: 'https://github.com/SillyTavern/SillyTavern',
+        role: 'World-info engine LoreStitch is built for — key matching and regex handling ported from its world-info.js',
+      },
+    ],
+  },
   {
     title: 'Runtime',
     dependencies: [

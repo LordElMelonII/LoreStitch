@@ -35,6 +35,11 @@
                 "glob": "CHANGELOG.md",
                 "input": ".",
                 "output": "/"
+              },
+              {
+                "glob": "LICENSE",
+                "input": ".",
+                "output": "/"
               }
             ],
             "styles": [

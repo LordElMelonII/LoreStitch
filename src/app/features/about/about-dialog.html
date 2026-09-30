@@ -164,5 +164,44 @@
         }
       </div>
     </mat-tab>
+
+    <!-- ---------------------------------------------------------------- -->
+    <mat-tab label="License">
+      <div class="tab-pane">
+        @if (licenseResource.isLoading()) {
+          <div class="changelog-state" role="status">
+            <mat-spinner [diameter]="32" />
+            <p>Loading license…</p>
+          </div>
+        } @else if (licenseFailed()) {
+          <div class="changelog-state" role="alert">
+            <mat-icon aria-hidden="true">warning</mat-icon>
+            <p>The license could not be loaded in this session.</p>
+            <a
+              matButton
+              [href]="githubUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Read the license on GitHub"
+            >
+              Read it on GitHub
+            </a>
+          </div>
+        } @else if (licenseText(); as text) {
+          <p class="license-intro">
+            LoreStitch is free software: you can run, study, share and modify it under the
+            <a [href]="agplUrl" target="_blank" rel="noopener noreferrer"
+              >GNU Affero General Public License v3.0</a
+            >. Copies you share or serve over a network carry the same license.
+          </p>
+          <div class="license-text">{{ text }}</div>
+        } @else {
+          <div class="changelog-state" role="status">
+            <mat-icon aria-hidden="true">description</mat-icon>
+            <p>The license file is empty.</p>
+          </div>
+        }
+      </div>
+    </mat-tab>
   </mat-tab-group>
 </div>

@@ -8,6 +8,7 @@
       "resources": {
         "files": [
           "/CHANGELOG.md",
+          "/LICENSE",
           "/favicon.ico",
           "/index.csr.html",
           "/index.html",

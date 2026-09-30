@@ -308,6 +308,37 @@
   color: var(--mat-sys-on-surface-variant);
 }
 
+// ---------------------------------------------------------------------------
+// License tab
+// ---------------------------------------------------------------------------
+
+.license-intro {
+  margin: 0 0 16px;
+  max-width: 560px;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+
+  a {
+    color: var(--mat-sys-primary);
+  }
+}
+
+// The verbatim license text: pre-wrap keeps the license's own indentation,
+// the monospace stack matches the commit-hash chip elsewhere in the dialog.
+.license-text {
+  max-width: 560px;
+  padding: 12px 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-small, 8px);
+  background: var(--mat-sys-surface-container-low);
+  font: var(--mat-sys-body-small);
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-variant-ligatures: none;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 // Compact phones: the sheet is nearly full-screen, so trade the two-column
 // metadata rows for a stacked list and tighten the pane padding.
 @media (max-width: 599px) {
