@@ -3,6 +3,20 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.9.1 — September 30, 2026
+
+A quiet patch that ships the paperwork: the license now lives in the app, and
+the project LoreStitch is built for gets its thanks.
+
+### Highlights
+
+- **The license, in the app** — the About dialog gains a License tab with the
+  full GNU Affero General Public License v3.0 text, readable offline, and the
+  repository carries the LICENSE file too.
+- **Credit where it's due** — the Open Source tab now thanks SillyTavern up
+  front: the world-info matching logic behind the scenes is ported from its
+  code, since LoreStitch is made for SillyTavern lorebooks.
+
 ## 1.9.0 — September 29, 2026
 
 The drawer release. The entries list got a top-to-bottom rethink: rows keep
