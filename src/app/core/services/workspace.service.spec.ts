@@ -1,8 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { WorkspaceService } from './workspace.service';
-import { StorageService } from './storage.service';
+import { SAVE_DEBOUNCE_MS, StorageService } from './storage.service';
+import { sessionLockName, SessionLockService } from './session-lock.service';
 import { createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
 import type { BookRepair } from '../models/book-repair';
+import { entryWith, projectOf } from '../../../testing/project-fixtures';
+import {
+  flushMicrotasks,
+  installSessionLockFakes,
+  type SessionLockFakes,
+} from '../../../testing/session-lock-fakes';
 
 /**
  * The WorkspaceService tests run against the in-memory fallback of the
@@ -282,5 +289,208 @@ describe('WorkspaceService', () => {
     expect(workspace.saveError()).toBe(
       'Latest changes could not be saved to browser storage. Export your work to avoid data loss.',
     );
+  });
+});
+
+/**
+ * Write gating (task 11 §3.2, §3.6 unit matrix row 2): with the Web Locks
+ * fakes installed, another tab holding the project's lock turns every
+ * persisted write path into a no-op + `blockedAttempt` pulse, while tab
+ * bookkeeping and fresh-project creation keep working.
+ */
+describe('WorkspaceService session-lock gating', () => {
+  let workspace: WorkspaceService;
+  let lock: SessionLockService;
+  let fakes: SessionLockFakes;
+
+  beforeEach(async () => {
+    fakes = installSessionLockFakes();
+    TestBed.configureTestingModule({});
+    workspace = TestBed.inject(WorkspaceService);
+    lock = TestBed.inject(SessionLockService);
+    // Allow the async init() to finish (no saved projects in a fresh store).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  afterEach(() => {
+    lock.detach();
+    fakes.restore();
+  });
+
+  /**
+   * Flips the active project's lock to `blocked`: closes (flush + release,
+   * drained), arms a phantom foreign holder that grabs whatever name the next
+   * request asks for, and re-opens. Returns the phantom's release.
+   */
+  async function blockActiveProject(): Promise<() => void> {
+    const project = workspace.activeProject();
+    assert(project);
+    await workspace.closeProject();
+    // Let the detach's flush-then-release chain finish before arming the
+    // phantom, so the old hold's release cannot wipe the phantom's grab.
+    await flushMicrotasks();
+    const phantom = fakes.locks.holdNext();
+    await workspace.openProject(project.id);
+    await flushMicrotasks();
+    expect(lock.state()).toBe('blocked');
+    return () => phantom.release();
+  }
+
+  it('no-ops and pulses mutateProject/commit/rollbackTo/deleteProject while blocked', async () => {
+    await workspace.createProject('Held', 'standalone_lorebook');
+    const entryId = workspace.addEntry();
+    const project = workspace.activeProject();
+    assert(project);
+    const commitCount = project.commits.length;
+    const release = await blockActiveProject();
+
+    const pulses = lock.blockedAttempt();
+    workspace.renameProject('Should Not Apply');
+    expect(workspace.activeProject()?.title).toBe('Held');
+
+    await expect(workspace.commit('blocked commit')).resolves.toBe(false);
+    assert(project.commits[0]);
+    await expect(workspace.rollbackTo(project.commits[0].id)).resolves.toBe(false);
+    expect(workspace.activeProject()?.commits).toHaveLength(commitCount);
+
+    await workspace.deleteProject(project.id);
+    // Destructive, gated: the project survives and stays active.
+    expect(workspace.activeProject()?.id).toBe(project.id);
+    const storage = TestBed.inject(StorageService);
+    await expect(storage.getProject(project.id)).resolves.toBeDefined();
+
+    workspace.updateEntry(entryId, { content: 'typed into the void' });
+    expect(workspace.entries()[0]?.content).not.toBe('typed into the void');
+
+    // One pulse per gated attempt, in order.
+    expect(lock.blockedAttempt()).toBe(pulses + 5);
+    release();
+  });
+
+  it('keeps tab bookkeeping live while blocked (browsing a read-only tab is harmless)', async () => {
+    await workspace.createProject('Held', 'standalone_lorebook');
+    const entryId = workspace.addEntry();
+    workspace.closeTab(entryId);
+    const release = await blockActiveProject();
+
+    workspace.openEntry(entryId);
+    expect(workspace.activeTabId()).toBe(entryId);
+    expect(workspace.openTabEntryIds()).toContain(entryId);
+    expect(lock.blockedAttempt()).toBe(0);
+    release();
+  });
+
+  it('gates writes after a takeover handed the lock away (lost), with the handshake flush first', async () => {
+    await workspace.createProject('Mine', 'standalone_lorebook');
+    const project = workspace.activeProject();
+    assert(project);
+    const flushSpy = vi.spyOn(workspace, 'flushPendingSave');
+
+    // The other tab's takeover handshake reaches this (holder) tab.
+    const channel = fakes.channels[0];
+    assert(channel);
+    channel.receive({ type: 'takeover-request', projectId: project.id });
+    expect(lock.state()).toBe('relinquishing');
+    await flushMicrotasks();
+    expect(lock.state()).toBe('lost');
+    // Non-destructive pin: the registered flush ran before the release.
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+    expect(fakes.locks.isHeld(sessionLockName(project.id))).toBe(false);
+    flushSpy.mockRestore();
+
+    const pulses = lock.blockedAttempt();
+    workspace.renameProject('Should Not Apply');
+    expect(workspace.activeProject()?.title).toBe('Mine');
+    expect(lock.blockedAttempt()).toBe(pulses + 1);
+  });
+
+  it('gates writes while a handshake flush is still in flight (relinquishing)', async () => {
+    await workspace.createProject('Mine', 'standalone_lorebook');
+    const project = workspace.activeProject();
+    assert(project);
+    const hanging = new Promise<void>(() => undefined);
+    const flushSpy = vi.spyOn(workspace, 'flushPendingSave').mockReturnValue(hanging);
+
+    const channel = fakes.channels[0];
+    assert(channel);
+    channel.receive({ type: 'takeover-request', projectId: project.id });
+    expect(lock.state()).toBe('relinquishing');
+    expect(lock.canEdit()).toBe(false);
+
+    const pulses = lock.blockedAttempt();
+    workspace.renameProject('Should Not Apply');
+    expect(workspace.activeProject()?.title).toBe('Mine');
+    expect(lock.blockedAttempt()).toBe(pulses + 1);
+
+    flushSpy.mockRestore();
+    // The flush never settles (hung hook): free the fake lock so nothing is
+    // left held across tests.
+    fakes.locks.forceRelease(sessionLockName(project.id));
+  });
+
+  it('confines a write that slipped through while acquiring; its debounced save never lands (§7.3)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const phantom = fakes.locks.holdNext();
+      const id = 'slipped-project';
+      // Built directly (not through createProject) so the lock attaches while
+      // the phantom already grabs the FIRST probe: the tab boots into
+      // `acquiring` — writes allowed — and settles `blocked`.
+      workspace.activeProject.set(projectOf([entryWith(0, { content: 'local' })], { id, title: 'Slipped' }));
+      lock.attach(id, { flush: () => workspace.flushPendingSave() });
+      expect(lock.state()).toBe('acquiring');
+      expect(lock.canEdit()).toBe(true);
+
+      workspace.updateEntry(0, { content: 'typed in the acquiring window' });
+      expect(workspace.entries()[0]?.content).toBe('typed in the acquiring window');
+
+      await flushMicrotasks();
+      expect(lock.state()).toBe('blocked');
+      expect(lock.canEdit()).toBe(false);
+
+      // The debounced save fires while gated: dropped, and the stale snapshot
+      // is retired so storage truth is served (the "gated keystrokes heal"
+      // precondition for the shell's reload-on-acquire).
+      await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
+      const storage = TestBed.inject(StorageService);
+      await expect(storage.getProject(id)).resolves.toBeUndefined();
+      // The edit stays confined to memory.
+      expect(workspace.entries()[0]?.content).toBe('typed in the acquiring window');
+
+      // Any further attempt is gated and pulses.
+      const pulses = lock.blockedAttempt();
+      workspace.updateEntry(0, { content: 'nope' });
+      expect(workspace.entries()[0]?.content).toBe('typed in the acquiring window');
+      expect(lock.blockedAttempt()).toBe(pulses + 1);
+      phantom.release();
+      await flushMicrotasks();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a blocked tab can still create a new project and edit it (fresh uuid lock)', async () => {
+    await workspace.createProject('First', 'standalone_lorebook');
+    const release = await blockActiveProject();
+    expect(lock.state()).toBe('blocked');
+
+    await workspace.createProject('Second', 'standalone_lorebook');
+    // A fresh uuid's lock is free: the new project is fully editable.
+    expect(lock.state()).toBe('held');
+    expect(lock.canEdit()).toBe(true);
+    const entryId = workspace.addEntry();
+    expect(entryId).toBe(0);
+    expect(workspace.entries()).toHaveLength(1);
+    release();
+  });
+
+  it('a blocked tab can still start a project from a book (fresh uuid lock)', async () => {
+    await workspace.createProject('First', 'standalone_lorebook');
+    const release = await blockActiveProject();
+
+    await workspace.startProjectFromBook('From Book', createEmptyBook('From Book'));
+    expect(lock.state()).toBe('held');
+    expect(workspace.activeProject()?.title).toBe('From Book');
+    release();
   });
 });

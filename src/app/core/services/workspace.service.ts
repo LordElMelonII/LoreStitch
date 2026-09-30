@@ -9,6 +9,7 @@ import {
 import type { CardShell, LintPrefs, ProjectWorkspace } from '../models/project.model';
 import type { BookRepair } from '../models/book-repair';
 import { randomUuid } from './sha256';
+import { SessionLockService } from './session-lock.service';
 import { LAST_PROJECT_KEY, StorageService } from './storage.service';
 import { VcsService } from './vcs.service';
 import { type TokenFootprint, computeTokenFootprint } from './token-estimator';
@@ -17,12 +18,15 @@ import { type TokenFootprint, computeTokenFootprint } from './token-estimator';
  * Reactive state hub. Owns the active `ProjectWorkspace` in signals, the open
  * editor tabs, and all entry mutations. Every mutation produces a new project
  * reference (structural sharing via shallow copies) and schedules a debounced
- * IndexedDB save.
+ * IndexedDB save. The active project's session lock (task 11) is attached on
+ * `setActive` and released on close/delete/switch; every persisted write path
+ * is gated behind it — a tab that lost the lock mutates nothing.
  */
 @Service()
 export class WorkspaceService {
   private readonly storage = inject(StorageService);
   private readonly vcs = inject(VcsService);
+  private readonly sessionLock = inject(SessionLockService);
 
   // -------------------------------------------------------------------------
   // Core state
@@ -135,18 +139,27 @@ export class WorkspaceService {
   }
 
   async deleteProject(id: string): Promise<void> {
-    await this.storage.deleteProject(id);
     if (this.activeProject()?.id === id) {
+      if (this.writeBlocked()) {
+        return;
+      }
+      // Close/delete/switch paths detach first (plan 11 §3.2): the detach's
+      // own flush runs while the active project is still set, targeting the
+      // right project, and the lock is released before the record goes away.
+      this.sessionLock.detach();
       this.activeProject.set(null);
       this.openTabEntryIds.set([]);
       this.activeTabId.set(null);
       await this.storage.setState(LAST_PROJECT_KEY, null);
     }
+    await this.storage.deleteProject(id);
     await this.refreshProjectList();
   }
 
   async closeProject(): Promise<void> {
-    await this.flushPendingSave();
+    // Detach flushes the pending debounced save (cancels the timer, writes
+    // now) and releases the project's lock (plan 11 §3.2).
+    this.sessionLock.detach();
     this.activeProject.set(null);
     this.openTabEntryIds.set([]);
     this.activeTabId.set(null);
@@ -212,7 +225,19 @@ export class WorkspaceService {
   }
 
   private async setActive(project: ProjectWorkspace): Promise<void> {
+    // Session lock (plan 11 §3.2): release the previous project's lock before
+    // switching — the detach's own flush targets the still-current
+    // `activeProject`. Re-`setActive` of the SAME project (the shell's
+    // reload-on-acquire path) skips the churn entirely: releasing and
+    // re-probing could hand the lock to a queued taker in the window.
+    const switched = this.activeProject()?.id !== project.id;
+    if (switched) {
+      this.sessionLock.detach();
+    }
     this.activeProject.set(project);
+    if (switched) {
+      this.sessionLock.attach(project.id, { flush: () => this.flushPendingSave() });
+    }
     await this.storage.setState(LAST_PROJECT_KEY, project.id);
     // Give the editor something to show: first few entries as tabs.
     const tabs = project.activeBook.entries
@@ -478,7 +503,7 @@ export class WorkspaceService {
 
   async commit(message: string): Promise<boolean> {
     const project = this.activeProject();
-    if (!project) {
+    if (!project || this.writeBlocked()) {
       return false;
     }
     const committed = await this.vcs.createCommit(project, message);
@@ -490,7 +515,7 @@ export class WorkspaceService {
 
   async rollbackTo(commitId: string): Promise<boolean> {
     const project = this.activeProject();
-    if (!project) {
+    if (!project || this.writeBlocked()) {
       return false;
     }
     const { project: rolled } = await this.vcs.rollbackToCommit(project, commitId);
@@ -504,10 +529,28 @@ export class WorkspaceService {
   // Internals
   // -------------------------------------------------------------------------
 
+  /**
+   * Session-lock write gate (plan 11 §3.2): every persisted mutation funnels
+   * through here. Returns true when the write must be dropped — another tab
+   * holds this project's lock (`blocked`/`lost`/`relinquishing`) — and pulses
+   * `blockedAttempt` so the shell can surface the read-only snackbar. An
+   * unattached lock (`idle`) gates nothing — the lock only ever speaks for a
+   * project that went through `setActive`. Tab bookkeeping and the
+   * `LAST_PROJECT_KEY` metadata write stay ungated: browsing a read-only tab
+   * is harmless.
+   */
+  private writeBlocked(): boolean {
+    if (this.sessionLock.state() === 'idle' || this.sessionLock.canEdit()) {
+      return false;
+    }
+    this.sessionLock.pulseBlockedAttempt();
+    return true;
+  }
+
   /** Shallow-immutable project update plus debounced persistence. */
   private mutateProject(mutate: (project: ProjectWorkspace) => ProjectWorkspace): void {
     const current = this.activeProject();
-    if (!current) {
+    if (!current || this.writeBlocked()) {
       return;
     }
     const next = mutate(current);

@@ -1,7 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { createEmptyBook, createEmptyEntry } from '../models/lorebook.model';
 import { ProjectWorkspace } from '../models/project.model';
+import { sessionLockName, SessionLockService } from './session-lock.service';
 import { SAVE_DEBOUNCE_MS, StorageService } from './storage.service';
+import {
+  flushMicrotasks,
+  installSessionLockFakes,
+} from '../../../testing/session-lock-fakes';
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -84,13 +89,6 @@ function makeProject(title: string): ProjectWorkspace {
     headCommitId: null,
     commits: [],
   };
-}
-
-/** Drains pending promise callbacks (fake timers do not flush microtasks). */
-async function flushMicrotasks(): Promise<void> {
-  for (let round = 0; round < 5; round += 1) {
-    await Promise.resolve();
-  }
 }
 
 describe('StorageService', () => {
@@ -278,6 +276,108 @@ describe('StorageService', () => {
     await secondWrite;
 
     await expect(storage.listProjects()).resolves.toEqual([newer, older]);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Session-lock fire-time gate (task 11 §3.2, §7.3)
+  // ---------------------------------------------------------------------------
+
+  it('still writes a debounced save while this tab holds the lock', async () => {
+    const fakes = installSessionLockFakes();
+    try {
+      const lock = TestBed.inject(SessionLockService);
+      lock.attach('project-1', { flush: () => undefined });
+      await flushMicrotasks();
+      expect(lock.state()).toBe('held');
+
+      const project = makeProject('held edits land');
+      storage.scheduleSave(project);
+      await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
+      await flushMicrotasks();
+      expect(fakeDb.puts).toHaveLength(1);
+      assert(fakeDb.puts[0]);
+      expect(fakeDb.puts[0].value.title).toBe('held edits land');
+      fakeDb.puts[0].deferred.resolve();
+      await flushMicrotasks();
+    } finally {
+      fakes.restore();
+    }
+  });
+
+  it('never writes a save whose edit-rights epoch was invalidated by a lost lock (§7.3)', async () => {
+    const fakes = installSessionLockFakes();
+    try {
+      const lock = TestBed.inject(SessionLockService);
+      const phantom = fakes.locks.holdNext();
+      // Attach while a phantom foreign tab grabs the probe: this tab boots
+      // into `acquiring` (writes allowed, plan §7.3) and settles `blocked`.
+      lock.attach('project-1', { flush: () => undefined });
+      expect(lock.state()).toBe('acquiring');
+
+      const slipped = makeProject('typed while acquiring');
+      storage.scheduleSave(slipped);
+      await flushMicrotasks();
+      expect(lock.state()).toBe('blocked');
+
+      // The debounce fires while gated: the write is dropped.
+      await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
+      await flushMicrotasks();
+      expect(fakeDb.puts).toHaveLength(0);
+
+      // The tainted snapshot is retired from the read path too — `getProject`
+      // serves storage truth, not this tab's stale memory, which is what the
+      // shell's reload-on-acquire re-derives from (plan §3.3).
+      await expect(storage.getProject(slipped.id)).resolves.toBeUndefined();
+
+      // Even after the lock frees up and a re-probe re-acquires it, the
+      // slipped save still never lands.
+      phantom.release();
+      await flushMicrotasks(); // Let the phantom's hold free before re-probing.
+      window.dispatchEvent(new Event('focus'));
+      await flushMicrotasks();
+      expect(lock.state()).toBe('held');
+      await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
+      await flushMicrotasks();
+      expect(fakeDb.puts).toHaveLength(0);
+    } finally {
+      fakes.restore();
+    }
+  });
+
+  it('lets the relinquishing holder write through flush() after the gate closed', async () => {
+    const fakes = installSessionLockFakes();
+    try {
+      const lock = TestBed.inject(SessionLockService);
+      // The registered flush hangs, parking the holder in `relinquishing` —
+      // exactly the window between the handshake and the release.
+      const hanging = new Promise<void>(() => undefined);
+      lock.attach('project-1', { flush: () => hanging });
+      await flushMicrotasks();
+      const channel = fakes.channels[0];
+      assert(channel);
+      channel.receive({ type: 'takeover-request', projectId: 'project-1' });
+      await flushMicrotasks();
+      expect(lock.state()).toBe('relinquishing');
+      expect(lock.canEdit()).toBe(false);
+
+      // saveProject/flush stay ungated (plan §3.2): the holder's pending save
+      // must reach storage BEFORE the lock is released — the non-destructive
+      // takeover pin rides on it.
+      const holderSnapshot = makeProject('holder last keystrokes');
+      storage.scheduleSave(holderSnapshot);
+      const flushing = storage.flush(holderSnapshot.id);
+      await flushMicrotasks();
+      expect(fakeDb.puts).toHaveLength(1);
+      assert(fakeDb.puts[0]);
+      expect(fakeDb.puts[0].value.title).toBe('holder last keystrokes');
+      fakeDb.puts[0].deferred.resolve();
+      await flushing;
+      await flushMicrotasks();
+
+      fakes.locks.forceRelease(sessionLockName('project-1'));
+    } finally {
+      fakes.restore();
+    }
   });
 });
 
