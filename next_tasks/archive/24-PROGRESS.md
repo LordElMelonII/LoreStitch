@@ -78,3 +78,11 @@ mark` + `feat(brand): show the LoreStitch mark in the top bar, About dialog
 and welcome screen` + this ledger.
 
 **Next**: user merges (ff-only) after testing the branch.
+
+---
+
+## Close-out
+
+- **Status**: ✅ merged — `feature/24-brand-icon` ff-merged into `develop`
+  (`a1f792f` + `f383d80` + docs, 2026-09-30); unreleased at archival —
+  rides the next release.

@@ -67,3 +67,13 @@ text` + `feat(about): add License tab and SillyTavern ported-source credit`
 **Next**: user merges (ff-only) after testing the branch. Branch-final
 three-project Playwright sweep still pending at close (only desktop-chrome
 smoke ran in-task).
+
+---
+
+## Close-out
+
+- **Status**: ✅ merged — branch ff-merged into `develop` (`3f715ed` +
+  `47ce0e5` + docs); shipped as v1.9.1 (2026-09-30). The pending
+  branch-final sweep was covered by task 24's three-project run over the
+  merged tree (its branch cut from `809ecf6`, which contains task 23) —
+  zero failures across all projects (24-PROGRESS).

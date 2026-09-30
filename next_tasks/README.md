@@ -3,30 +3,19 @@
 Planning documents for the remaining `ROADMAP.md` backlog (the LOW PRIORITY
 items + quality-gate gaps routed here, since the MEDIUM batch closed with tasks
 01–08; plus urgent fixes). **Planning only — no implementation.**
-Completed plans live in [archive/](./archive/).
+Completed plans and progress ledgers live in [archive/](./archive/).
 
 ## Pending
 
 Grounded at `develop` @ `ddc9f04` (2026-09-22 roadmap evaluation; see the
-evaluation notes below). Task 15 (character-card round-trip), planned from the
-same review, was completed and archived 2026-09-23 (shipped as v1.5.0). Task
-09 (book schema validation & guided repair) was completed and archived
-2026-09-25 (shipped as v1.6.0). Task 12 (delimiters selection + markdown) entered
-2026-09-26 from the user's improvements doc and **preempts 10/11** (user decision:
-"priority over every other task"); the sketch queue numbers shifted (undo → 13,
-pinned drawer → 15 — 14 stays retired). Task 12 was completed 2026-09-26
-(shipped as v1.7.0). Tasks 16–19 followed (shipped as v1.8.0, 2026-09-28), then
-tasks 20 and 21 (shipped as v1.9.0, 2026-09-29); their plans and ledgers also
-still sit in this folder pending the archival move. Task 22 (ARD
-agent-discovery manifests — urgent intake: a validator reported the live
-site's `ai-catalog.json` path serving the SPA fallback) completed 2026-09-29
-on `feature/22-ard-ai-catalog-manifest`, awaiting user merge + deploy. Task 23
-(About dialog License tab + SillyTavern ported-source credit — direct user
-intake, no plan file) completed 2026-09-30 on `feature/23-about-license`,
-awaiting user merge. Task 24 (LoreStitch brand mark: generated app icon set
-replacing the Angular placeholders + the mark in topbar/About/welcome —
-direct user intake, no plan file) completed 2026-09-30 on
-`feature/24-brand-icon` after an approved visual gate, awaiting user merge.
+evaluation notes below). Everything completed since that evaluation is
+archived in [archive/](./archive/): task 15 (character-card round-trip,
+v1.5.0), task 09 (export pre-flight validation, v1.6.0), task 12 (delimiters
+selection + markdown, v1.7.0 — it pre-empted 10/11 by user decision,
+"priority over every other task", shifting the sketch queue numbers: undo →
+13, pinned drawer → 15, 14 stays retired), tasks 16–19 (v1.8.0), tasks 20–21
+(v1.9.0), tasks 22–23 (v1.9.1) and task 24 (brand mark — merged to `develop`
+2026-09-30, unreleased at archival).
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|

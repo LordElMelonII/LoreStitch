@@ -43,3 +43,12 @@ plan + README note).
 
 **Next**: user merges (ff-only) after checking the deployed site answers
 both paths with JSON once Cloudflare Pages rebuilds.
+
+---
+
+## Close-out
+
+- **Status**: ✅ merged — branch ff-merged into `develop` (`a36a3fc` + the
+  docs commits, all on develop first-parent); shipped in v1.9.1 (2026-09-30).
+  The deployed-site check above (both `.well-known` paths answering JSON
+  once Cloudflare Pages rebuilt) stayed the user's side of the merge.
