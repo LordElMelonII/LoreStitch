@@ -323,9 +323,8 @@ export class App {
     effect(() => {
       const state = this.sessionLock.state();
       const project = untracked(this.workspace.activeProject);
-      const transition: SessionLockState = state;
       const from = previousState;
-      previousState = transition;
+      previousState = state;
       if (state === from) {
         return;
       }

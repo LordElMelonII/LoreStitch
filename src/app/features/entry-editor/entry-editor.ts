@@ -382,24 +382,45 @@ export class EntryEditor {
    * alone must not flash a veil (plan §7.3 — writes are allowed there).
    */
   protected readonly sessionVeiled = computed(() => {
-    switch (this.sessionLock.state()) {
+    const state = this.sessionLock.state();
+    switch (state) {
       case 'blocked':
       case 'lost':
       case 'relinquishing':
         return true;
-      default:
+      case 'idle':
+      case 'acquiring':
+      case 'held':
         return false;
+      default: {
+        // Union-level exhaustiveness (the runBarAction precedent): a new
+        // `SessionLockState` member added without a case must not silently
+        // read as editable.
+        const unhandled: never = state;
+        throw new Error(`Unhandled session lock state: ${String(unhandled)}`);
+      }
     }
   });
 
   /** The veil's Take over action — offered only where a retry makes sense. */
   protected readonly sessionCanRetry = computed(() => {
-    switch (this.sessionLock.state()) {
+    const state = this.sessionLock.state();
+    switch (state) {
       case 'blocked':
       case 'lost':
         return true;
-      default:
+      case 'idle':
+      case 'acquiring':
+      case 'held':
+      case 'relinquishing':
         return false;
+      default: {
+        // Union-level exhaustiveness (the runBarAction precedent): a new
+        // `SessionLockState` member added without a case must not silently
+        // hide the retry affordance.
+        const unhandled: never = state;
+        throw new Error(`Unhandled session lock state: ${String(unhandled)}`);
+      }
     }
   });
 
