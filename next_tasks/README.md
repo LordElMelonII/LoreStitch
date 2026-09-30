@@ -20,7 +20,10 @@ tasks 20 and 21 (shipped as v1.9.0, 2026-09-29); their plans and ledgers also
 still sit in this folder pending the archival move. Task 22 (ARD
 agent-discovery manifests — urgent intake: a validator reported the live
 site's `ai-catalog.json` path serving the SPA fallback) completed 2026-09-29
-on `feature/22-ard-ai-catalog-manifest`, awaiting user merge + deploy.
+on `feature/22-ard-ai-catalog-manifest`, awaiting user merge + deploy. Task 23
+(About dialog License tab + SillyTavern ported-source credit — direct user
+intake, no plan file) completed 2026-09-30 on `feature/23-about-license`,
+awaiting user merge.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
