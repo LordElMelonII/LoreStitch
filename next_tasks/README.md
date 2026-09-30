@@ -23,7 +23,10 @@ site's `ai-catalog.json` path serving the SPA fallback) completed 2026-09-29
 on `feature/22-ard-ai-catalog-manifest`, awaiting user merge + deploy. Task 23
 (About dialog License tab + SillyTavern ported-source credit — direct user
 intake, no plan file) completed 2026-09-30 on `feature/23-about-license`,
-awaiting user merge.
+awaiting user merge. Task 24 (LoreStitch brand mark: generated app icon set
+replacing the Angular placeholders + the mark in topbar/About/welcome —
+direct user intake, no plan file) completed 2026-09-30 on
+`feature/24-brand-icon` after an approved visual gate, awaiting user merge.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
