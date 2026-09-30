@@ -7,8 +7,10 @@
 > **Suggested agents**: `core-engine` (lead: lock service + write gating) →
 > `ui-specialist` (takeover prompt, notice, editor veil) → `ts-reviewer` →
 > `qa-auditor`
-> **Status**: 🟡 Planned — not started (re-anchored 2026-09-30, decisions
-> locked with the user in the same session — see §3.0)
+> **Status**: 🟢 Implemented on `feature/11-multi-tab-session-lock`
+> (2026-09-30 — all phases + branch-final sweep green, checkpoint 11-1
+> answered; ledger in [11-PROGRESS.md](./11-PROGRESS.md). Awaiting user
+> manual test before the ff-only merge to `develop`.)
 
 ---
 
