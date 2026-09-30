@@ -376,4 +376,49 @@ describe('SessionLockService', () => {
     // lost → idle: still no rights, no bump.
     expect(service.writeEpoch()).toBe(2);
   });
+
+  describe('isHeldElsewhere (checkpoint 11-1)', () => {
+    it('a grant resolves false and holds nothing, not even for a microtask', async () => {
+      makeService();
+      await expect(service.isHeldElsewhere('p1')).resolves.toBe(false);
+      expect(fakes.locks.isHeld(sessionLockName('p1'))).toBe(false);
+      // The probe rode an ifAvailable request on the exact lock name.
+      expect(fakes.locks.requests.at(-1)).toMatchObject({
+        name: sessionLockName('p1'),
+        ifAvailable: true,
+      });
+    });
+
+    it('a taken lock resolves true (held elsewhere)', async () => {
+      makeService();
+      const releaseHolder = await fakes.locks.holdFromOutside(sessionLockName('p1'));
+      await expect(service.isHeldElsewhere('p1')).resolves.toBe(true);
+      // The probe disturbed nothing: the foreign holder still owns the lock.
+      expect(fakes.locks.isHeld(sessionLockName('p1'))).toBe(true);
+      releaseHolder();
+    });
+
+    it('an id this tab holds and may edit resolves false without probing', async () => {
+      makeService();
+      service.attach('p1', { flush: () => undefined });
+      await flushMicrotasks();
+      expect(service.state()).toBe('held');
+      const probeCountBefore = fakes.locks.requests.length;
+      await expect(service.isHeldElsewhere('p1')).resolves.toBe(false);
+      // Self-held is not "held elsewhere": no request was issued at all.
+      expect(fakes.locks.requests.length).toBe(probeCountBefore);
+    });
+
+    it('absent navigator.locks resolves false (proceed, status quo)', async () => {
+      makeService();
+      Reflect.deleteProperty(globalThis.navigator as unknown as Record<string, unknown>, 'locks');
+      await expect(service.isHeldElsewhere('p1')).resolves.toBe(false);
+    });
+
+    it('a rejecting request resolves true (could not verify free ⇒ abort)', async () => {
+      makeService();
+      vi.spyOn(fakes.locks, 'request').mockRejectedValueOnce(new Error('lock manager gone'));
+      await expect(service.isHeldElsewhere('p1')).resolves.toBe(true);
+    });
+  });
 });

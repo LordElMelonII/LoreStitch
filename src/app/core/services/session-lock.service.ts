@@ -238,6 +238,43 @@ export class SessionLockService {
   }
 
   /**
+   * Point probe (checkpoint 11-1 decision): resolves true when `projectId`'s
+   * lock is currently held ELSEWHERE — i.e. importing or otherwise overwriting
+   * that project from this tab would clobber another tab's edits. A grant
+   * means the lock is free: the callback returns synchronously so nothing is
+   * held, not even for a microtask. Absent `navigator.locks` resolves false —
+   * proceed, the pre-lock status quo. A rejecting request could not verify
+   * "free", so it resolves true (abort the destructive operation).
+   *
+   * The attached lock is never disturbed: a different project probes a
+   * different name, and a same-id probe rides `{ ifAvailable: true }`, which
+   * never queues. An id THIS tab holds (and may edit) resolves false without
+   * probing — self-held is not "held elsewhere".
+   */
+  async isHeldElsewhere(projectId: string): Promise<boolean> {
+    if (this.disposed || (this.attachedId === projectId && this.canEdit())) {
+      return false;
+    }
+    const locks = this.locks();
+    if (locks === undefined) {
+      return false;
+    }
+    let held = true;
+    const request = locks.request(sessionLockName(projectId), { ifAvailable: true }, (lock) => {
+      held = !lock;
+      return undefined;
+    });
+    // Marked handled up front (the storage.service.ts rejection lesson): the
+    // probe's own settlement must never surface as an unhandled rejection.
+    const settled = request.then(
+      () => undefined,
+      () => undefined,
+    );
+    await settled;
+    return held;
+  }
+
+  /**
    * Fire-time persistence gate for the debounced save timer (plan §3.2):
    * false only when `projectId` is the attached project and this tab may not
    * currently edit it. Projects with no attached lock are ungated.

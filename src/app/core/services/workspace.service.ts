@@ -202,8 +202,23 @@ export class WorkspaceService {
     await this.refreshProjectList();
   }
 
-  /** Re-opens a full workspace from a `.stproj` archive, commits included. */
+  /**
+   * Re-opens a full workspace from a `.stproj` archive, commits included.
+   *
+   * Checkpoint 11-1 decision: the archive keeps its own project id, so
+   * importing over a record another tab holds would clobber that tab's saved
+   * edits. The import probes the archive id's lock BEFORE persisting
+   * anything; a held id aborts the import (no save, no state change) with one
+   * `blockedAttempt` pulse — the same read-only chokepoint the other gated
+   * writes pulse through. A free id (or an absent Web Locks API, or this tab
+   * already holding the id) imports as before: `setActive` attaches and
+   * acquires the lock.
+   */
   async openImportedWorkspace(workspace: ProjectWorkspace): Promise<void> {
+    if (await this.sessionLock.isHeldElsewhere(workspace.id)) {
+      this.sessionLock.pulseBlockedAttempt();
+      return;
+    }
     await this.storage.saveProject(workspace);
     await this.setActive(workspace);
     await this.refreshProjectList();

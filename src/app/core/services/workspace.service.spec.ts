@@ -290,6 +290,17 @@ describe('WorkspaceService', () => {
       'Latest changes could not be saved to browser storage. Export your work to avoid data loss.',
     );
   });
+
+  it('imports an archive when the Web Locks API is absent (proceed, status quo)', async () => {
+    const lock = TestBed.inject(SessionLockService);
+    const imported = projectOf([entryWith(0)], { id: 'imported-absent', title: 'Imported' });
+
+    await workspace.openImportedWorkspace(imported);
+
+    expect(workspace.activeProject()?.id).toBe('imported-absent');
+    // Without locks the attach degraded straight to held — edits allowed.
+    expect(lock.canEdit()).toBe(true);
+  });
 });
 
 /**
@@ -492,5 +503,59 @@ describe('WorkspaceService session-lock gating', () => {
     expect(lock.state()).toBe('held');
     expect(workspace.activeProject()?.title).toBe('From Book');
     release();
+  });
+
+  it('refuses to import an archive whose project id another tab holds (checkpoint 11-1)', async () => {
+    const releaseHolder = await fakes.locks.holdFromOutside(sessionLockName('imported-1'));
+    const storage = TestBed.inject(StorageService);
+    const saveSpy = vi.spyOn(storage, 'saveProject');
+    const imported = projectOf([entryWith(0), entryWith(1)], { id: 'imported-1', title: 'Imported' });
+
+    const pulses = lock.blockedAttempt();
+    await workspace.openImportedWorkspace(imported);
+
+    // Aborted before anything persisted or any state changed.
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(workspace.activeProject()).toBeNull();
+    expect(workspace.savedProjects()).toEqual([]);
+    expect(lock.state()).toBe('idle');
+    // Exactly one pulse through the read-only chokepoint.
+    expect(lock.blockedAttempt()).toBe(pulses + 1);
+    // The probe rode an ifAvailable request on the held id's lock name.
+    expect(fakes.locks.requests.at(-1)).toMatchObject({
+      name: sessionLockName('imported-1'),
+      ifAvailable: true,
+    });
+    releaseHolder();
+  });
+
+  it('imports an archive whose project id is free and acquires its lock', async () => {
+    const imported = projectOf([entryWith(0), entryWith(1)], { id: 'imported-2', title: 'Imported' });
+    const pulses = lock.blockedAttempt();
+
+    await workspace.openImportedWorkspace(imported);
+
+    expect(workspace.activeProject()?.id).toBe('imported-2');
+    expect(workspace.entries()).toHaveLength(2);
+    // setActive attached and acquired the archive id's lock.
+    expect(lock.state()).toBe('held');
+    expect(lock.canEdit()).toBe(true);
+    expect(fakes.locks.isHeld(sessionLockName('imported-2'))).toBe(true);
+    // A free id never pulses the read-only chokepoint.
+    expect(lock.blockedAttempt()).toBe(pulses);
+  });
+
+  it('re-importing the archive of the project this tab holds proceeds (self-held is not elsewhere)', async () => {
+    await workspace.createProject('Open', 'standalone_lorebook');
+    const id = workspace.activeProject()?.id;
+    assert(id);
+    const pulses = lock.blockedAttempt();
+
+    await workspace.openImportedWorkspace(projectOf([entryWith(0)], { id, title: 'Re-imported' }));
+
+    expect(workspace.activeProject()?.title).toBe('Re-imported');
+    // Same-id re-open: no lock churn, no pulse.
+    expect(lock.state()).toBe('held');
+    expect(lock.blockedAttempt()).toBe(pulses);
   });
 });
