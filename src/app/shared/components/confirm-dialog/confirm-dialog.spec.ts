@@ -58,6 +58,21 @@ describe('ConfirmDialog', () => {
     expect(button('Discard')).toBeTruthy();
   });
 
+  it('honors a custom cancel label (session lock "Stay read-only") and still closes false', () => {
+    createDialog({
+      title: 'Project open in another tab',
+      message: 'Another tab holds the lock.',
+      confirmLabel: 'Take over',
+      cancelLabel: 'Stay read-only',
+    });
+
+    expect(button('Stay read-only')).toBeTruthy();
+    button('Stay read-only').click();
+
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledWith(false);
+  });
+
   it('closes with false when cancelled', () => {
     createDialog({ title: 'Delete entry', message: 'Sure?' });
 

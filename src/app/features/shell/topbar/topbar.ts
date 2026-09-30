@@ -9,6 +9,7 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ThemeService } from '../../../core/services/theme.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { SessionLockService } from '../../../core/services/session-lock.service';
 import { GITHUB_REPO_URL } from '../../../shared/constants/github';
 import { TouchSafeNestedMenuTrigger } from '../../../shared/directives/touch-safe-nested-menu-trigger';
 import { LayoutService } from '../../../shared/services/layout.service';
@@ -43,6 +44,24 @@ export class Topbar {
   protected readonly linter = inject(LinterState);
   private readonly dialog = inject(MatDialog);
   private readonly overlay = inject(ResponsiveOverlayService);
+  private readonly sessionLock = inject(SessionLockService);
+
+  /**
+   * Read-only session state (task 11 §3.3): the pill shows while another tab
+   * holds the active project (`blocked`, prompt answered or not) or after
+   * this tab lost the lock to a takeover. `relinquishing` is the handover's
+   * brief mid-flush moment — the editor veil covers it; the pill would only
+   * flicker. Universal across breakpoints (the save-error rule).
+   */
+  protected readonly sessionReadOnly = computed(
+    () =>
+      this.sessionLock.state() === 'blocked' || this.sessionLock.state() === 'lost',
+  );
+
+  /** The pill's retry affordance: ask the holder tab to hand the lock over. */
+  protected retryTakeover(): void {
+    void this.sessionLock.takeover();
+  }
 
   /** Drawer toggles, handled by the shell that owns the sidenav layout. */
   readonly toggleEntries = output<void>();

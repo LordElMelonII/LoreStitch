@@ -18,7 +18,9 @@ import { type ConfirmDialogData } from './confirm-dialog.model';
       <p class="message">{{ data.message }}</p>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button matButton type="button" (click)="ref.close(false)">Cancel</button>
+      <button matButton type="button" (click)="ref.close(false)">
+        {{ data.cancelLabel ?? 'Cancel' }}
+      </button>
       <button
         [matButton]="data.danger ? 'outlined' : 'filled'"
         [class.danger-btn]="data.danger"

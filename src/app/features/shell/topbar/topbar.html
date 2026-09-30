@@ -30,6 +30,24 @@
     <span class="project-badge no-project">No project open</span>
   }
 
+  <!-- Read-only session marker (task 11 §3.3, checkpoint 11-1): a quiet pill
+       next to the project badge — visible on phones too, exactly like the
+       save-error marker below it never joins the desktop-only set. It is the
+       retry affordance while blocked/lost; @if-removed (never display:none)
+       while editable so exactly one control carries this accessible name. -->
+  @if (sessionReadOnly()) {
+    <button
+      type="button"
+      class="read-only-pill"
+      matTooltip="Read-only — held by another tab. Select to try taking over."
+      aria-label="Read-only — held by another tab. Select to try taking over."
+      (click)="retryTakeover()"
+    >
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <span>Read-only</span>
+    </button>
+  }
+
   <!-- Persistence-failure marker: the tooltip carries the full message. It
        must stay visible on phones (quota errors bite there), so it never
        joins the desktop-only set. -->

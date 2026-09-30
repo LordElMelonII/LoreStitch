@@ -3,6 +3,39 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  position: relative;
+}
+
+// Session veil (task 11 §3.3, checkpoint 11-1): the pane's read-only surface
+// while another tab holds the project. The editor content beneath is inert
+// (the template binds [inert]), so the veil's job is explanation + the
+// takeover retry — it sits above everything the pane renders, including the
+// empty state's New entry button.
+.session-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background: color-mix(in srgb, var(--mat-sys-surface-container-high) 88%, transparent);
+
+  mat-icon {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  p {
+    margin: 0;
+    font: var(--mat-sys-body-large);
+    color: var(--mat-sys-on-surface);
+  }
 }
 
 // Explicit flex column: the tab group fills the pane and the body wrapper

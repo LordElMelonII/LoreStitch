@@ -14,6 +14,7 @@ import { MatTabChangeEvent, MatTabGroup, MatTabsModule } from '@angular/material
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CharacterBookEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { SessionLockService } from '../../core/services/session-lock.service';
 import {
   TAB_STRIP_DRAG_SLOP_PX,
   TAB_STRIP_FLING_DECAY_MS,
@@ -343,6 +344,7 @@ export class TabStripDragScroller {
 })
 export class EntryEditor {
   protected readonly workspace = inject(WorkspaceService);
+  private readonly sessionLock = inject(SessionLockService);
   private readonly tabGroup = viewChild(MatTabGroup);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly drag = new TabStripDragScroller({
@@ -371,6 +373,40 @@ export class EntryEditor {
     );
     return (id: number) => byId.get(id);
   });
+
+  /**
+   * Session veil (task 11 §3.3, checkpoint 11-1): covers the pane whenever
+   * this tab may not edit — `blocked` (another tab holds the lock), `lost`
+   * (a takeover moved it away) and the brief `relinquishing` handover.
+   * `acquiring` stays unveiled on purpose: a booting tab that is genuinely
+   * alone must not flash a veil (plan §7.3 — writes are allowed there).
+   */
+  protected readonly sessionVeiled = computed(() => {
+    switch (this.sessionLock.state()) {
+      case 'blocked':
+      case 'lost':
+      case 'relinquishing':
+        return true;
+      default:
+        return false;
+    }
+  });
+
+  /** The veil's Take over action — offered only where a retry makes sense. */
+  protected readonly sessionCanRetry = computed(() => {
+    switch (this.sessionLock.state()) {
+      case 'blocked':
+      case 'lost':
+        return true;
+      default:
+        return false;
+    }
+  });
+
+  /** Veil retry: same handshake the topbar pill and the prompt drive. */
+  protected retryTakeover(): void {
+    void this.sessionLock.takeover();
+  }
 
   constructor() {
     // Self-healing selection: if the active tab id is gone (e.g. its entry was

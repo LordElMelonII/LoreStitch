@@ -12,8 +12,11 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialogRef } from '@angular/material/dialog';
 import { MatSidenavContainer, MatSidenavModule } from '@angular/material/sidenav';
 import { WorkspaceService } from './core/services/workspace.service';
+import { SessionLockService, type SessionLockState } from './core/services/session-lock.service';
 import { EntryList } from './features/entry-list/entry-list';
 import { EntryEditor } from './features/entry-editor/entry-editor';
 import { CommitHistory } from './features/commit-history/commit-history';
@@ -27,6 +30,7 @@ import {
 } from './features/shell/mobile-bottom-bar/mobile-bottom-bar';
 import { LayoutService } from './shared/services/layout.service';
 import { ProjectActionsService } from './features/shell/project-actions.service';
+import { ResponsiveOverlayService } from './shared/services/responsive-overlay.service';
 
 /**
  * Entries drawer resize clamp (task 21 D3, user-locked): the user decides,
@@ -97,6 +101,15 @@ export class App {
   protected readonly workspace = inject(WorkspaceService);
   protected readonly layout = inject(LayoutService);
   private readonly actions = inject(ProjectActionsService);
+
+  // Session-lock surface (task 11 §3.3): the shell owns the takeover prompt,
+  // the blocked-attempt snackbar and the reload-on-acquire — the topbar notice
+  // and the editor veil read the same service reactively.
+  private readonly sessionLock = inject(SessionLockService);
+  private readonly overlay = inject(ResponsiveOverlayService);
+  private readonly snackBar = inject(MatSnackBar);
+  /** The open takeover prompt, if any — one prompt per blocked streak. */
+  private lockPrompt: ReturnType<ResponsiveOverlayService['openResponsive']> | null = null;
 
   /** Children the shell forwards actions into (search dialog, batch pane). */
   private readonly topbar = viewChild(Topbar);
@@ -294,6 +307,92 @@ export class App {
       }
       this.workspaceContainer()?.updateContentMargins();
     });
+
+    // -------------------------------------------------------------------------
+    // Session lock (task 11 §3.3, checkpoint 11-1 approved design).
+    // -------------------------------------------------------------------------
+
+    // State-transition fan-out. `blocked` ENTERED (from acquiring — every
+    // fresh open into blocked, per the checkpoint's frequency rule) opens the
+    // takeover prompt once per streak; staying blocked never re-prompts.
+    // `held` entered from blocked/lost (takeover grant or spontaneous
+    // re-probe) reloads the project so the tree and forms re-derive from the
+    // flushed storage state — the P1 contract: same-id setActive is lock-safe
+    // and getProject serves storage truth, so openProject is the only call.
+    let previousState: SessionLockState = this.sessionLock.state();
+    effect(() => {
+      const state = this.sessionLock.state();
+      const project = untracked(this.workspace.activeProject);
+      const transition: SessionLockState = state;
+      const from = previousState;
+      previousState = transition;
+      if (state === from) {
+        return;
+      }
+      if (state === 'blocked' && project) {
+        this.openLockPrompt(project.title);
+      }
+      if (state === 'held' && (from === 'blocked' || from === 'lost') && project) {
+        void this.workspace.openProject(project.id);
+      }
+    });
+
+    // Blocked write attempts surface as one snackbar per pulse: every gated
+    // path (mutateProject, commit, rollback, delete, locked-id import) pulses
+    // the counter through the same chokepoint.
+    let seenAttempts = this.sessionLock.blockedAttempt();
+    effect(() => {
+      const attempts = this.sessionLock.blockedAttempt();
+      const pulses = attempts - seenAttempts;
+      seenAttempts = attempts;
+      if (pulses > 0) {
+        this.snackBar.open('Read-only — this project is held by another tab', 'OK', {
+          duration: 3000,
+        });
+      }
+    });
+  }
+
+  /**
+   * Opens the takeover prompt (checkpoint 11-1): the `ConfirmDialog` exemplar
+   * opened through `ResponsiveOverlayService`, dialog-only (no sheet variant)
+   * with the compact-fullscreen class ConfirmDialog's own call sites use.
+   * Confirming hands off to `takeover()`; dismissing keeps the read-only
+   * notice and veil — they are state-driven and need no wiring here.
+   */
+  private openLockPrompt(projectTitle: string): void {
+    if (this.lockPrompt) {
+      return;
+    }
+    void (async () => {
+      // Lazy-loaded: keeps the confirm dialog out of the initial bundle.
+      const { ConfirmDialog } = await import(
+        './shared/components/confirm-dialog/confirm-dialog'
+      );
+      const ref = this.overlay.openResponsive(ConfirmDialog, {
+        dialog: { panelClass: 'app-compact-fullscreen-dialog' },
+        data: {
+          title: 'Project open in another tab',
+          message:
+            `“${projectTitle}” is being edited in another tab of this browser. Taking over ` +
+            'saves that tab’s work first, then moves editing here — the other tab switches to ' +
+            'read-only. No edits are lost either way.',
+          confirmLabel: 'Take over',
+          cancelLabel: 'Stay read-only',
+        },
+      });
+      this.lockPrompt = ref;
+      // Dialog-only config: the ref is always a MatDialogRef here; the sheet
+      // branch of the union is unreachable by construction.
+      if (ref instanceof MatDialogRef) {
+        ref.afterClosed().subscribe((confirmed) => {
+          this.lockPrompt = null;
+          if (confirmed) {
+            void this.sessionLock.takeover();
+          }
+        });
+      }
+    })();
   }
 
   protected toggleLeft(): void {

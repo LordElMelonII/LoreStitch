@@ -10,6 +10,7 @@
     (pointercancel)="onStripPointerCancel($event)"
     [fitInkBarToContent]="true"
     animationDuration="160ms"
+    [attr.inert]="sessionVeiled() ? '' : null"
   >
     @for (tab of tabs(); track tab.id) {
       <mat-tab>
@@ -47,9 +48,23 @@
     }
   </mat-tab-group>
 } @else {
-  <div class="empty-editor">
+  <div class="empty-editor" [attr.inert]="sessionVeiled() ? '' : null">
     <mat-icon>tab</mat-icon>
     <p>Open an entry from the list, or create a new one to start editing.</p>
     <button matButton (click)="workspace.addEntry()">New entry</button>
+  </div>
+}
+
+<!-- Session veil (task 11 §3.3, checkpoint 11-1): one surface over the whole
+     editor pane while another tab holds the project. The editor content goes
+     inert (keyboard AND pointer — typed-into-the-void is the failure this
+     kills), and the veil restates why and offers the takeover retry. -->
+@if (sessionVeiled()) {
+  <div class="session-veil" role="note" aria-disabled="true">
+    <mat-icon aria-hidden="true">lock</mat-icon>
+    <p>Editing paused — this project is open in another tab.</p>
+    @if (sessionCanRetry()) {
+      <button matButton="filled" type="button" (click)="retryTakeover()">Take over</button>
+    }
   </div>
 }

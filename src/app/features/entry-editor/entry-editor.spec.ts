@@ -9,6 +9,7 @@ import {
 } from './entry-editor';
 import { CharacterBookEntry, createEmptyEntry } from '../../core/models/lorebook.model';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { SessionLockService } from '../../core/services/session-lock.service';
 
 interface ClampableHeader {
   scrollDistance: number;
@@ -723,6 +724,103 @@ describe('EntryEditor workspace wiring', () => {
       expect(currentEntry(0).insertion_order).toBe(42);
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+/**
+ * Session veil (task 11 §3.3, checkpoint 11-1): the pane's read-only surface
+ * while another tab holds the project. The lock service runs real
+ * (dependency-free) with its state driven directly — the machine itself is
+ * pinned by session-lock.service.spec.ts.
+ */
+describe('EntryEditor session veil', () => {
+  const entry: CharacterBookEntry = { ...createEmptyEntry(1), keys: ['rin'] };
+
+  beforeEach(async () => {
+    // The tab strip pagination tracks size changes; jsdom lacks the API.
+    if (!('ResizeObserver' in globalThis)) {
+      /* eslint-disable @typescript-eslint/no-empty-function -- no-op stub by design */
+      Object.defineProperty(globalThis, 'ResizeObserver', {
+        writable: true,
+        value: class {
+          observe(): void {}
+          unobserve(): void {}
+          disconnect(): void {}
+        },
+      });
+      /* eslint-enable @typescript-eslint/no-empty-function */
+    }
+    await TestBed.configureTestingModule({
+      imports: [EntryEditor],
+      providers: [
+        {
+          provide: WorkspaceService,
+          useValue: {
+            entries: signal([entry]),
+            openTabEntryIds: signal([1]),
+            activeTabId: signal(1),
+            dirtyEntryIds: signal(new Set<number>()),
+            updateEntry: vi.fn(),
+            addEntry: vi.fn(),
+            closeTab: vi.fn(),
+          },
+        },
+      ],
+    }).compileComponents();
+  });
+
+  it('veils the pane while blocked, inerting the editor content beneath', async () => {
+    const lock = TestBed.inject(SessionLockService);
+    const fixture = TestBed.createComponent(EntryEditor);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.session-veil')).toBeNull();
+
+    lock.state.set('blocked');
+    fixture.detectChanges();
+
+    const veil = el.querySelector<HTMLElement>('.session-veil');
+    expect(veil).toBeTruthy();
+    expect(veil?.getAttribute('role')).toBe('note');
+    expect(veil?.getAttribute('aria-disabled')).toBe('true');
+    expect(veil?.textContent).toContain('Editing paused — this project is open in another tab.');
+    // The tab group beneath is inert — keyboard AND pointer stay out.
+    expect(el.querySelector('mat-tab-group')?.hasAttribute('inert')).toBe(true);
+    // The retry button names its action.
+    expect(veil?.textContent).toContain('Take over');
+  });
+
+  it('offers takeover from the veil and hides it while relinquishing', async () => {
+    const lock = TestBed.inject(SessionLockService);
+    const takeover = vi.spyOn(lock, 'takeover').mockResolvedValue();
+    const fixture = TestBed.createComponent(EntryEditor);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+
+    lock.state.set('blocked');
+    fixture.detectChanges();
+    (el.querySelector('.session-veil button') as HTMLButtonElement).click();
+    expect(takeover).toHaveBeenCalledTimes(1);
+
+    lock.state.set('relinquishing');
+    fixture.detectChanges();
+    const veil = el.querySelector<HTMLElement>('.session-veil');
+    expect(veil).toBeTruthy();
+    expect(veil?.querySelector('button')).toBeNull();
+  });
+
+  it('never veils a booting or editing tab', async () => {
+    const lock = TestBed.inject(SessionLockService);
+    const fixture = TestBed.createComponent(EntryEditor);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+
+    for (const state of ['idle', 'acquiring', 'held'] as const) {
+      lock.state.set(state);
+      fixture.detectChanges();
+      expect(el.querySelector('.session-veil')).toBeNull();
+      expect(el.querySelector('mat-tab-group')?.hasAttribute('inert')).toBe(false);
     }
   });
 });

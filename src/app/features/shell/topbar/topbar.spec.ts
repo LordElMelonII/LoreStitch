@@ -9,6 +9,7 @@ import { createEmptyEntry } from '../../../core/models/lorebook.model';
 import { ProjectWorkspace } from '../../../core/models/project.model';
 import { StorageService } from '../../../core/services/storage.service';
 import { WorkspaceService } from '../../../core/services/workspace.service';
+import { SessionLockService } from '../../../core/services/session-lock.service';
 import { ResponsiveOverlayService } from '../../../shared/services/responsive-overlay.service';
 import { LinterDialog } from '../../linter/linter-dialog';
 import { ProjectActionsService } from '../project-actions.service';
@@ -494,6 +495,55 @@ describe('Topbar', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.save-error')).toBeTruthy();
   });
+  // -------------------------------------------------------------------------
+  // Read-only session pill (task 11 §3.3, checkpoint 11-1)
+  // -------------------------------------------------------------------------
+
+  it('renders the read-only pill while blocked or lost and retries takeover on click', async () => {
+    const lock = TestBed.inject(SessionLockService);
+    const takeover = vi.spyOn(lock, 'takeover').mockResolvedValue();
+    workspace.activeProject.set(projectOf([], { title: 'Held' }));
+    await createTopbar();
+    fixture.detectChanges();
+
+    // Editable tab: no pill in the DOM at all (@if-removed, never hidden).
+    expect((fixture.nativeElement as HTMLElement).querySelector('.read-only-pill')).toBeNull();
+
+    lock.state.set('blocked');
+    fixture.detectChanges();
+    const pill = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.read-only-pill');
+    expect(pill).toBeTruthy();
+    expect(pill?.textContent?.trim()).toContain('Read-only');
+    expect(pill?.getAttribute('aria-label')).toBe(
+      'Read-only — held by another tab. Select to try taking over.',
+    );
+    expect(pill?.querySelector('mat-icon')?.textContent?.trim()).toBe('lock');
+
+    pill?.click();
+    expect(takeover).toHaveBeenCalledTimes(1);
+
+    lock.state.set('lost');
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.read-only-pill')).toBeTruthy();
+
+    lock.state.set('held');
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.read-only-pill')).toBeNull();
+  });
+
+  it('keeps the read-only pill on the phone band (the save-error rule)', async () => {
+    const lock = TestBed.inject(SessionLockService);
+    desktop.setMobile(true);
+    workspace.activeProject.set(projectOf([], { title: 'Held' }));
+    await createTopbar();
+
+    lock.state.set('blocked');
+    fixture.detectChanges();
+    const pill = (fixture.nativeElement as HTMLElement).querySelector('.read-only-pill');
+    expect(pill).toBeTruthy();
+    expect(getComputedStyle(pill as HTMLElement).display).not.toBe('none');
+  });
+
 });
 
 describe('TokenMeter', () => {
@@ -657,4 +707,5 @@ describe('TokenMeter', () => {
     // openInspector lazy-loads the inspector dialog module first.
     await vi.waitFor(() => expect(dialogOpen).toHaveBeenCalledTimes(1), { timeout: 5000 });
   });
+
 });

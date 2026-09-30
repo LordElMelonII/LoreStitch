@@ -5,10 +5,13 @@ import { ANIMATION_MODULE_TYPE } from '@angular/core';
 import { MatIconRegistry } from '@angular/material/icon';
 import { MatSidenav } from '@angular/material/sidenav';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { ESCAPE } from '@angular/cdk/keycodes';
 import { Subject } from 'rxjs';
 import { App } from './app';
 import { WorkspaceService } from './core/services/workspace.service';
+import { SessionLockService } from './core/services/session-lock.service';
+import { projectOf } from '../testing/project-fixtures';
 import { LayoutService } from './shared/services/layout.service';
 import { GITHUB_ICON } from './shared/constants/github';
 import { BRAND_MARK_ICON } from './shared/constants/brand-mark';
@@ -1066,5 +1069,175 @@ describe('App', () => {
     app['entriesWidth'].set(400);
     await fixture.whenStable();
     expect(margins).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Session-lock shell wiring (task 11 §3.3, checkpoint 11-1): the takeover
+ * prompt on every fresh blocked entry, the blocked-attempt snackbar, and the
+ * reload-on-acquire contract. The lock service runs real (dependency-free)
+ * with its state driven directly — the state MACHINE is the service spec's
+ * territory; these pin the shell's reactions to its transitions.
+ */
+describe('App session lock wiring', () => {
+  let lock: SessionLockService;
+  let fixture: ComponentFixture<App>;
+  let workspace: WorkspaceService;
+
+  /** Same mount contract as the App describe's helper, on this block's fixture. */
+  async function createApp(): Promise<App> {
+    fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    return fixture.componentInstance;
+  }
+
+  beforeEach(async () => {
+    // Side-effect installs only: this block never reads the stub handles.
+    installStorageStub();
+    installViewportStub();
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' }],
+    }).compileComponents();
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'github',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
+    );
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'lorestitch-mark',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(BRAND_MARK_ICON),
+    );
+    workspace = TestBed.inject(WorkspaceService);
+    lock = TestBed.inject(SessionLockService);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  afterEach(() => {
+    if (nativeStorage) {
+      Object.defineProperty(window, 'localStorage', nativeStorage);
+    }
+    lock.state.set('idle');
+    // jsdom shares one document across a spec file: drop any overlay DOM a
+    // test left open (prompt panes, snackbars) so later tests start clean.
+    document.querySelector('.cdk-overlay-container')?.remove();
+  });
+
+  /** Dialog action button inside the open takeover prompt, by trimmed label. */
+  function promptButton(label: string): HTMLButtonElement {
+    const match = [
+      ...document.querySelectorAll<HTMLButtonElement>('mat-dialog-actions button'),
+    ].find((b) => b.textContent?.trim() === label);
+    assert(match);
+    return match;
+  }
+
+  /**
+   * Waits out the prompt's lazy import + open and returns once rendered. The
+   * explicit detectChanges per iteration is required: in zoneless unit tests
+   * a bare timer never schedules a change-detection pass, so the transition
+   * effect (and with it the dialog) would never run.
+   */
+  async function waitForPrompt(): Promise<void> {
+    for (let i = 0; i < 50; i++) {
+      fixture.detectChanges();
+      if (document.querySelector('app-confirm-dialog')) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('takeover prompt never opened');
+  }
+
+  it('opens the takeover prompt with the approved copy on a fresh blocked entry', async () => {
+    workspace.activeProject.set(projectOf([], { id: 'locked-1', title: 'Field Notes' }));
+    await createApp();
+
+    lock.state.set('blocked');
+    await waitForPrompt();
+
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('Project open in another tab');
+    expect(text).toContain('“Field Notes” is being edited in another tab');
+    expect(text).toContain('Take over');
+    expect(text).toContain('Stay read-only');
+  });
+
+  it('confirming the prompt hands off to takeover; dismissal keeps the tab read-only', async () => {
+    const takeover = vi.spyOn(lock, 'takeover').mockResolvedValue();
+    workspace.activeProject.set(projectOf([], { id: 'locked-2' }));
+    await createApp();
+    lock.state.set('blocked');
+    await waitForPrompt();
+
+    promptButton('Take over').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(takeover).toHaveBeenCalledTimes(1);
+
+    // A fresh blocked streak prompts again (checkpoint 11-1: every fresh
+    // open), and dismissing it never triggers the handshake. Each transition
+    // gets its own CD pass so the effect observes them one at a time.
+    lock.state.set('idle');
+    fixture.detectChanges();
+    lock.state.set('blocked');
+    await waitForPrompt();
+    promptButton('Stay read-only').click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(takeover).toHaveBeenCalledTimes(1);
+    // Staying blocked never re-prompts: pulses surface as the snackbar only.
+    lock.pulseBlockedAttempt();
+    fixture.detectChanges();
+    expect(document.querySelectorAll('app-confirm-dialog')).toHaveLength(0);
+  });
+
+  it('reloads the active project when the lock lands held after blocked or lost', async () => {
+    const openProject = vi.spyOn(workspace, 'openProject').mockResolvedValue();
+    workspace.activeProject.set(projectOf([], { id: 'locked-3' }));
+    await createApp();
+
+    lock.state.set('blocked');
+    fixture.detectChanges();
+    lock.state.set('held');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(openProject).toHaveBeenCalledWith('locked-3');
+
+    // The re-probe recovery path (lost → held) reloads too, and a plain
+    // acquire (idle → held, the every-boot case) never does.
+    openProject.mockClear();
+    lock.state.set('lost');
+    fixture.detectChanges();
+    lock.state.set('held');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(openProject).toHaveBeenCalledWith('locked-3');
+
+    // The plain-acquire control needs its own baseline: leg 2's expected
+    // call above would otherwise count against the final "never" pin.
+    openProject.mockClear();
+    lock.state.set('idle');
+    fixture.detectChanges();
+    lock.state.set('held');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(openProject).not.toHaveBeenCalled();
+  });
+
+  it('snackbars every blocked write attempt pulse', async () => {
+    const open = vi.spyOn(TestBed.inject(MatSnackBar), 'open');
+    workspace.activeProject.set(projectOf([]));
+    await createApp();
+
+    lock.pulseBlockedAttempt();
+    fixture.detectChanges();
+    lock.pulseBlockedAttempt();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledWith('Read-only — this project is held by another tab', 'OK', {
+      duration: 3000,
+    });
   });
 });

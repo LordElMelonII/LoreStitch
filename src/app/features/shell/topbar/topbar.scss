@@ -85,6 +85,41 @@
     flex: 1;
   }
 
+  // Read-only session pill (task 11 §3.3, checkpoint 11-1): the project-badge
+  // look made interactive. 40px tall keeps the Material toolbar touch-target
+  // ergonomics (the icon buttons sit at 40/48); the lock glyph rides the
+  // self-hosted subset like every other ligature.
+  .read-only-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    min-height: 40px;
+    padding: 4px 12px;
+    border: none;
+    border-radius: var(--mat-sys-corner-full);
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-label-large);
+    cursor: pointer;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      line-height: 1;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--mat-sys-primary);
+      outline-offset: 2px;
+    }
+
+    &:hover {
+      background: var(--mat-sys-surface-container-highest);
+    }
+  }
+
   // Save-failure marker: fixed-size so the truncating project badge absorbs
   // any squeeze on narrow bars, never the other way around.
   .save-error {
