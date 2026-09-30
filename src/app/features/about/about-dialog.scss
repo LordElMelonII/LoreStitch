@@ -29,8 +29,9 @@
 }
 
 .app-icon {
-  color: var(--mat-sys-primary);
-  font-size: 34px;
+  // The mark carries its own brand color (#a40, fixed in the SVG literal —
+  // see shared/constants/brand-mark.ts); it must not follow
+  // --mat-sys-primary like a font glyph would.
   width: 34px;
   height: 34px;
 }

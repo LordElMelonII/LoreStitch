@@ -1,8 +1,11 @@
 import { TestBed } from '@angular/core/testing';
+import { DomSanitizer } from '@angular/platform-browser';
+import { MatIconRegistry } from '@angular/material/icon';
 import { createEmptyBook, createEmptyEntry } from '../../../core/models/lorebook.model';
 import { ProjectWorkspace } from '../../../core/models/project.model';
 import { WorkspaceService } from '../../../core/services/workspace.service';
 import { ProjectActionsService } from '../project-actions.service';
+import { BRAND_MARK_ICON } from '../../../shared/constants/brand-mark';
 import { WelcomeScreen } from './welcome-screen';
 
 function savedProject(id: string, title: string, entryCount: number): ProjectWorkspace {
@@ -53,6 +56,12 @@ describe('WelcomeScreen', () => {
       });
     }
     TestBed.configureTestingModule({ imports: [WelcomeScreen] });
+    // The hero glyph is the inlined registry literal (see app.config); unit
+    // tests bypass the app initializer, so register it directly here.
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'lorestitch-mark',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(BRAND_MARK_ICON),
+    );
     workspace = TestBed.inject(WorkspaceService);
     actions = TestBed.inject(ProjectActionsService);
     // Allow the workspace's async init() to settle.

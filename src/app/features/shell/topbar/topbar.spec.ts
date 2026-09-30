@@ -13,6 +13,7 @@ import { ResponsiveOverlayService } from '../../../shared/services/responsive-ov
 import { LinterDialog } from '../../linter/linter-dialog';
 import { ProjectActionsService } from '../project-actions.service';
 import { GITHUB_ICON } from '../../../shared/constants/github';
+import { BRAND_MARK_ICON } from '../../../shared/constants/brand-mark';
 import { AboutDialog } from '../../about/about-dialog';
 import { Topbar } from './topbar';
 import { TokenMeter } from './token-meter';
@@ -59,6 +60,10 @@ describe('Topbar', () => {
       'github',
       TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
     );
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'lorestitch-mark',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(BRAND_MARK_ICON),
+    );
     workspace = TestBed.inject(WorkspaceService);
     // Allow the workspace's async init() to settle.
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -70,6 +75,8 @@ describe('Topbar', () => {
 
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('.brand-name')?.textContent).toContain('LoreStitch');
+    // The brand glyph is the registered SVG mark, not a font ligature.
+    expect(el.querySelector('.brand-icon svg')).toBeTruthy();
     expect(el.querySelector('.no-project')?.textContent).toContain('No project open');
     // Welcome-screen affordances: GitHub link and theme menu are reachable.
     expect(el.querySelector('[aria-label="GitHub repository"]')).toBeTruthy();

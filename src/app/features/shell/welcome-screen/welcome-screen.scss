@@ -9,10 +9,11 @@
   text-align: center;
 
   .welcome-icon {
-    font-size: 64px;
+    // The mark carries its own brand color (#a40, fixed in the SVG literal —
+    // see shared/constants/brand-mark.ts); it must not follow
+    // --mat-sys-primary like a font glyph would.
     width: 64px;
     height: 64px;
-    color: var(--mat-sys-primary);
     opacity: 0.85;
   }
 

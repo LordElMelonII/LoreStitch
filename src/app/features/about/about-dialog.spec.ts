@@ -9,6 +9,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { DomSanitizer } from '@angular/platform-browser';
 import { APP_BUILD_INFO, type BuildInfo } from '../../core/models/build-info';
 import { GITHUB_ICON } from '../../shared/constants/github';
+import { BRAND_MARK_ICON } from '../../shared/constants/brand-mark';
 import { AboutDialog } from './about-dialog';
 
 /**
@@ -98,6 +99,10 @@ describe('AboutDialog', () => {
     TestBed.inject(MatIconRegistry).addSvgIconLiteral(
       'github',
       TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
+    );
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'lorestitch-mark',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(BRAND_MARK_ICON),
     );
     fixture = TestBed.createComponent(AboutDialog);
     await fixture.whenStable();

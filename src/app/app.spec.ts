@@ -11,6 +11,7 @@ import { App } from './app';
 import { WorkspaceService } from './core/services/workspace.service';
 import { LayoutService } from './shared/services/layout.service';
 import { GITHUB_ICON } from './shared/constants/github';
+import { BRAND_MARK_ICON } from './shared/constants/brand-mark';
 import {
   DESKTOP_BREAKPOINT_QUERY,
   MOBILE_BREAKPOINT_QUERY,
@@ -208,6 +209,10 @@ describe('App', () => {
     TestBed.inject(MatIconRegistry).addSvgIconLiteral(
       'github',
       TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
+    );
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'lorestitch-mark',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(BRAND_MARK_ICON),
     );
     workspace = TestBed.inject(WorkspaceService);
     layout = TestBed.inject(LayoutService);

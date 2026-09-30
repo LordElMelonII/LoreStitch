@@ -11,6 +11,7 @@ import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { MAT_TOOLTIP_DEFAULT_OPTIONS } from '@angular/material/tooltip';
 import { MatIconRegistry } from '@angular/material/icon';
 import { GITHUB_ICON } from './shared/constants/github';
+import { BRAND_MARK_ICON } from './shared/constants/brand-mark';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -46,6 +47,11 @@ export const appConfig: ApplicationConfig = {
       registry.addSvgIconLiteral(
         'github',
         inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
+      );
+      // The brand mark (top bar): same literal strategy as the GitHub mark.
+      registry.addSvgIconLiteral(
+        'lorestitch-mark',
+        inject(DomSanitizer).bypassSecurityTrustHtml(BRAND_MARK_ICON),
       );
     }),
   ],
