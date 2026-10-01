@@ -11,7 +11,7 @@
 import { type StKeyMatchRange } from '../../../core/models/st-key-match';
 
 /** Paint of one rendered preview segment. */
-export type HighlightTone = 'none' | 'primary' | 'secondary';
+type HighlightTone = 'none' | 'primary' | 'secondary';
 
 /** One contiguous render span of the highlighted preview. */
 export interface TextSegment {
@@ -20,7 +20,7 @@ export interface TextSegment {
 }
 
 /** One key's match ranges, tagged with the tone its hits paint. */
-export interface KeyHighlightRanges {
+interface KeyHighlightRanges {
   readonly tone: 'primary' | 'secondary';
   /** Ranges in document order, exactly as `findStKeyMatches` returned them. */
   readonly ranges: readonly StKeyMatchRange[];

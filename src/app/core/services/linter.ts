@@ -328,7 +328,7 @@ type MutableLintProgress = { -readonly [P in keyof LintProgress]: LintProgress[P
  * all state, so any sizes — including the pathological 1-per-chunk — produce
  * `lintBook`-identical output (pinned in linter.spec.ts).
  */
-export interface LintChunkSizes {
+interface LintChunkSizes {
   /** Entry-scoped-rule entries processed per step (default 200). */
   entriesPerStep?: number;
   /** Recursion sources processed per step (default 16). */
@@ -579,7 +579,7 @@ function* lintPassChunks(
  * to `lintBook`'s for the same input+options regardless of chunk sizes; the
  * sync and chunked drivers are just two stepping cadences over this engine.
  */
-export interface LintPass {
+interface LintPass {
   /**
    * Advances one chunk of work; returns true once the pass is complete
    * (idempotently — a step after completion is a no-op returning true).

@@ -12,13 +12,13 @@
  */
 
 /** A named bullet group within a release ("Highlights", "Fixed", …). */
-export interface ChangelogSection {
+interface ChangelogSection {
   readonly title: string;
   readonly items: readonly string[];
 }
 
 /** One `##` release heading with everything under it. */
-export interface ChangelogRelease {
+interface ChangelogRelease {
   readonly version: string;
   /** Free-form date text as written in the heading; null when omitted. */
   readonly date: string | null;

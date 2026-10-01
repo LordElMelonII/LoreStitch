@@ -112,7 +112,7 @@ export function extText(value: unknown): string {
 }
 
 /** How a form section projects one workspace entry into its form model. */
-export interface EntrySliceOptions<M> {
+interface EntrySliceOptions<M> {
   /** The workspace-owned entry under edit (a component input signal). */
   source: Signal<CharacterBookEntry | undefined>;
   /** Slice shown before the entry input is bound; never displayed. */

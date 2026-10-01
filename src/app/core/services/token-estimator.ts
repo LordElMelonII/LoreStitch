@@ -70,7 +70,7 @@ export function estimateEntryTokens(entry: CharacterBookEntry): number {
 }
 
 /** One always-active entry's share of the constant token footprint. */
-export interface TokenFootprintItem {
+interface TokenFootprintItem {
   entryId: number;
   title: string;
   tokens: number;

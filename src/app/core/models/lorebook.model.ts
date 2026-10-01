@@ -200,7 +200,7 @@ export const ST_TRIGGER_OPTIONS: readonly { value: StTrigger; label: string; hin
 ];
 
 /** Native per-entry character activation filter (SillyTavern's `characterFilter`). */
-export interface StCharacterFilter {
+interface StCharacterFilter {
   isExclude: boolean;
   names: string[];
   tags: string[];
@@ -816,7 +816,7 @@ export function entryTitle(entry: CharacterBookEntry): string {
  * never polluted and the values round-trip losslessly through the unknown
  * extension-key path of the converters.
  */
-export const LORESTITCH_TAGS_EXTENSION_KEY = 'lorestitch_tags';
+const LORESTITCH_TAGS_EXTENSION_KEY = 'lorestitch_tags';
 
 /** The entry's author-assigned tags (trimmed, de-duplicated, in order). */
 export function entryTags(entry: CharacterBookEntry): string[] {
@@ -1184,7 +1184,7 @@ export interface EntryExtensions {
 export type EntryExtensionKey = keyof EntryExtensions;
 
 /** `CharacterBookEntry.extensions` as the native SillyTavern conversion sees it. */
-export type StNativeExtensions = EntryExtensions & Record<string, unknown>;
+type StNativeExtensions = EntryExtensions & Record<string, unknown>;
 
 /**
  * Reads a match flag that was normalized in a later version: books imported

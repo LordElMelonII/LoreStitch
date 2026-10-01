@@ -27,7 +27,7 @@
 import { ST_LOGIC, entryTriggerState, type CharacterBookEntry } from './lorebook.model';
 
 /** The entry-level outcome bucket for the verdict row. */
-export type StTriggerOutlook = 'inserted' | 'blocked' | 'probabilistic' | 'inconclusive';
+type StTriggerOutlook = 'inserted' | 'blocked' | 'probabilistic' | 'inconclusive';
 
 export interface StTriggerVerdict {
   readonly outlook: StTriggerOutlook;

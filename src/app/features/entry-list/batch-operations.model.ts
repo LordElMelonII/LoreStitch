@@ -20,13 +20,13 @@ import {
  */
 
 /** Insertion-order edit: set every entry to `amount`, or shift it by `amount`. */
-export interface OrderOperation {
+interface OrderOperation {
   mode: 'set' | 'shift';
   amount: number;
 }
 
 /** Per-entry scan-depth override: set a value, or clear back to "inherit". */
-export interface ScanDepthOperation {
+interface ScanDepthOperation {
   mode: 'set' | 'clear';
   value: number;
 }

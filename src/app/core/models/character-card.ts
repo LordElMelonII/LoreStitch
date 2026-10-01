@@ -58,7 +58,7 @@ export function isCardChunkKeyword(value: unknown): value is CardChunkKeyword {
  * Non-fatal open finding, surfaced on `OpenedCard.warnings` — the card
  * opened, but the caller should tell the user about it.
  */
-export interface CardWarning {
+interface CardWarning {
   readonly reason: 'multiple-card-chunks' | 'truncated-png';
   readonly message: string;
   /** Set for `multiple-card-chunks`: the duplicated keyword. */
@@ -800,7 +800,7 @@ export function openCardJson(text: string): OpenedCard | CardError {
 // ============================================================================
 
 /** Structural subset of the card shell that remembers PNG chunk payloads. */
-export interface PngCardShellSubset {
+interface PngCardShellSubset {
   /** The preferred card JSON payload text (updated in place). */
   readonly cardJson: string;
   /** The keyword of the chunk `cardJson` came from. */
@@ -810,7 +810,7 @@ export interface PngCardShellSubset {
 }
 
 /** Per-keyword updated card JSON texts, ready for `embedCardPayloads`. */
-export interface CardChunkPayloads {
+interface CardChunkPayloads {
   readonly chara?: string;
   readonly ccv3?: string;
 }

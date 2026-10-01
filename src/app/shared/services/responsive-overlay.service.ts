@@ -15,7 +15,7 @@ import { LayoutService } from './layout.service';
  * `data` key nested inside `dialog` or `sheetConfig` is ignored, so the two
  * containers can never disagree about the payload they inject.
  */
-export interface ResponsiveOverlayConfig<D> {
+interface ResponsiveOverlayConfig<D> {
   /** Payload injected into the opened component via the container's data token. */
   data?: D;
   /**

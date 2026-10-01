@@ -47,7 +47,7 @@ export const EXAMPLE_CARD_JSON = join(process.cwd(), 'example_card', 'example_ca
 /**
  * The card rows' menu titles (checkpoint 15-1 copy, verbatim everywhere).
  */
-export type CardExportTitle = 'Character card (PNG)' | 'Character card (JSON)';
+type CardExportTitle = 'Character card (PNG)' | 'Character card (JSON)';
 
 /**
  * Asserts the project-open shell appeared: the top bar's More-actions trigger
@@ -79,7 +79,7 @@ export async function importLorebook(page: Page, path: string): Promise<void> {
  * `role="dialog"` + the `aria-label` the opener sets, so one locator resolves
  * the pane in either form. Scope button/row assertions to this locator.
  */
-export function repairDialog(page: Page): Locator {
+function repairDialog(page: Page): Locator {
   return page.getByRole('dialog', { name: 'Book repair' });
 }
 
@@ -331,7 +331,7 @@ export async function readEntryContent(page: Page): Promise<string> {
 // -----------------------------------------------------------------------------
 
 /** The whole DOM contract of one entry row's key strip, read in one pass. */
-export interface KeyStripMeasure {
+interface KeyStripMeasure {
   /** Visible key chips — state and counter chips excluded. */
   readonly keyChipCount: number;
   /** The `+N` counter's text, or null while every key fits (no counter). */
@@ -445,7 +445,7 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /** A decoded card payload of an exported card PNG: keyword + base64 card JSON. */
-export interface ExportedCardChunk {
+interface ExportedCardChunk {
   readonly keyword: string;
   /** The tEXt payload text — standard base64 of the card JSON. */
   readonly base64: string;

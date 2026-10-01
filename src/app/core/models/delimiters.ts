@@ -212,7 +212,7 @@ export function wrapContent(
 }
 
 /** Options for name-matched delimiter stripping (see `unwrapContent`). */
-export interface UnwrapOptions {
+interface UnwrapOptions {
   /**
    * Accepted tag/bracket wrapper names (case-insensitive, sanitized before
    * comparison). When omitted, any detected wrapper is stripped (legacy).

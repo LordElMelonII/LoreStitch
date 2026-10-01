@@ -1,6 +1,6 @@
 import { Service, effect, signal } from '@angular/core';
 
-export type ThemeMode = 'system' | 'light' | 'dark';
+type ThemeMode = 'system' | 'light' | 'dark';
 
 const THEME_KEY = 'lorestitch-theme';
 

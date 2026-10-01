@@ -7,7 +7,7 @@
  */
 
 /** A single credited open-source dependency. */
-export interface OpenSourceDependency {
+interface OpenSourceDependency {
   readonly name: string;
   /** SPDX license identifier. */
   readonly license: string;
@@ -18,7 +18,7 @@ export interface OpenSourceDependency {
 }
 
 /** Dependencies grouped the way the About dialog renders them. */
-export interface OpenSourceGroup {
+interface OpenSourceGroup {
   readonly title: string;
   readonly dependencies: readonly OpenSourceDependency[];
 }

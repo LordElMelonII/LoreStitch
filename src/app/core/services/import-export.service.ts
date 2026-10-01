@@ -58,7 +58,7 @@ export interface ParsedImport {
  * JSON verbatim (the export swap must keep its key order) or the PNG bytes
  * (the export shell).
  */
-export interface ImportSourcePayload {
+interface ImportSourcePayload {
   /** Verbatim file text of a text import. */
   rawText?: string;
   /** PNG bytes of a card-image import. */
@@ -71,7 +71,7 @@ export interface ImportSourcePayload {
  * per-reason copy; the plain `parseImport` entry folds the same branch into
  * `null` (its historical "unsupported" outcome).
  */
-export type CardImportParse =
+type CardImportParse =
   | { readonly status: 'ok'; readonly parsed: ParsedImport }
   | { readonly status: 'card-error'; readonly error: CardError };
 
@@ -83,7 +83,7 @@ export type CardImportParse =
  */
 export type CardExportFailureReason = CardErrorReason | 'no-shell' | 'no-image';
 
-export interface CardExportFailure {
+interface CardExportFailure {
   readonly reason: CardExportFailureReason;
   readonly message: string;
 }
@@ -133,7 +133,7 @@ export function cardPngExportAvailable(project: ProjectWorkspace | null): boolea
   return shell !== undefined && shell.pngBytes !== undefined && shell.pngKeyword !== undefined;
 }
 
-export interface MarkdownDigestOptions {
+interface MarkdownDigestOptions {
   includeDisabled?: boolean;
 }
 

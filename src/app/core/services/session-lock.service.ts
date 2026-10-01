@@ -38,7 +38,7 @@ export function sessionLockName(projectId: string): string {
 }
 
 /** Hooks registered at attach; `flush` runs before any release (§3.1). */
-export interface SessionLockHooks {
+interface SessionLockHooks {
   flush: () => Promise<void> | void;
 }
 

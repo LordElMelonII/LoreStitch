@@ -15,8 +15,8 @@ interface LoreStitchDb extends DBSchema {
   };
 }
 
-export const DB_NAME = 'lorestitch';
-export const DB_VERSION = 1;
+const DB_NAME = 'lorestitch';
+const DB_VERSION = 1;
 export const SAVE_DEBOUNCE_MS = 400;
 
 /** Key under `appState` remembering the most recently opened project. */

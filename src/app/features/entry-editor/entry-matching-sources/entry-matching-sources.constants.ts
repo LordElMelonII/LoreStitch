@@ -1,7 +1,7 @@
 import type { EntryExtensionKey } from '../../../core/models/lorebook.model';
 
 /** Extension keys of the per-entry "additional matching sources" flags. */
-export type MatchSourceKey = Extract<
+type MatchSourceKey = Extract<
   EntryExtensionKey,
   | 'match_character_description'
   | 'match_character_personality'
@@ -12,7 +12,7 @@ export type MatchSourceKey = Extract<
 >;
 
 /** One checkbox of the "additional matching sources" chip row. */
-export interface MatchSourceOption {
+interface MatchSourceOption {
   key: MatchSourceKey;
   label: string;
   hint: string;

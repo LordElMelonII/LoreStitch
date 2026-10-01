@@ -69,7 +69,7 @@ export interface TabStripFrameScheduler {
 }
 
 /** Construction options for `TabStripDragScroller`'s momentum tail. */
-export interface TabStripDragOptions {
+interface TabStripDragOptions {
   /** Scheduler the fling runs on; defaults to the browser's rAF (SSR: none). */
   scheduler?: TabStripFrameScheduler;
   /**
