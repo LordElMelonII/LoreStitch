@@ -161,3 +161,34 @@ viewport. Paths posted in the phase report to the user.
 **Next**: P4 — branch-final sweep (three-project Playwright matrix one
 `--project=` at a time, closing `CI=true npm test -- --watch=false --coverage`
 + `npm run lint`), ledger final entry + README status, push branch, STOP.
+
+## Phase P4 — Branch-final sweep + push (orchestrator)
+
+**Status**: ✅ complete — sweep green, branch pushed, stopped (no merge — user
+tests first).
+
+**Sweep results** (all run at HEAD `76acbca`, one project at a time):
+- `npx playwright test --project=desktop-chrome`: 91 passed / 20 skipped
+  (4.2 m) — green.
+- `npx playwright test --project=mobile-chrome`: 54 passed / 57 skipped
+  (3.4 m) — green.
+- `npx playwright test --project=mobile-safari`: 52 passed / 59 skipped
+  (4.8 m) — green. (Large skip counts are by design — phone-pinned tests skip
+  on desktop and vice versa.)
+- `CI=true npm test -- --watch=false --coverage`: exit 0, 64 files / 1485
+  tests passed.
+- `npm run lint`: green ("All files pass linting").
+
+**Branch history** (linear, off `develop` @ `5e142ac`):
+- `f08c1a0` docs(next_tasks): plan task 25 pwa update prompt (P0)
+- `9b362d4` docs(next_tasks): task 25 phase P0 progress
+- `f3c3d30` feat(pwa): prompt reload when a new version is ready (P1)
+- `b9e4a9b` docs(next_tasks): task 25 phase P1 progress
+- `e8cfdf8` refactor(pwa): satisfy no-empty-function in the update-check catch (P2)
+- `3e1b0a6` docs(next_tasks): task 25 phase P2 progress
+- `76acbca` docs(next_tasks): task 25 phase P3 progress
+- final docs commit: phase P4 progress + README/plan status sync (this commit)
+
+**Next**: USER gate — test the pushed branch; `git merge --ff-only` into
+`develop` only on the explicit go (then the archival pass moves this plan +
+ledger into `archive/`).

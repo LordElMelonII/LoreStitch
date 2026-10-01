@@ -24,7 +24,7 @@ level pending the archival pass.
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
-| 25 | [25-pwa-update-prompt.md](./25-pwa-update-prompt.md) | `SwUpdate` `VERSION_READY` → flush-first reload snackbar in the shell + visible-transition re-check; no new files (session-lock wiring precedent) | ✅ Ready — slotted by user decision 2026-10-01 (preempts the queue, task-12 precedent) |
+| 25 | [25-pwa-update-prompt.md](./25-pwa-update-prompt.md) | `SwUpdate` `VERSION_READY` → flush-first reload snackbar in the shell + visible-transition re-check; no new files (session-lock wiring precedent). Real-SW capture script at `__screenshots__/25-pwa-update-prompt/capture.mjs` doubles as manual deploy-hygiene regression tooling (cache-header mistakes, broken hash churn) | 🟢 Implemented on `feature/25-pwa-update-prompt` (pushed 2026-10-01, awaiting user test; ledger [25-PROGRESS.md](./25-PROGRESS.md)) |
 
 ### Queue (sketched during evaluation; planned when their turn comes)
 
