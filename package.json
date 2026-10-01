@@ -40,7 +40,6 @@
     "@angular/compiler-cli": "^22.1.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
-    "@types/diff": "^7.0.2",
     "@types/node": "^24.13.5",
     "@vitest/browser-playwright": "^4.1.11",
     "@vitest/coverage-v8": "^4.1.11",
