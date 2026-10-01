@@ -987,4 +987,226 @@ describe('EntryList', () => {
     pointer(checkboxAt(0), 'pointerdown', { pointerType: 'mouse' });
     expect(contextmenu().defaultPrevented).toBe(false);
   });
+
+  // -------------------------------------------------------------------------
+  // Keyboard model (Task 10 §3.4): roving tabindex, row activation guard,
+  // keyboard selection and reorder.
+  // -------------------------------------------------------------------------
+
+  it('renders roving tabindex: the active row is the one Tab stop, aria-current on it', async () => {
+    await createList([entry(0), entry(1), entry(2)]);
+    workspace.openEntry(1);
+    fixture.detectChanges();
+
+    const rows = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+      '.entry-item',
+    );
+    expect(rows[0]?.getAttribute('tabindex')).toBe('-1');
+    expect(rows[1]?.getAttribute('tabindex')).toBe('0');
+    expect(rows[1]?.getAttribute('aria-current')).toBe('true');
+    expect(rows[2]?.getAttribute('tabindex')).toBe('-1');
+    expect(rows[2]?.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('opens from the row itself on Space/Enter, never from a nested control', async () => {
+    const list = await createList([entry(0)]);
+    fixture.detectChanges();
+    const openSpy = vi.spyOn(workspace, 'openEntry');
+    const row = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.entry-item');
+    assert(row);
+    const input = row.querySelector('input');
+    assert(input);
+
+    // Suffixed (keydown.enter)/(keydown.space) bindings do not answer
+    // dispatched KeyboardEvents in the jsdom unit environment (they do in a
+    // real browser — probe-verified 2026-10-01 on the dev server; the real
+    // wiring is e2e-covered in P5). Drive the handler directly with the two
+    // events it can receive: a checkbox keydown (target = the nested input,
+    // bubbled) and a row keydown (target = the row itself).
+    const checkboxEvent = {
+      target: input,
+      currentTarget: row,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+
+    // The live bubbling bug (Task 10 §1.2): Space on the row checkbox used to
+    // reach the row's (keydown.space) binding and open the editor too. The
+    // guard ignores keydowns whose target is not the row.
+    list['onRowKeydown'](checkboxEvent, itemAt(list, 0));
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(checkboxEvent.preventDefault).not.toHaveBeenCalled();
+
+    // Enter from a nested control is ignored the same way.
+    list['onRowKeydown']({ ...checkboxEvent } as unknown as KeyboardEvent, itemAt(list, 0));
+    expect(openSpy).not.toHaveBeenCalled();
+
+    // …while the row itself still opens on both keys (Space is also claimed
+    // so it never scroll-squeaks past the handler).
+    const rowSpace = {
+      target: row,
+      currentTarget: row,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+    list['onRowKeydown'](rowSpace, itemAt(list, 0));
+    expect(rowSpace.preventDefault).toHaveBeenCalled();
+    expect(openSpy).toHaveBeenCalledWith(0);
+
+    const rowEnter = {
+      target: row,
+      currentTarget: row,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+    list['onRowKeydown'](rowEnter, itemAt(list, 0));
+    expect(rowEnter.preventDefault).toHaveBeenCalled();
+    expect(openSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('Ctrl+Space toggles the focused row and parks the keyboard cursor there', async () => {
+    const list = await createList([entry(0), entry(1)]);
+    fixture.detectChanges();
+
+    // DOM focus on row 1's checkbox: THAT row toggles (a focused checkbox in
+    // a non-active row is still the focused row).
+    checkboxInput(checkboxAt(1)).focus();
+    list.toggleFocusedSelection();
+    expect(list['selection']()).toEqual(new Set([1]));
+    expect(list['selectionAnchor']()).toBe(1); // plain-toggle anchor semantics
+
+    // No row focused: the active row answers.
+    checkboxInput(checkboxAt(1)).blur();
+    workspace.openEntry(0);
+    list.toggleFocusedSelection();
+    expect(list['selection']()).toEqual(new Set([0, 1]));
+  });
+
+  it('Shift+arrows extend with the exact shift+click range math (anchor never moves)', async () => {
+    const list = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    workspace.openEntry(0);
+
+    // Keyboard path: anchor 0 (plain toggle via Ctrl+Space), extend down twice.
+    list.toggleFocusedSelection(); // no row focused → the active row answers
+    expect(list['selection']()).toEqual(new Set([0]));
+    list.extendSelection(1);
+    expect(list['selection']()).toEqual(new Set([0, 1]));
+    list.extendSelection(1);
+    expect(list['selection']()).toEqual(new Set([0, 1, 2]));
+    // The anchor stayed on row 0 through both extensions (task 20 D1).
+    expect(list['selectionAnchor']()).toBe(0);
+
+    // Mouse parity: the same anchor + gesture row through shift+click yields
+    // the same set.
+    list.clearSelection();
+    list['toggleRow'](itemAt(list, 0), true);
+    shiftClick(checkboxAt(2));
+    await settle();
+    expect(list['selection']()).toEqual(new Set([0, 1, 2]));
+
+    // Deselect branch, keyboard: the cursor parks on the selected end row
+    // (Ctrl+Space), then extending back applies the gesture row's new state
+    // over its whole range (shift+click parity — the anchor never moves).
+    checkboxInput(checkboxAt(2)).focus();
+    list.toggleFocusedSelection(); // row 2 was selected: toggles OFF, cursor+anchor → 2
+    expect(list['selection']()).toEqual(new Set([0, 1]));
+    list.extendSelection(-1); // gesture row 1: the 1..2 slice takes its deselected state
+    expect(list['selection']()).toEqual(new Set([0]));
+
+    // Clamped at the view's end: cursor sits on 1 after the extension, so one
+    // step re-selects the gesture row 2 (slice 2..2), and the next step —
+    // already at the last row — changes nothing.
+    list.extendSelection(1);
+    expect(list['selection']()).toEqual(new Set([0, 2]));
+    list.extendSelection(1); // 2 is the last row — clamped
+    expect(list['selection']()).toEqual(new Set([0, 2]));
+  });
+
+  it('navigates the active entry through the filtered order, clamped at the ends', async () => {
+    const list = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    workspace.openEntry(0);
+
+    list.navigate(1, false);
+    expect(workspace.activeTabId()).toBe(1);
+    list.navigate(1, false);
+    expect(workspace.activeTabId()).toBe(2);
+    list.navigate(1, false); // clamp — no wrap
+    expect(workspace.activeTabId()).toBe(2);
+    list.navigate(-1, false);
+    expect(workspace.activeTabId()).toBe(1);
+  });
+
+  it('moves the active entry by one visible position through the filtered view', async () => {
+    const list = await createList([
+      entry(0, { comment: 'Alpha' }),
+      entry(1, { comment: 'Hidden' }),
+      entry(2, { comment: 'Beta' }),
+      entry(3, { comment: 'Gamma' }),
+    ]);
+    workspace.openEntry(2); // Beta
+    list['filterModel'].set({ query: 'a' }); // view: Alpha, Beta, Gamma
+    await settleFilter();
+    expect(list['filtered']().map((i) => i.id)).toEqual([0, 2, 3]);
+
+    const moveSpy = vi.spyOn(workspace, 'moveEntry');
+    list.moveActive(1, false); // Beta over Gamma: tree indices 2 → 3
+    expect(moveSpy).toHaveBeenLastCalledWith(2, 3);
+    expect(workspace.activeTabId()).toBe(2); // stays active
+
+    // Back down the view: Beta over Gamma again (3 → 2), then over Alpha
+    // (2 → 0) — the translation re-derives both tree indices per step.
+    list.moveActive(-1, false);
+    list.moveActive(-1, false);
+    expect(moveSpy).toHaveBeenLastCalledWith(2, 0);
+
+    // Clamped at the visible ends: Beta now leads the view, one more step up
+    // changes nothing.
+    list.moveActive(-1, false);
+    expect(moveSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('falls back to tree order when the active entry is hidden by the filter', async () => {
+    const list = await createList([
+      entry(0, { comment: 'Alpha' }),
+      entry(1, { comment: 'Hidden A' }),
+      entry(2, { comment: 'Beta' }),
+    ]);
+    workspace.openEntry(1); // Hidden A — does not match the filter below
+    list['filterModel'].set({ query: 'beta' }); // view: [Beta]
+    await settleFilter();
+    expect(list['filtered']().map((i) => i.id)).toEqual([2]);
+
+    const moveSpy = vi.spyOn(workspace, 'moveEntry');
+    list.moveActive(-1, false); // tree order: 1 → 0
+    expect(moveSpy).toHaveBeenCalledWith(1, 0);
+    expect(workspace.activeTabId()).toBe(1);
+  });
+
+  it('moves DOM focus with navigate only when focus follows', async () => {
+    const list = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    workspace.openEntry(0);
+    fixture.detectChanges();
+
+    const rowOf = (id: number): HTMLElement => {
+      const row = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        `.entry-item[data-entry-id="${id}"]`,
+      );
+      assert(row);
+      return row;
+    };
+
+    // other-scope dispatch (editor): the active entry moves, focus untouched.
+    list.navigate(1, false);
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0); // the scroll/focus deferral windows
+    expect(workspace.activeTabId()).toBe(1);
+    expect(document.activeElement).not.toBe(rowOf(1));
+
+    // list-scope dispatch: focus moves to the reached row.
+    list.navigate(1, true);
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(workspace.activeTabId()).toBe(2);
+    expect(document.activeElement).toBe(rowOf(2));
+  });
 });

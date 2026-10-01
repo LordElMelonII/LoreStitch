@@ -1,0 +1,35 @@
+<div class="pane">
+  <header class="pane-header">
+    <h2 mat-dialog-title class="pane-title">
+      <mat-icon aria-hidden="true">keyboard</mat-icon>
+      Keyboard shortcuts
+    </h2>
+    <button
+      matIconButton
+      type="button"
+      class="pane-close"
+      (click)="close()"
+      matTooltip="Close"
+      aria-label="Close keyboard shortcuts"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </header>
+
+  <div class="pane-body">
+    <p class="hint">Mod means Ctrl on Windows and Linux, Cmd on macOS.</p>
+    @for (group of groups(); track group.title) {
+      <section class="help-group" [attr.aria-label]="group.title">
+        <h3>{{ group.title }}</h3>
+        <ul class="help-rows">
+          @for (entry of group.entries; track entry.action) {
+            <li class="help-row">
+              <kbd>{{ entry.chord }}</kbd>
+              <span class="desc">{{ entry.description }}</span>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  </div>
+</div>

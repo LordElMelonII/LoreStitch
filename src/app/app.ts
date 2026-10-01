@@ -33,6 +33,9 @@ import {
 import { LayoutService } from './shared/services/layout.service';
 import { ProjectActionsService } from './features/shell/project-actions.service';
 import { ResponsiveOverlayService } from './shared/services/responsive-overlay.service';
+import { KeyboardShortcutsService } from './shared/services/keyboard-shortcuts.service';
+import { type ShortcutAction, type ShortcutScope } from './core/models/shortcut-map';
+import { shortHash } from './core/services/vcs.service';
 import { EDIT_COMMIT_DEBOUNCE_MS } from './features/entry-editor/entry-editor.constants';
 
 /**
@@ -62,6 +65,20 @@ function clampEntriesWidth(value: number): number {
     return ENTRIES_WIDTH_DEFAULT;
   }
   return Math.min(ENTRIES_WIDTH_MAX, Math.max(ENTRIES_WIDTH_MIN, Math.round(value)));
+}
+
+/**
+ * The Mod+S snapshot's auto-message (Task 10 §3.3, checkpoint 10-1 locked
+ * copy): `Snapshot · <local yyyy-mm-dd hh:mm>` — a local-timestamp commit
+ * message that satisfies the commit form's own rules (required, ≤200
+ * trimmed) and renders verbatim in the history rows.
+ */
+function snapshotMessage(now = new Date()): string {
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  return (
+    `Snapshot · ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
+    `${pad(now.getHours())}:${pad(now.getMinutes())}`
+  );
 }
 
 /**
@@ -130,6 +147,8 @@ export class App {
   private readonly sessionLock = inject(SessionLockService);
   private readonly overlay = inject(ResponsiveOverlayService);
   private readonly snackBar = inject(MatSnackBar);
+  /** The global chord layer (Task 10 §3.2) — the shell is its one dispatcher. */
+  private readonly shortcuts = inject(KeyboardShortcutsService);
   /** The open takeover prompt, if any — one prompt per blocked streak. */
   private lockPrompt: ReturnType<ResponsiveOverlayService['openResponsive']> | null = null;
 
@@ -141,6 +160,7 @@ export class App {
   /** Children the shell forwards actions into (search dialog, batch pane). */
   private readonly topbar = viewChild(Topbar);
   private readonly entryList = viewChild(EntryList);
+  private readonly entryEditor = viewChild(EntryEditor);
 
   /**
    * Shell geometry the drawer focus/scroll reclaim works on: the pannable
@@ -251,6 +271,10 @@ export class App {
     // A mid-drag teardown must not leak the body-level drag chrome or a
     // stale drag state — the pointer capture itself dies with the element.
     this.destroyRef.onDestroy(() => this.endResizeDrag());
+
+    // The shortcut layer (Task 10 §3.2): the service owns the single DOCUMENT
+    // keydown listener and the guard table; the shell owns every action.
+    this.shortcuts.register((action, scope) => this.runShortcutAction(action, scope));
 
     // Re-apply the per-class defaults when the window class changes. User
     // toggles stay sticky until the layout class itself flips.
@@ -816,5 +840,133 @@ export class App {
    */
   private refocusEntriesPaneAfterSelectionCollapse(): void {
     this.focusPaneOnPhone(this.entriesPaneEl());
+  }
+
+  // -------------------------------------------------------------------------
+  // Keyboard shortcuts (Task 10 §3.3): the shell-side half of the chord
+  // dispatch. The service resolves chords and hands over (action, scope);
+  // this switch owns every action — workspace actions route directly, view
+  // actions through the `viewChild` refs.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Routes a resolved shortcut to the component or service that owns it —
+   * the exhaustive `never`-switch shape of `runBarAction`. Early guard: no
+   * active project (welcome screen) ⇒ silent no-op — the chords are project
+   * actions and the welcome screen has nothing for them to act on.
+   *
+   * `scope` (Task 10 §3.2's sanctioned second argument) only matters to the
+   * list actions: navigation/reorder from `list` scope moves DOM focus with
+   * the row; from `other` scope (Alt+arrows while in the editor) focus stays
+   * untouched.
+   */
+  protected runShortcutAction(action: ShortcutAction, scope: ShortcutScope): void {
+    // Silent no-op on the welcome screen. `show-help` is included: the
+    // topbar's help entry is project-gated with it, and the help catalog
+    // documents project actions.
+    if (this.workspace.activeProject() === null) {
+      return;
+    }
+    switch (action) {
+      case 'commit-snapshot': {
+        if (!this.workspace.hasUnsavedChanges()) {
+          // A clean tree would mint a new commit id for an unchanged book —
+          // history noise (Task 10 §3.3).
+          this.snackBar.open('Nothing to commit.', 'OK', { duration: 3000 });
+          break;
+        }
+        void this.workspace.commit(snapshotMessage()).then((committed) => {
+          if (!committed) {
+            // Blocked/lost lock: `commit` already pulsed `blockedAttempt`,
+            // and the shell's read-only snackbar fires through that effect.
+            return;
+          }
+          const head = this.workspace.activeProject()?.headCommitId ?? '';
+          this.snackBar.open(`Committed ${shortHash(head)}.`, 'OK', { duration: 3000 });
+        });
+        break;
+      }
+      case 'new-entry':
+        // `addEntry` appends and opens the tab; the name field of the ACTIVE
+        // tab body takes focus one render pass later (EntryEditor's
+        // after-render effect).
+        this.workspace.addEntry();
+        this.entryEditor()?.focusNameField();
+        break;
+      case 'focus-filter':
+        // Drawer closed (phones) ⇒ no-op: the chord set serves
+        // keyboard-carrying viewports.
+        if (this.leftOpened()) {
+          this.entryList()?.focusFilter();
+        }
+        break;
+      case 'nav-prev':
+        this.entryList()?.navigate(-1, scope === 'list');
+        break;
+      case 'nav-next':
+        this.entryList()?.navigate(1, scope === 'list');
+        break;
+      case 'move-up':
+        this.entryList()?.moveActive(-1, scope === 'list');
+        break;
+      case 'move-down':
+        this.entryList()?.moveActive(1, scope === 'list');
+        break;
+      case 'toggle-enabled': {
+        const activeId = this.workspace.activeTabId();
+        const entry =
+          activeId === null
+            ? undefined
+            : this.workspace.entries().find((e) => e.id === activeId);
+        if (!entry || entry.id === undefined) {
+          this.snackBar.open('Open an entry first.', 'OK', { duration: 3000 });
+          break;
+        }
+        this.workspace.updateEntry(entry.id, { enabled: !entry.enabled });
+        break;
+      }
+      case 'select-toggle':
+        this.entryList()?.toggleFocusedSelection();
+        break;
+      case 'select-extend-prev':
+        this.entryList()?.extendSelection(-1);
+        break;
+      case 'select-extend-next':
+        this.entryList()?.extendSelection(1);
+        break;
+      case 'show-help':
+        this.openShortcutsHelp();
+        break;
+      default: {
+        // Union-level exhaustiveness (see runBarAction): a new
+        // `ShortcutAction` member added without a case must not route
+        // silently to nothing.
+        const unhandled: never = action;
+        throw new Error(`Unhandled shortcut action: ${String(unhandled)}`);
+      }
+    }
+  }
+
+  /**
+   * Opens the shortcuts help pane (Task 10 §3.6): centered dialog on
+   * tablet/desktop, bottom sheet on phones — one opener shared by the `?`
+   * chord and the topbar's "Keyboard shortcuts…" item, so the config exists
+   * exactly once. Lazy-loaded like the other panes.
+   */
+  protected openShortcutsHelp(): void {
+    void (async () => {
+      const { ShortcutsDialog } = await import(
+        './shared/components/shortcuts-dialog/shortcuts-dialog'
+      );
+      this.overlay.openResponsive(ShortcutsDialog, {
+        dialog: {
+          maxWidth: 'min(96vw, 560px)',
+          panelClass: 'app-shortcuts-dialog',
+          ariaLabel: 'Keyboard shortcuts',
+        },
+        sheetPanelClass: 'app-shortcuts-sheet',
+        sheetConfig: { ariaLabel: 'Keyboard shortcuts' },
+      });
+    })();
   }
 }

@@ -11,6 +11,7 @@ import { SwUpdate, type VersionEvent } from '@angular/service-worker';
 import { Subject } from 'rxjs';
 import { App } from './app';
 import { WorkspaceService } from './core/services/workspace.service';
+import { shortHash } from './core/services/vcs.service';
 import { SessionLockService } from './core/services/session-lock.service';
 import { EDIT_COMMIT_DEBOUNCE_MS } from './features/entry-editor/entry-editor.constants';
 import { projectOf } from '../testing/project-fixtures';
@@ -1448,5 +1449,144 @@ describe('App PWA update prompt', () => {
     fixture.destroy();
     document.dispatchEvent(new Event('visibilitychange'));
     expect(updates.checkForUpdate).toHaveBeenCalledTimes(1);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Keyboard shortcut action semantics (Task 10 §3.3, checkpoint 10-1 locked
+// copy): the shell's `runShortcutAction` dispatch, driven directly — the
+// resolver/service layers are pinned in their own suites.
+// -----------------------------------------------------------------------------
+describe('App keyboard shortcuts', () => {
+  let fixture: ComponentFixture<App>;
+  let workspace: WorkspaceService;
+  let snackBar: MatSnackBar;
+
+  /** Same mount contract as the App describe's helper, on this block's fixture. */
+  async function createApp(): Promise<App> {
+    fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    return fixture.componentInstance;
+  }
+
+  beforeEach(async () => {
+    installStorageStub();
+    installViewportStub();
+    TestBed.overrideProvider(SwUpdate, { useValue: makeSwUpdateFake(false) });
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' }],
+    }).compileComponents();
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'github',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
+    );
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'lorestitch-mark',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(BRAND_MARK_ICON),
+    );
+    workspace = TestBed.inject(WorkspaceService);
+    snackBar = TestBed.inject(MatSnackBar);
+    vi.spyOn(snackBar, 'open');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  afterEach(() => {
+    if (nativeStorage) {
+      Object.defineProperty(window, 'localStorage', nativeStorage);
+    }
+    // jsdom shares one document across a spec file: drop any overlay DOM a
+    // test left open (dialog panes, snackbars) so later tests start clean.
+    document.querySelector('.cdk-overlay-container')?.remove();
+  });
+
+  it('every action is a silent no-op without an active project', async () => {
+    const app = await createApp(); // no project: the welcome screen is up
+
+    app['runShortcutAction']('commit-snapshot', 'other');
+    app['runShortcutAction']('new-entry', 'other');
+    app['runShortcutAction']('toggle-enabled', 'other');
+    app['runShortcutAction']('show-help', 'other');
+    await fixture.whenStable();
+
+    expect(snackBar.open).not.toHaveBeenCalled();
+    expect(workspace.entries()).toHaveLength(0);
+    expect(document.querySelector('app-shortcuts-dialog')).toBeNull();
+  });
+
+  it('commit-snapshot on a clean tree: "Nothing to commit.", no history row', async () => {
+    await workspace.createProject('Clean');
+    const app = await createApp();
+    const commitsBefore = workspace.activeProject()?.commits.length ?? 0;
+
+    app['runShortcutAction']('commit-snapshot', 'other');
+    await fixture.whenStable();
+
+    expect(snackBar.open).toHaveBeenCalledWith('Nothing to commit.', 'OK', { duration: 3000 });
+    expect(workspace.activeProject()?.commits.length).toBe(commitsBefore);
+  });
+
+  it('commit-snapshot on a dirty tree: locked auto-message shape + short-hash snackbar', async () => {
+    await workspace.createProject('Dirt');
+    const app = await createApp();
+    workspace.addEntry(); // book-level change ⇒ dirty
+
+    app['runShortcutAction']('commit-snapshot', 'other');
+    await fixture.whenStable();
+
+    const head = workspace.activeProject()?.commits.at(-1);
+    assert(head);
+    expect(head.message).toMatch(/^Snapshot · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+    expect(snackBar.open).toHaveBeenCalledWith(`Committed ${shortHash(head.id)}.`, 'OK', {
+      duration: 3000,
+    });
+  });
+
+  it('toggle-enabled with no active entry: "Open an entry first."', async () => {
+    await workspace.createProject('Empty');
+    const app = await createApp();
+    const updateSpy = vi.spyOn(workspace, 'updateEntry');
+
+    app['runShortcutAction']('toggle-enabled', 'other');
+
+    expect(snackBar.open).toHaveBeenCalledWith('Open an entry first.', 'OK', { duration: 3000 });
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it('toggle-enabled flips the active entry through the workspace mutator', async () => {
+    await workspace.createProject('Toggle');
+    const app = await createApp();
+    const id = workspace.addEntry();
+    assert(id >= 0);
+    const wasEnabled = workspace.entries().find((e) => e.id === id)?.enabled;
+    assert(wasEnabled !== undefined);
+
+    app['runShortcutAction']('toggle-enabled', 'list');
+
+    expect(workspace.entries().find((e) => e.id === id)?.enabled).toBe(!wasEnabled);
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
+  it('new-entry appends an entry and the ACTIVE tab body name input takes focus', async () => {
+    await workspace.createProject('Focus');
+    const app = await createApp();
+    const before = workspace.entries().length;
+
+    app['runShortcutAction']('new-entry', 'other');
+
+    expect(workspace.entries().length).toBe(before + 1);
+    // Zoneless pacing (the waitForPrompt idiom): explicit detectChanges per
+    // step — the render pass materializes the new tab, then the editor's
+    // after-render effect focuses the ACTIVE body's name field.
+    let focused = false;
+    for (let i = 0; i < 50 && !focused; i++) {
+      fixture.detectChanges();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const active = document.activeElement;
+      focused =
+        active?.getAttribute('aria-label') === 'Entry name' &&
+        active.closest('.mat-mdc-tab-body-active') !== null;
+    }
+    expect(focused).toBe(true);
   });
 });

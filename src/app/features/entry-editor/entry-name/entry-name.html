@@ -1,6 +1,11 @@
 <div class="field-row">
   <mat-form-field class="grow" subscriptSizing="dynamic" appearance="fill">
     <mat-label>Name / Comment</mat-label>
-    <input matInput [formField]="nameForm.comment" placeholder="Entry name…" />
+    <input
+      matInput
+      [formField]="nameForm.comment"
+      placeholder="Entry name…"
+      aria-label="Entry name"
+    />
   </mat-form-field>
 </div>

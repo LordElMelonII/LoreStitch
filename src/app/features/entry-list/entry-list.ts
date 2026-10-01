@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  DOCUMENT,
   ElementRef,
   afterNextRender,
   computed,
@@ -107,6 +108,12 @@ export class EntryList {
   readonly closeDrawer = output<void>();
 
   private readonly viewport = viewChild.required(CdkVirtualScrollViewport);
+  /** The sidebar filter box input (focus target of the Mod+F chord). */
+  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
+  /** The component's own host element (row queries for keyboard focus). */
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** DOCUMENT token, never the global (focused-row queries). */
+  private readonly document = inject(DOCUMENT);
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -143,7 +150,7 @@ export class EntryList {
     // __screenshots__/task20-probe). A delegated capture-phase listener on
     // the host element is the earliest possible interception point; see
     // `interceptCheckboxClick`.
-    const hostElement = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+    const hostElement = this.host.nativeElement;
     hostElement.addEventListener('click', this.interceptCheckboxClick, true);
     destroyRef.onDestroy(() =>
       hostElement.removeEventListener('click', this.interceptCheckboxClick, true),
@@ -408,8 +415,10 @@ export class EntryList {
    * batch swap routes here through the shell. */
   clearSelection(): void {
     this.selection.set(new Set());
-    // A cleared selection has no anchor to range from (task 20 D1).
+    // A cleared selection has no anchor to range from (task 20 D1) — and no
+    // keyboard cursor either (Task 10 §3.4).
     this.selectionAnchor.set(null);
+    this.selectionCursor = null;
   }
 
   // -------------------------------------------------------------------------
@@ -565,6 +574,204 @@ export class EntryList {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Keyboard model (Task 10 §3.4): roving entry navigation, keyboard reorder
+  // and keyboard range selection. Chords resolve in the global shortcut
+  // service; these methods are the list-side half of the dispatch.
+  // -------------------------------------------------------------------------
+
+  /**
+   * The row the keyboard selection cursor sits on (Ctrl+Space sets it,
+   * Shift+arrows move it). Transient gesture state, deliberately not a
+   * signal — nothing renders from it (task 20 D5 idiom); it only seeds the
+   * next extension when DOM focus can't answer.
+   */
+  private selectionCursor: number | null = null;
+
+  /**
+   * Focuses and selects the sidebar filter input (the Mod+F chord, Task 10
+   * §3.3). No-op when the input is not rendered — the shell only routes the
+   * chord here while the drawer is open.
+   */
+  focusFilter(): void {
+    const input = this.filterInput()?.nativeElement;
+    if (!input) {
+      return;
+    }
+    input.focus();
+    input.select();
+  }
+
+  /**
+   * Steps the ACTIVE entry through the filtered view's order (Task 10
+   * §3.3): clamped at the view's ends (no wrap), idempotent open, row
+   * brought into view through the virtual scroller. `focusFollows` — true
+   * when the chord fired from `list` scope — also moves DOM focus to the
+   * reached row; from `other` scope (Alt+arrows while typing in the editor)
+   * focus is untouched.
+   */
+  navigate(delta: -1 | 1, focusFollows: boolean): void {
+    const view = this.filtered();
+    const activeId = this.workspace.activeTabId();
+    const index = view.findIndex((item) => item.id === activeId);
+    // No active entry (or hidden by the filter): stepping down starts at the
+    // view's top, stepping up at its bottom.
+    const current = index === -1 ? (delta === 1 ? -1 : view.length) : index;
+    const targetIndex = current + delta;
+    if (targetIndex < 0 || targetIndex >= view.length) {
+      return; // Clamped at the ends — no wrap.
+    }
+    const target = view[targetIndex];
+    if (!target) {
+      return;
+    }
+    this.workspace.openEntry(target.id);
+    this.scrollToEntry(target.id);
+    if (focusFollows) {
+      this.focusRow(target.id);
+    }
+  }
+
+  /**
+   * Reorders the ACTIVE entry by one visible position (Task 10 §3.3): the
+   * move reads the filtered view, so the entry jumps over visible neighbors
+   * only; an active entry hidden by the filter moves one position in tree
+   * order instead. The entry stays active and scrolled into view; focus
+   * follows only from `list` scope.
+   */
+  moveActive(delta: -1 | 1, focusFollows: boolean): void {
+    const activeId = this.workspace.activeTabId();
+    if (activeId === null) {
+      return;
+    }
+    const view = this.filtered();
+    const viewIndex = view.findIndex((item) => item.id === activeId);
+    if (viewIndex >= 0) {
+      const targetIndex = viewIndex + delta;
+      if (targetIndex < 0 || targetIndex >= view.length) {
+        return; // Clamped at the visible ends.
+      }
+      const indices = this.treeIndices(viewIndex, targetIndex);
+      if (!indices) {
+        return;
+      }
+      this.workspace.moveEntry(indices[0], indices[1]);
+    } else {
+      // Active entry not in the view: one position in tree order.
+      const all = this.items();
+      const from = all.findIndex((item) => item.id === activeId);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= all.length) {
+        return;
+      }
+      this.workspace.moveEntry(from, to);
+    }
+    this.scrollToEntry(activeId);
+    if (focusFollows) {
+      this.focusRow(activeId);
+    }
+  }
+
+  /**
+   * Toggles selection of the focused row (Ctrl+Space, Task 10 §3.4): the row
+   * holding DOM focus (which can be a non-active row's nested checkbox),
+   * falling back to the active entry when no row is focused. A plain
+   * non-gesture toggle — the range anchor moves to it, exactly like a
+   * checkbox click — and the keyboard cursor lands there for a following
+   * Shift+arrow extension.
+   */
+  toggleFocusedSelection(): void {
+    const item = this.focusedRowItem() ?? this.activeRowItem();
+    if (!item) {
+      return;
+    }
+    this.selectionCursor = item.id;
+    this.toggleRow(item, !this.selection().has(item.id));
+  }
+
+  /**
+   * Extends the selection from the anchor (Shift+↑/↓, Task 10 §3.4) with
+   * exactly the shift+click range math: the row the cursor lands on becomes
+   * the gesture row of `applyRangeGesture` (task 20 D1 — the inclusive
+   * filtered slice between the anchor and the gesture row takes its new
+   * state, anchor never moves). Roving DOM focus moves with the extension;
+   * the active entry does NOT follow (opening every extended row would spam
+   * the editor with tabs).
+   */
+  extendSelection(delta: -1 | 1): void {
+    const view = this.filtered();
+    const fromId =
+      this.selectionCursor ?? this.focusedRowItem()?.id ?? this.activeRowItem()?.id ?? null;
+    if (fromId === null) {
+      return;
+    }
+    const fromIndex = view.findIndex((item) => item.id === fromId);
+    const current = fromIndex === -1 ? (delta === 1 ? -1 : view.length) : fromIndex;
+    const targetIndex = current + delta;
+    if (targetIndex < 0 || targetIndex >= view.length) {
+      return; // Clamped at the view's ends.
+    }
+    const target = view[targetIndex];
+    if (!target) {
+      return;
+    }
+    this.selectionCursor = target.id;
+    this.applyRangeGesture(target);
+    this.scrollToEntry(target.id);
+    this.focusRow(target.id);
+  }
+
+  /**
+   * Row keyboard activation (Enter/Space, Task 10 §1.2 fix): only the row
+   * itself is the activation target. Keydowns bubbling from nested controls
+   * (the row checkbox, the ghost buttons) keep their native behavior — Space
+   * on the checkbox toggles selection and must NOT open the editor. The
+   * template's suffixed key bindings hand over a plain `Event` (Angular's
+   * strict template types for `(keydown.enter)`/`(keydown.space)`), which is
+   * all this handler reads.
+   */
+  protected onRowKeydown(event: Event, item: EntryListItem): void {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    event.preventDefault();
+    this.open(item);
+  }
+
+  /** The entry row holding DOM focus, if any. */
+  private focusedRowItem(): EntryListItem | undefined {
+    const active = this.document.activeElement;
+    if (!(active instanceof Element)) {
+      return undefined;
+    }
+    const row = active.closest<HTMLElement>('.entry-item[data-entry-id]');
+    const raw = row?.dataset['entryId'];
+    if (raw === undefined || raw === '') {
+      return undefined;
+    }
+    const id = Number(raw);
+    return Number.isNaN(id) ? undefined : this.filtered().find((item) => item.id === id);
+  }
+
+  /** The active tab's entry as a view item, when it is shown. */
+  private activeRowItem(): EntryListItem | undefined {
+    const id = this.workspace.activeTabId();
+    return id === null ? undefined : this.filtered().find((item) => item.id === id);
+  }
+
+  /**
+   * Moves DOM focus to an entry's row. Deferred one macrotask — the same
+   * idiom `scrollToEntry` uses — so the virtual scroller has rendered the
+   * window the navigation landed on before the row is queried.
+   */
+  private focusRow(entryId: number): void {
+    setTimeout(() => {
+      this.host.nativeElement
+        .querySelector<HTMLElement>(`.entry-item[data-entry-id="${entryId}"]`)
+        ?.focus();
+    });
+  }
+
   protected toggleTagFilter(tag: string): void {
     this.tagFilter.update((current) => {
       const next = new Set(current);
@@ -601,7 +808,13 @@ export class EntryList {
     setTimeout(() => {
       const index = this.filtered().findIndex((item) => item.id === entryId);
       if (index >= 0) {
-        this.viewport().scrollToIndex(index, 'smooth');
+        try {
+          this.viewport().scrollToIndex(index, 'smooth');
+        } catch {
+          // Exotic environments (bare jsdom) expose no Element.scrollTo — the
+          // reveal is best-effort UI, never worth crashing over (the same
+          // guard idiom as the viewport observers above).
+        }
       }
     });
   }
@@ -767,23 +980,34 @@ export class EntryList {
     return formatTokenCount(tokens);
   }
 
-  protected drop(previousIndex: number, currentIndex: number): void {
+  /**
+   * Translates two positions in the FILTERED view into working-tree indices
+   * for `WorkspaceService.moveEntry` — the drag-drop translation
+   * (`drop`) and the keyboard reorder (`moveActive`) share it. When nothing
+   * is filtered out the view IS the tree, so the indices pass through;
+   * `null` means either position has no tree counterpart and the move is
+   * dropped.
+   */
+  private treeIndices(viewIndex: number, targetViewIndex: number): [number, number] | null {
     const view = this.filtered();
     if (view.length === this.items().length) {
-      this.workspace.moveEntry(previousIndex, currentIndex);
-    } else {
-      // Translate viewport indexes back to working-tree indexes.
-      const all = this.items();
-      const moved = view[previousIndex];
-      const target = view[currentIndex];
-      if (!moved || !target) {
-        return;
-      }
-      const from = all.findIndex((i) => i.id === moved.id);
-      const to = all.findIndex((i) => i.id === target.id);
-      if (from >= 0 && to >= 0) {
-        this.workspace.moveEntry(from, to);
-      }
+      return [viewIndex, targetViewIndex];
+    }
+    const all = this.items();
+    const moved = view[viewIndex];
+    const target = view[targetViewIndex];
+    if (!moved || !target) {
+      return null;
+    }
+    const from = all.findIndex((i) => i.id === moved.id);
+    const to = all.findIndex((i) => i.id === target.id);
+    return from >= 0 && to >= 0 ? [from, to] : null;
+  }
+
+  protected drop(previousIndex: number, currentIndex: number): void {
+    const indices = this.treeIndices(previousIndex, currentIndex);
+    if (indices) {
+      this.workspace.moveEntry(indices[0], indices[1]);
     }
   }
 }

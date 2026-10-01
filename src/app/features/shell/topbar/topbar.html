@@ -74,6 +74,7 @@
       (click)="workspace.addEntry()"
       matTooltip="New entry"
       aria-label="New entry"
+      aria-keyshortcuts="Control+N"
     >
       <mat-icon>post_add</mat-icon>
     </button>
@@ -260,6 +261,13 @@
     >
       <mat-icon>brightness_auto</mat-icon>
       <span>Theme</span>
+    </button>
+    <!-- Keyboard shortcuts help (Task 10 §3.6): the discovery path that needs
+         no foreknowledge — it sits in the About/help cluster and names the ?
+         chord it opens. aria-keyshortcuts carries the ARIA-style literal. -->
+    <button mat-menu-item (click)="openShortcuts.emit()" aria-keyshortcuts="?">
+      <mat-icon>keyboard</mat-icon>
+      <span>Keyboard shortcuts…</span>
     </button>
     <button mat-menu-item (click)="openAbout()">
       <mat-icon>info</mat-icon>

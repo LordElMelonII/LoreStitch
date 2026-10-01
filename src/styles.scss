@@ -284,6 +284,22 @@ body {
   border-radius: 28px 28px 0 0;
 }
 
+// --- Keyboard shortcuts help (src/app/shared/components/shortcuts-dialog,
+// Task 10 §3.6) --- same fixed-height recipe as the batch/linter panes: the
+// component paints its own header and scrolling body, so the containers only
+// own the height chain (dialog) and the full-bleed sheet chrome (phones).
+.app-shortcuts-dialog .mat-mdc-dialog-surface {
+  height: min(78dvh, 640px);
+  max-height: min(78dvh, 640px);
+}
+
+.app-shortcuts-sheet .mat-bottom-sheet-container {
+  height: 88dvh;
+  max-height: 88dvh;
+  padding: 0;
+  border-radius: 28px 28px 0 0;
+}
+
 // Guided book-repair pane (src/app/shared/components/book-repair-dialog,
 // Task 09): dialog on tablet/desktop, content-hugging sheet on phones. The
 // approved mock paints surface-container-high on both containers while

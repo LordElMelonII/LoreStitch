@@ -1,4 +1,8 @@
-<app-topbar (toggleEntries)="toggleLeft()" (toggleHistory)="toggleRight()" />
+<app-topbar
+  (toggleEntries)="toggleLeft()"
+  (toggleHistory)="toggleRight()"
+  (openShortcuts)="openShortcutsHelp()"
+/>
 
 <mat-sidenav-container class="workspace" #workspaceEl>
   <!-- D3: the docked drawer's live width (App.entriesWidth, clamped

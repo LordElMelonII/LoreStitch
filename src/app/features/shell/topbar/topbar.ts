@@ -67,6 +67,14 @@ export class Topbar {
   readonly toggleEntries = output<void>();
   readonly toggleHistory = output<void>();
 
+  /**
+   * Request to open the keyboard-shortcuts help dialog (Task 10 §3.6),
+   * handled by the shell — the same `ResponsiveOverlayService` opener the
+   * `show-help` chord routes through, so the dialog config exists exactly
+   * once (the topbar item and the `?` key can never disagree).
+   */
+  readonly openShortcuts = output<void>();
+
   protected readonly projectName = computed(
     () => this.workspace.activeProject()?.title ?? 'LoreStitch',
   );

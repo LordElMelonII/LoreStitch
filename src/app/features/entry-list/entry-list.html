@@ -9,6 +9,7 @@
       (click)="add()"
       matTooltip="New entry"
       aria-label="New entry"
+      aria-keyshortcuts="Control+N"
     >
       <mat-icon>add</mat-icon>
     </button>
@@ -32,10 +33,12 @@
     <mat-icon matPrefix>search</mat-icon>
     <input
       matInput
+      #filterInput
       type="text"
       placeholder="Filter keys, names, content…"
       [formField]="filterForm.query"
       aria-label="Filter entries"
+      aria-keyshortcuts="Control+F"
     />
     @if (filter()) {
       <button
@@ -180,9 +183,11 @@
     [class.selected]="selection().has(item.id)"
     [class.disabled-entry]="!item.enabled"
     (click)="open(item)"
-    (keydown.enter)="open(item)"
-    (keydown.space)="$event.preventDefault(); open(item)"
-    tabindex="0"
+    (keydown.enter)="onRowKeydown($event, item)"
+    (keydown.space)="onRowKeydown($event, item)"
+    [attr.data-entry-id]="item.id"
+    [attr.tabindex]="item.id === activeId() ? 0 : -1"
+    [attr.aria-current]="item.id === activeId() ? 'true' : null"
     role="button"
     [attr.aria-label]="'Open entry ' + item.title"
   >

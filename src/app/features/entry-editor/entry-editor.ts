@@ -3,9 +3,12 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  afterRenderEffect,
   computed,
   effect,
   inject,
+  signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -347,6 +350,14 @@ export class EntryEditor {
   private readonly sessionLock = inject(SessionLockService);
   private readonly tabGroup = viewChild(MatTabGroup);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /**
+   * Pending Mod+N focus handoff (Task 10 §3.3): set by `focusNameField`,
+   * consumed by the after-render effect below once the render pass that
+   * materialized the new tab has run. Nothing renders from it.
+   */
+  private readonly nameFocusPending = signal(false);
+
   private readonly drag = new TabStripDragScroller({
     // The fling's frames drive `scrollDistance` directly, so the 1:1 tracking
     // class must survive the release and come off only when the coast ends —
@@ -429,6 +440,16 @@ export class EntryEditor {
     void this.sessionLock.takeover();
   }
 
+  /**
+   * Focuses the active tab's name field (the Mod+N chord's second half, Task
+   * 10 §3.3): public, called by the shell right after `workspace.addEntry()`.
+   * The actual focus is deferred to the after-render effect above — the tab
+   * this call creates renders one pass later.
+   */
+  focusNameField(): void {
+    this.nameFocusPending.set(true);
+  }
+
   constructor() {
     // Self-healing selection: if the active tab id is gone (e.g. its entry was
     // deleted), fall back to the first open tab so the pane never blanks out.
@@ -438,6 +459,33 @@ export class EntryEditor {
       if (tabs.length && !tabs.some((tab) => tab.id === id)) {
         this.workspace.activeTabId.set(tabs[0]?.id ?? null);
       }
+    });
+
+    // Mod+N focus deferral (Task 10 §3.3): the name field of the ACTIVE tab
+    // body takes focus one render pass after `focusNameField` — the pass that
+    // materializes the new tab. The query is scoped to
+    // `.mat-mdc-tab-body-active` because inactive mat-tab bodies keep inert
+    // DOM copies of every input (the pinned entry-editor rule); the pending
+    // flag lingers only while that input is not yet queryable and is dropped
+    // when the editor has no tabs to focus into at all.
+    afterRenderEffect(() => {
+      if (this.tabs().length === 0) {
+        untracked(() => this.nameFocusPending.set(false));
+        return;
+      }
+      if (!this.nameFocusPending()) {
+        return;
+      }
+      untracked(() => {
+        const input = this.host.nativeElement.querySelector<HTMLInputElement>(
+          '.mat-mdc-tab-body-active app-entry-name input',
+        );
+        if (input) {
+          this.nameFocusPending.set(false);
+          input.focus();
+          input.select();
+        }
+      });
     });
 
     // Swallow the synthetic click that trails a drag-scroll of the strip so a

@@ -127,6 +127,15 @@
     }
   }
 
+  // Roving-list focus indicator (Task 10 §3.4): a primary 2px ring, inset so
+  // it hugs the row's own rounded box instead of painting over neighbors —
+  // the resize-handle exemplar's approach (M3 primary token on
+  // :focus-visible only, mouse focus never rings).
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+
   &.active {
     background: var(--mat-sys-secondary-container);
     color: var(--mat-sys-on-secondary-container);
