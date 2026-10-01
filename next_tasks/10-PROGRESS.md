@@ -67,3 +67,65 @@ Pipeline holds until the explicit answer.
 dispatch, entry-list roving tabindex + bubbling fix + nav/move chords,
 focusNameField + name aria-label, shortcuts help dialog + topbar entry +
 annotations (§3.2–3.4, §3.6).
+
+## Phase P2 — Shortcut wiring + help dialog (ui-specialist)
+
+**Status**: ✅ complete — commit `8db5297` `feat(shortcuts): global shortcut service and keyboard entry navigation` (18 files, +1465/−23; tree clean)
+
+**Landed**:
+- BEFORE screenshots (9) under `__screenshots__/10/before/` — pinned
+  conditions (3 viewports, light theme, seeded Fate fixture via real import,
+  settled render, tooltips suppressed); parameterized
+  `__screenshots__/10/capture.mjs` for P3's AFTER pass; import-button label
+  re-probed (drifted from the linter precedent).
+- `shared/services/keyboard-shortcuts.service.ts` (+174) + spec (+199) — one
+  DOCUMENT keydown listener, overlay gate → scope classification → platform →
+  `resolveShortcut`, preventDefault only on non-null, `DestroyRef` teardown;
+  `register(fn)` two-arg `(action, scope)` shape (sanctioned deviation).
+- `app.ts` `runShortcutAction` exhaustive never-switch (+152) — checkpoint
+  copy verbatim (auto-message, "Nothing to commit.", `Committed <short>.`,
+  "Open an entry first."); `show-help` → `openResponsive(ShortcutsDialog)`.
+- Entry list (+260/−23): roving tabindex + `aria-current` + `data-entry-id`,
+  `onRowKeydown` bubbling guard, `:focus-visible` ring (M3, resize-handle
+  approach), `navigate`/`moveActive` (with `treeIndices` extracted from
+  `drop()`)/`toggleFocusedSelection`/`extendSelection` over the task-20
+  anchor model, `focusFilter`, `scrollToEntry` made reusable.
+- `EntryEditor.focusNameField()` (`.mat-mdc-tab-body-active`-scoped,
+  `afterRenderEffect`-deferred); `entry-name` `aria-label="Entry name"`.
+- `shared/components/shortcuts-dialog/` — renders `SHORTCUTS_HELP` grouped
+  Everywhere / In the entry list, kbd chips, opened only via
+  ResponsiveOverlayService; topbar "Keyboard shortcuts…" item (cluster
+  ellipsis convention) + `aria-keyshortcuts="?"`; annotations: filter
+  `Control+F`, both New-entry buttons `Control+N`.
+- Icon: NEW `keyboard` ligature; `icons:refresh` re-subset (69 icons),
+  woff2 staged in-commit.
+
+**Gates**: build green (after 3 in-phase type fixes) · full suite
+**1545/1545** (66 files) · lint green · typecheck:e2e green · smoke
+`entry-list-selection` desktop-chrome 5P/2S (+ insurance `topbar about`
+6P/2S).
+
+**Probe findings pinned by specs**: scope table verified in rendered
+Chromium DOM (row ⇒ list; checkbox ⇒ list-not-text; filter ⇒ text;
+mat-select HOST `mat-select[role=combobox]` ⇒ other — `closest('.mat-mdc-select')`,
+not the trigger div); TestBed mounts under bare DIV — service spec nests a
+real `<app-entry-list>` wrapper.
+
+**Deviations** (evidence-backed):
+1. Suffixed `(keydown.enter)` bindings don't fire on dispatched
+   KeyboardEvents in vitest/jsdom (probe-verified; DO fire in Chromium) —
+   row-activation spec drives `onRowKeydown` directly (`entry-keys`
+   precedent); real wiring pinned by P5 e2e.
+2. `scrollToEntry` jsdom guard (`Element.scrollTo` absent) via the file's
+   existing "skip exotic environments" idiom.
+3. `onRowKeydown($event: Event)` — strict-template typing of suffixed
+   handlers.
+
+**Note for P5**: `commit-snapshot` commits committed bytes only (no
+draft-flush API exists) — type-then-commit e2e waits out
+`EDIT_COMMIT_FLUSH_MS` (house precedent).
+
+**Next**: P3 — ui-specialist: §3.5 (restore/delete ConfirmDialogs, remaining
+`:focus-visible` coverage incl. bar-item ring upgrade, skip link, pane
+labels + `aria-expanded`, sr-only h1) + one-shot DevTools a11y audit +
+AFTER screenshots + side-by-side report.
