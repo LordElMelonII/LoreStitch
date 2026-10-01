@@ -44,3 +44,26 @@ gated. All gates re-verified after.
 snackbar copy, §3.5 confirm copy, §3.6 help-dialog design (SHORTCUTS_HELP
 verbatim above + grouping + exemplar), §3.7 focus-ring/skip-link evidence.
 Pipeline holds until the explicit answer.
+
+## Checkpoint 10-1 — user gate
+
+**Status**: ✅ approved 2026-10-01 (explicit answers via structured prompt)
+
+- **Contract approved as posted**: §3.1 guard table + universal guards, §3.3
+  copy (auto-message `Snapshot · <local yyyy-mm-dd hh:mm>`, "Nothing to
+  commit.", `Committed <short-hash>.`, "Open an entry first."), §3.5 confirm
+  copy, §3.6 help-dialog design, §3.7 focus-ring/skip-link design.
+- **Help chord**: `?` only — the `Mod+/` alias is declined.
+- **Delete copy**: user asked for the recommendation; proceeding with the
+  plan's "This cannot be undone." (conservative warning, true in the worst
+  case — a never-committed entry is unrecoverable; the batch-delete wording
+  is the optimistic one of the two).
+- **`aria-keyshortcuts`**: ADD (user decision) — mirrored controls only:
+  filter input `Control+F`, both "New entry" buttons `Control+N`, topbar
+  "Keyboard shortcuts" item `?`. ARIA-style literals, not the catalog's
+  display `Mod` (the catalog stays single-source in the dialog).
+
+**Next**: P2 — ui-specialist: BEFORE screenshots, shortcut service + app
+dispatch, entry-list roving tabindex + bubbling fix + nav/move chords,
+focusNameField + name aria-label, shortcuts help dialog + topbar entry +
+annotations (§3.2–3.4, §3.6).
