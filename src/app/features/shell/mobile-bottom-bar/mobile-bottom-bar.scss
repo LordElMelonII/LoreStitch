@@ -132,7 +132,7 @@
   position: relative;
   flex: 1 1 0;
   // The bar renders only on phones, so the enhanced 48px target applies
-  // (see --touch-target-* in src/styles.scss / touch-targets.ts).
+  // (see --touch-target-* in src/styles.scss).
   min-width: var(--touch-target-mobile);
   max-width: 120px;
   min-height: var(--touch-target-mobile);

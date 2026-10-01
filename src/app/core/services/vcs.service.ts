@@ -161,10 +161,6 @@ export class VcsService {
     return serialized;
   }
 
-  serializeBook(book: CharacterBook): string {
-    return this.serialize(book);
-  }
-
   /**
    * Serializes the book's shell — every book-level field with `entries`
    * emptied. The spread preserves unknown book-level vendor keys (lossless).

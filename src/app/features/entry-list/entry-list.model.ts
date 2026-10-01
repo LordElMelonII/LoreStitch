@@ -23,15 +23,6 @@ export interface EntryListItem {
 }
 
 /**
- * Re-export only: the fold primitive itself moved to
- * `core/services/entry-memo.ts` (plan 18 D2) — core must not import from
- * features, so the implementation lives core-side next to the per-entry
- * memoization (`memoEntryHaystack`) that now composes it. Behavior and
- * export surface are unchanged for every import site.
- */
-export { entrySearchHaystack } from '../../core/services/entry-memo';
-
-/**
  * Case-insensitive containment over a pre-folded haystack. `query` must
  * already be trimmed and lowercased — fold it once per keystroke at the
  * call site, never once per entry. An empty query matches everything;

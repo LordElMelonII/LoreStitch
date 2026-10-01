@@ -1,6 +1,6 @@
+import { entrySearchHaystack } from '../../core/services/entry-memo';
 import {
   applyRangeSelection,
-  entrySearchHaystack,
   matchesQuery,
   type EntryListItem,
 } from './entry-list.model';

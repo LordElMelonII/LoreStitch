@@ -2,7 +2,6 @@ import {
   classifyStKey,
   isRegexShapedKey,
   isValidStRegex,
-  matchStRegex,
   parseStRegex,
   type StKeyClass,
 } from './st-regex';
@@ -147,40 +146,6 @@ describe('st-regex', () => {
       expect(isValidStRegex('/a/')).toBe(true);
       expect(isValidStRegex('/a[/i')).toBe(false);
       expect(isValidStRegex('plain')).toBe(false);
-    });
-  });
-
-  describe('matchStRegex', () => {
-    const MATCH_CASES: readonly [key: string, text: string, expected: boolean][] = [
-      ['/rose/i', 'ROSES are red', true],
-      ['/rose/i', 'LILIES are red', false],
-      ['/^rose/', 'roses', true],
-      ['/^rose/', 'a rose', false],
-      ['/a\\d+/', 'a42', true],
-      ['/a\\d+/', 'axy', false],
-      // ST applies regexes raw: case/whole-word options never fold the haystack.
-      ['/rose/', 'ROSE', false],
-      ['/ROSE/', 'rose', false],
-    ];
-
-    for (const [key, text, expected] of MATCH_CASES) {
-      it(`matches ${JSON.stringify(key)} against ${JSON.stringify(text)} -> ${expected}`, () => {
-        expect(matchStRegex(key, text)).toBe(expected);
-      });
-    }
-
-    it('returns false for invalid or non-regex keys (ST then treats them as plaintext)', () => {
-      expect(matchStRegex('/a[/i', '/a[/')).toBe(false);
-      expect(matchStRegex('rose', 'rose')).toBe(false);
-      expect(matchStRegex('', '')).toBe(false);
-    });
-
-    it('is stateless across calls even for stateful flags (fresh parse per call, world-info.js:339)', () => {
-      for (let i = 0; i < 3; i++) {
-        expect(matchStRegex('/o/g', 'foo')).toBe(true);
-        // Sticky anchors at lastIndex, which starts at 0 on every fresh parse.
-        expect(matchStRegex('/f/y', 'foo')).toBe(true);
-      }
     });
   });
 

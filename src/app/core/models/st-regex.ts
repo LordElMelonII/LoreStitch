@@ -120,22 +120,3 @@ export function classifyStKey(key: string): StKeyClass {
   }
   return isValidStRegex(key) ? 'regex' : 'invalid-regex';
 }
-
-/**
- * True when the ST key regex matches `text`. `false` when the key is not a
- * valid ST regex (ST then treats it as plaintext, never as a regex) or the
- * test itself throws. The regex is parsed fresh per call, so stateful flags
- * (`g`, `y`) behave identically on every call — the `matchKeys` contract at
- * world-info.js:337-342.
- */
-export function matchStRegex(key: string, text: string): boolean {
-  const parsed = parseStRegex(key);
-  if (!parsed) {
-    return false;
-  }
-  try {
-    return parsed.regex.test(text);
-  } catch {
-    return false;
-  }
-}

@@ -138,10 +138,9 @@ body {
   --ls-warning: color-mix(in srgb, #b26a00 82%, var(--mat-sys-on-surface));
   --ls-warning-container: color-mix(in srgb, #e8930c 14%, var(--mat-sys-surface));
 
-  // Touch-target policy (values sourced from src/app/shared/constants/
-  // touch-targets.ts — keep the two in sync): 44px is the universal minimum
-  // floor for every interactive element; 48px is the mobile target, applied
-  // on the shell's mobile query (max-width: 767px, see breakpoints.ts).
+  // Touch-target policy: 44px is the universal minimum floor for every
+  // interactive element; 48px is the mobile target, applied on the shell's
+  // mobile query (max-width: 767px, see breakpoints.ts).
   --touch-target-min: 44px;
   --touch-target-mobile: 48px;
 }
