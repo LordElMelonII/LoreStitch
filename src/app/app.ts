@@ -12,9 +12,11 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialogRef } from '@angular/material/dialog';
 import { MatSidenavContainer, MatSidenavModule } from '@angular/material/sidenav';
+import { SwUpdate } from '@angular/service-worker';
 import { WorkspaceService } from './core/services/workspace.service';
 import { SessionLockService, type SessionLockState } from './core/services/session-lock.service';
 import { EntryList } from './features/entry-list/entry-list';
@@ -31,6 +33,7 @@ import {
 import { LayoutService } from './shared/services/layout.service';
 import { ProjectActionsService } from './features/shell/project-actions.service';
 import { ResponsiveOverlayService } from './shared/services/responsive-overlay.service';
+import { EDIT_COMMIT_DEBOUNCE_MS } from './features/entry-editor/entry-editor.constants';
 
 /**
  * Entries drawer resize clamp (task 21 D3, user-locked): the user decides,
@@ -78,6 +81,23 @@ function restoreEntriesWidth(): number {
   return ENTRIES_WIDTH_DEFAULT;
 }
 
+/**
+ * visibilitychange handler for the PWA update check (task 25 §3.1): a tab
+ * becoming visible again re-checks for a deployed version — the only update
+ * signal a long-lived session gets, since the app has no router navigations
+ * for the service worker to piggyback on. Hidden transitions don't check;
+ * failures are ignored (offline is normal). Kept named at module scope, with
+ * the constructor registering one thin wrapper around it — that wrapper is
+ * the single identity shared by addEventListener and its DestroyRef removal
+ * (two fresh arrows would make the removal a silent no-op). Bare `document`
+ * matches the session-lock service's listener precedent.
+ */
+function checkForUpdateIfVisible(updates: SwUpdate): void {
+  if (document.visibilityState === 'visible') {
+    void updates.checkForUpdate().catch(() => {});
+  }
+}
+
 /** Studio shell: top bar, entry sidenav, tabbed editor, commit history drawer. */
 @Component({
   selector: 'app-root',
@@ -110,6 +130,11 @@ export class App {
   private readonly snackBar = inject(MatSnackBar);
   /** The open takeover prompt, if any — one prompt per blocked streak. */
   private lockPrompt: ReturnType<ResponsiveOverlayService['openResponsive']> | null = null;
+
+  // PWA update surface (task 25 §3.1): the shell owns the reload prompt — the
+  // service worker is provided app-wide (app.config); inert unless one serves
+  // the app (`isEnabled` is false in dev mode and the unit test bed).
+  private readonly updates = inject(SwUpdate);
 
   /** Children the shell forwards actions into (search dialog, batch pane). */
   private readonly topbar = viewChild(Topbar);
@@ -350,6 +375,33 @@ export class App {
         });
       }
     });
+
+    // -------------------------------------------------------------------------
+    // PWA update prompt (task 25 §3.1). Everything below is gated on a real
+    // service worker serving the app — without one, no listener, no
+    // subscription, nothing to observe.
+    // -------------------------------------------------------------------------
+
+    if (this.updates.isEnabled) {
+      // An installed-and-waiting version offers exactly one reload prompt.
+      // `versionUpdates` is an event stream, not state — a subscription is
+      // the correct shape here; no dedupe is needed either, the worker
+      // re-emits VERSION_READY only for a genuinely new version (a rapid
+      // second deploy simply replaces the snackbar — latest wins).
+      this.updates.versionUpdates.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((evt) => {
+        if (evt.type === 'VERSION_READY') {
+          this.offerUpdate();
+        }
+      });
+      // A returning visible tab re-checks for a deployed version (see
+      // checkForUpdateIfVisible). One listener identity for add and removal:
+      // the onDestroy teardown must detach the exact function that was added.
+      const onUpdateVisibility = (): void => checkForUpdateIfVisible(this.updates);
+      this.document.addEventListener('visibilitychange', onUpdateVisibility, { passive: true });
+      this.destroyRef.onDestroy(() =>
+        this.document.removeEventListener('visibilitychange', onUpdateVisibility),
+      );
+    }
   }
 
   /**
@@ -365,9 +417,7 @@ export class App {
     }
     void (async () => {
       // Lazy-loaded: keeps the confirm dialog out of the initial bundle.
-      const { ConfirmDialog } = await import(
-        './shared/components/confirm-dialog/confirm-dialog'
-      );
+      const { ConfirmDialog } = await import('./shared/components/confirm-dialog/confirm-dialog');
       const ref = this.overlay.openResponsive(ConfirmDialog, {
         dialog: { panelClass: 'app-compact-fullscreen-dialog' },
         data: {
@@ -392,6 +442,32 @@ export class App {
         });
       }
     })();
+  }
+
+  /**
+   * Offers the pending update as one snackbar (task 25 §3.2) — the shell's
+   * standard snackbar, only the copy differs from the blocked-attempt one.
+   * A duration lapse is a silent dismissal (the next launch activates the
+   * version anyway); the subscription self-terminates because `onAction`
+   * completes when the snackbar dismisses either way.
+   */
+  private offerUpdate(): void {
+    const ref = this.snackBar.open('A new version is available.', 'Reload', { duration: 10000 });
+    ref.onAction().subscribe(() => void this.applyUpdate());
+  }
+
+  /**
+   * Reloads into the pending version. The order is the data contract: a draft
+   * mid-debounce must commit to workspace state first (no public draft-flush
+   * API exists, so the window is waited out — the same idiom the house e2e
+   * uses as EDIT_COMMIT_FLUSH_MS), then storage truth catches up, then the
+   * reload closes the page — which is itself what activates the waiting
+   * service-worker version; no activateUpdate() dance.
+   */
+  private async applyUpdate(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, EDIT_COMMIT_DEBOUNCE_MS));
+    await this.workspace.flushPendingSave();
+    this.document.location.reload();
   }
 
   protected toggleLeft(): void {

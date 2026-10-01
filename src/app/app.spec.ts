@@ -1,16 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { DomSanitizer } from '@angular/platform-browser';
-import { ANIMATION_MODULE_TYPE } from '@angular/core';
+import { ANIMATION_MODULE_TYPE, DOCUMENT } from '@angular/core';
 import { MatIconRegistry } from '@angular/material/icon';
 import { MatSidenav } from '@angular/material/sidenav';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ESCAPE } from '@angular/cdk/keycodes';
+import { SwUpdate, type VersionEvent } from '@angular/service-worker';
 import { Subject } from 'rxjs';
 import { App } from './app';
 import { WorkspaceService } from './core/services/workspace.service';
 import { SessionLockService } from './core/services/session-lock.service';
+import { EDIT_COMMIT_DEBOUNCE_MS } from './features/entry-editor/entry-editor.constants';
 import { projectOf } from '../testing/project-fixtures';
 import { LayoutService } from './shared/services/layout.service';
 import { GITHUB_ICON } from './shared/constants/github';
@@ -143,6 +145,27 @@ function stubPointerCapture(handle: HTMLElement): { captured: boolean } {
   return state;
 }
 
+/** A VERSION_READY payload with throwaway hashes — the shell never reads them. */
+const VERSION_READY: VersionEvent = {
+  type: 'VERSION_READY',
+  currentVersion: { hash: 'serving' },
+  latestVersion: { hash: 'waiting' },
+};
+
+/**
+ * Minimal SwUpdate stand-in for App's PWA wiring (task 25 §4.1): the subject
+ * backs `versionUpdates` so specs drive the VERSION_READY path, and the
+ * spied `checkForUpdate` records the visibility re-check. The real provider
+ * only exists behind provideServiceWorker, which the test bed never mounts.
+ */
+function makeSwUpdateFake(isEnabled: boolean) {
+  return {
+    isEnabled,
+    versionUpdates: new Subject<VersionEvent>(),
+    checkForUpdate: vi.fn(async (): Promise<boolean> => false),
+  };
+}
+
 describe('App', () => {
   let workspace: WorkspaceService;
   let layout: LayoutService;
@@ -197,6 +220,10 @@ describe('App', () => {
     // test gets a fresh Map-backed stub, restored in afterEach.
     storage = installStorageStub();
     viewport = installViewportStub();
+    // App injects SwUpdate (task 25) but the test bed mounts no service
+    // worker: stand in an inert fake — isEnabled false skips App's whole
+    // update wiring, so every pin here keeps its pre-task behavior.
+    TestBed.overrideProvider(SwUpdate, { useValue: makeSwUpdateFake(false) });
     await TestBed.configureTestingModule({
       imports: [App],
       // jsdom fires no transitionend, so a settled sidenav open would never
@@ -1095,6 +1122,9 @@ describe('App session lock wiring', () => {
     // Side-effect installs only: this block never reads the stub handles.
     installStorageStub();
     installViewportStub();
+    // Inert SwUpdate fake (task 25): no service worker is mounted in tests,
+    // and isEnabled false skips App's update wiring entirely.
+    TestBed.overrideProvider(SwUpdate, { useValue: makeSwUpdateFake(false) });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [{ provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' }],
@@ -1239,5 +1269,184 @@ describe('App session lock wiring', () => {
     expect(open).toHaveBeenCalledWith('Read-only — this project is held by another tab', 'OK', {
       duration: 3000,
     });
+  });
+});
+
+/**
+ * PWA update prompt shell wiring (task 25 §3.1/§4.1): VERSION_READY offers
+ * one reload snackbar, and accepting it waits out the edit-debounce window,
+ * flushes pending saves and reloads — the reload itself is what activates
+ * the waiting version. The service worker runs fake (SwUpdate overridden);
+ * the real one only exists behind a production server, which the qa phase's
+ * capture script drives (plan §4.3).
+ */
+describe('App PWA update prompt', () => {
+  let fixture: ComponentFixture<App>;
+  let updates: ReturnType<typeof makeSwUpdateFake>;
+  let workspace: WorkspaceService;
+
+  /**
+   * The reload request cannot be spied directly: jsdom's location members are
+   * legacy-unforgeable (`document.location` and `location.reload` are all
+   * non-configurable own properties), so the block overrides the injected
+   * DOCUMENT with a transparent proxy that serves a stub location while a spy
+   * is armed — the component seam the plan names for the reload assertion.
+   * Unarmed, the proxy returns the real location and everything else reaches
+   * the raw document (with the raw `this`, so jsdom's internal-slot getters
+   * and the platform's listener bookkeeping keep working).
+   */
+  let reloadSpy: (() => void) | null = null;
+  const shellDocument: Document = new Proxy(document, {
+    get(target, prop) {
+      if (prop === 'location' && reloadSpy) {
+        return { reload: reloadSpy };
+      }
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    set(target, prop, value) {
+      return Reflect.set(target, prop, value, target);
+    },
+  });
+
+  /** Same mount contract as the sibling describes' helper, on this block's fixture. */
+  async function createApp(): Promise<App> {
+    fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    return fixture.componentInstance;
+  }
+
+  beforeEach(async () => {
+    // Side-effect installs only: this block never reads the stub handles.
+    installStorageStub();
+    installViewportStub();
+    reloadSpy = null;
+    updates = makeSwUpdateFake(true);
+    TestBed.overrideProvider(SwUpdate, { useValue: updates });
+    TestBed.overrideProvider(DOCUMENT, { useValue: shellDocument });
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [{ provide: ANIMATION_MODULE_TYPE, useValue: 'NoopAnimations' }],
+    }).compileComponents();
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'github',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_ICON),
+    );
+    TestBed.inject(MatIconRegistry).addSvgIconLiteral(
+      'lorestitch-mark',
+      TestBed.inject(DomSanitizer).bypassSecurityTrustHtml(BRAND_MARK_ICON),
+    );
+    workspace = TestBed.inject(WorkspaceService);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  afterEach(() => {
+    if (nativeStorage) {
+      Object.defineProperty(window, 'localStorage', nativeStorage);
+    }
+    reloadSpy = null;
+    // jsdom shares one document across a spec file: drop any overlay DOM a
+    // test left open (snackbars) so later tests start clean.
+    document.querySelector('.cdk-overlay-container')?.remove();
+  });
+
+  /** The snackbar's action button inside the body-level overlay container. */
+  function snackBarAction(): HTMLButtonElement {
+    const match = document.querySelector<HTMLButtonElement>(
+      '.cdk-overlay-container .mat-mdc-snack-bar-action',
+    );
+    assert(match);
+    return match;
+  }
+
+  it('offers one snackbar with the reload action when a version is ready', async () => {
+    const open = vi.spyOn(TestBed.inject(MatSnackBar), 'open');
+    await createApp();
+
+    updates.versionUpdates.next(VERSION_READY);
+    fixture.detectChanges();
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith('A new version is available.', 'Reload', {
+      duration: 10000,
+    });
+  });
+
+  it('reloading from the action waits out the draft window, flushes saves, then reloads', async () => {
+    const flush = vi.spyOn(workspace, 'flushPendingSave').mockResolvedValue();
+    const open = vi.spyOn(TestBed.inject(MatSnackBar), 'open');
+    await createApp();
+
+    updates.versionUpdates.next(VERSION_READY);
+    fixture.detectChanges();
+
+    // Fake time must be live before the click: applyUpdate's debounce window
+    // has to land on the faked clock for the advance below to settle it. The
+    // faked pair is the house minimum, so fixture.whenStable() stays alive —
+    // and everything after the enable sits inside the try so a failure can
+    // never leak fake timers into the next hook.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    // Arm the proxy-served location stub before the action click (plan §4.1
+    // note 2): the stub records the reload request, never touching jsdom's.
+    reloadSpy = vi.fn();
+    const reload = reloadSpy;
+    try {
+      snackBarAction().click();
+      // The window is really waited out — nothing flushed before it elapses.
+      expect(flush).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(EDIT_COMMIT_DEBOUNCE_MS);
+
+      expect(flush).toHaveBeenCalledTimes(1);
+      expect(reload).toHaveBeenCalledTimes(1);
+      expect(open).toHaveBeenCalledWith('A new version is available.', 'Reload', {
+        duration: 10000,
+      });
+    } finally {
+      vi.useRealTimers();
+      reloadSpy = null;
+    }
+  });
+
+  it('stays entirely inert when no service worker backs the app', async () => {
+    // The constructor reads isEnabled once, at mount — flip before createApp.
+    updates.isEnabled = false;
+    const open = vi.spyOn(TestBed.inject(MatSnackBar), 'open');
+    await createApp();
+
+    updates.versionUpdates.next(VERSION_READY);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await fixture.whenStable();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(updates.checkForUpdate).not.toHaveBeenCalled();
+  });
+
+  it('re-checks for a deployed version when the tab becomes visible, and only then', async () => {
+    await createApp();
+
+    // jsdom always reports visible: the first dispatch exercises the real
+    // check, the second (hidden, via an own-property shadow) must not fire.
+    document.dispatchEvent(new Event('visibilitychange'));
+    await fixture.whenStable();
+    expect(updates.checkForUpdate).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await fixture.whenStable();
+      expect(updates.checkForUpdate).toHaveBeenCalledTimes(1);
+    } finally {
+      // Drop the shadow so the prototype getter (and later specs) resume.
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
+
+    // The listener dies with the shell: a post-destroy dispatch fires nothing.
+    fixture.destroy();
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(updates.checkForUpdate).toHaveBeenCalledTimes(1);
   });
 });
