@@ -115,3 +115,49 @@ shadow cleans up via `Reflect.deleteProperty` in `finally` — no residue.
 --watch=false --coverage`, `npm run lint`, `npm run typecheck:e2e`; no e2e
 smoke — no spec touched, plan §4.2) + §4.3 real-SW capture under
 `__screenshots__/25-pwa-update-prompt/` + before/after evidence pack.
+
+## Phase P3 — Fast gate + real-SW capture (qa-auditor)
+
+**Status**: ✅ complete — no repo commit (all deliverables gitignored under `__screenshots__/`, per plan §7)
+
+**Fast gate — ALL FOUR GREEN**:
+- `npm run build` green (16.5 s).
+- `CI=true npm test -- --watch=false --coverage` green: 64 files / **1485/1485**
+  passed (47.6 s). Coverage 96.00 statements / 90.62 branches / 91.77 functions
+  / 96.99 lines — all above thresholds (80/75/80/80); `app.ts` + `app.spec.ts`
+  fully covered, the 4 PWA specs ran in-suite.
+- `npm run lint` green ("All files pass linting").
+- `npm run typecheck:e2e` green.
+- No e2e smoke (plan §4.2 — the Playwright dev server has the SW disabled; no
+  spec touched). Process note: qa's first gate-2 run was piped through `tail`
+  (masked exit code) — re-run with full capture; both runs identical 1485/1485.
+
+**§4.3 capture** (`__screenshots__/25-pwa-update-prompt/`): `capture.mjs`
+(stdlib `node:http` server, free port, full MIME map, `no-cache` on everything
+incl. `ngsw-worker.js`/`ngsw.json`; refuses to run if the two builds'
+`ngsw.json` are identical — the empirical A/B guard) + before/after PNG sets
+at 1280×800 / 1024×768 / 390×844 (light theme pinned, Fuyuki fixture via the
+real import path, linter-capture conventions reused).
+- Two consecutive `npm run build`s produced **natively different**
+  `ngsw.json` — the plan's churn assertion confirmed; perturb fallback unused,
+  tree clean throughout.
+- Label drift caught by probing: welcome import button is now "Import lorebook
+  or character card" (the linter precedent's label was stale).
+- Controller reload NOT needed — ngsw's `clients.claim()` made every first
+  load controller-owned (script polls; reload was the fallback).
+- Real chain verified per viewport: build swap → synthetic `visibilitychange`
+  → app listener → `checkForUpdate()` → fresh manifest → `VERSION_READY` →
+  snackbar. Swap alternation A→B / B→A / A→B — prompt fires on any differing
+  manifest.
+- Geometry measured: snackbar bottom ≤ viewport at all three (792≤800,
+  760≤768, 836≤844 — fully on-screen, visually confirmed in the PNGs).
+- Deviations: builds served from gitignored `serve/{buildA,buildB,live}` temp
+  copies (build B would overwrite `dist/`); otherwise none.
+
+**Evidence for user**: before = settled project-open page, no prompt;
+after = snackbar `A new version is available.` + `Reload` visible at every
+viewport. Paths posted in the phase report to the user.
+
+**Next**: P4 — branch-final sweep (three-project Playwright matrix one
+`--project=` at a time, closing `CI=true npm test -- --watch=false --coverage`
++ `npm run lint`), ledger final entry + README status, push branch, STOP.
