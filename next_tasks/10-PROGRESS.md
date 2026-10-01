@@ -189,3 +189,34 @@ dialog + phone sheet). Side-by-side posted to the user with the task report.
 
 **Next**: P4 — ts-reviewer typing/lint review of everything touched
 (c779b55, 8db5297, 89d3a12 diffs).
+
+## Phase P4 — Typing/lint review (ts-reviewer)
+
+**Status**: ✅ CLEAN — no fixes needed, no commit (review range
+`8fe8b80..HEAD`, ~2,632 added lines)
+
+Verdicts: exhaustive 12-action `never`-switch PASS (`app.ts:876-961`, +
+SHORTCUTS_HELP completeness backstop) · listener teardown PASS (single
+DOCUMENT listener, stable field identity, `DestroyRef`, spec-pinned via
+`TestBed.resetTestingModule`) · signal purity PASS (list methods are plain
+methods; Mod+N focus handoff = private pending signal +
+`afterRenderEffect` on `tabs()`; topbar opened-inputs are `input(false)`
+bound from existing shell signals, zero duplication) · scope-predicate
+typing PASS (instanceof-only narrowing, typed optional `userAgentData`
+view, jsdom default `'other'`) · strictness PASS (no `!` assertions, explicit
+returns, dual-token ConfirmDialog = third house twin, `treeIndices`
+behavior-identical to the old inline translation) · ESLint PASS.
+
+Gates re-run: lint green · full suite 1552/1552 · build green (both new
+dialogs lazy chunks) · typecheck:e2e green.
+
+Residual notes (no failure mode): redundant `event.ctrlKey` in one resolver
+guard documents intent; `ShortcutsDialog.groups` computed-over-constant;
+`focusRow`/`scrollToEntry` bare `setTimeout`s verified no-op post-destroy;
+jsdom suffixed-keydown limitation means row activation is unit-pinned via
+direct `onRowKeydown` calls — P5 e2e is the real pin.
+
+**Next**: P5 — qa-auditor: `e2e/keyboard-shortcuts.spec.ts` +
+`e2e/keyboard-navigation.spec.ts` (§3.8, incl. help-dialog cases), fresh
+delete/restore confirm pins (migration list empty), fast gate, smoke on
+desktop-chrome + one mobile project.
