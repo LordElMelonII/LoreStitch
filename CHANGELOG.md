@@ -3,6 +3,25 @@
 What's new in LoreStitch — written for writers, not for machines. This list also
 powers the in-app **About → Changelog** viewer, so it stays with you even offline.
 
+## 1.11.0 — October 1, 2026
+
+The stay-current release. An installed LoreStitch used to wait for its next
+launch to pick up a new version; now the app notices a fresh release while
+you work and offers to hand it over on the spot.
+
+### Highlights
+
+- **New versions offer themselves** — when a release ships while LoreStitch
+  is open, a small notice appears: "A new version is available." with a
+  Reload button. Take it and you're in the new version right away; ignore
+  it and nothing changes — the next launch brings the update anyway.
+- **A reload keeps your latest words** — accepting that Reload first saves
+  whatever you were just typing, so a mid-sentence refresh loses nothing.
+- **A returning visit checks for updates** — reopening LoreStitch after a
+  while (an installed app left suspended, a tab waiting in the background)
+  quietly looks for a newer version and speaks up if one shipped while you
+  were away.
+
 ## 1.10.0 — September 30, 2026
 
 The multi-tab release. A project now belongs to one tab at a time: open the
