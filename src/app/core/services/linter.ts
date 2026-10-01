@@ -31,11 +31,11 @@ import {
  * duplicate-key buckets, recursion graph — are driven by ONE resumable
  * engine. `createLintPass` exposes it (`step()`/`progress()`/`finish()`);
  * `lintBook` is that engine run synchronously to completion (the pinned
- * public API), and `lintBookChunked` walks the same engine with scheduler
- * yields between chunks so the main thread can paint. Both drivers share
- * emission order, seq assignment and the final sort, so their outputs are
- * byte-identical for the same input+options regardless of chunk cadence
- * (pinned in linter.spec.ts). Recursion verdicts and per-target key plans
+ * public API), and the pane (plan 19 D4) drives the same engine directly for
+ * progress and stale-run supersession. Every cadence shares emission order,
+ * seq assignment and the final sort, so the output is byte-identical for the
+ * same input+options regardless of chunk sizes (pinned in linter.spec.ts).
+ * Recursion verdicts and per-target key plans
  * are memoized by entry identity (plan 19 D2 — see the memos section).
  *
  * Semantics:
@@ -336,19 +336,7 @@ export interface LintChunkSizes {
 }
 
 /**
- * `lintBookChunked`'s config: chunk sizes plus the scheduler awaited between
- * chunks. Tests pass an immediate scheduler for determinism.
- */
-export interface LintChunkConfig extends LintChunkSizes {
-  /**
-   * Awaited between chunks so the main thread can paint. Default: a
-   * `setTimeout(0)` macrotask yield.
-   */
-  yieldBetween?: () => Promise<void>;
-}
-
-/**
- * Default chunk sizes for the chunked drivers (plan 19 D1), tuned so a chunk
+ * Default chunk sizes for a resumable pass (plan 19 D1), tuned so a chunk
  * stays near the ~50 ms main-thread budget on the probe books (plan 19 §2):
  * the entry-scoped rules are per-entry memoized (plan 18 D2) and cheap per
  * chunk, while the recursion pair loop dominates — hence its finer cadence.
@@ -364,12 +352,6 @@ const SYNC_CHUNK_SIZES: Required<LintChunkSizes> = {
   entriesPerStep: Number.POSITIVE_INFINITY,
   sourcesPerStep: Number.POSITIVE_INFINITY,
 };
-
-/** Default macrotask yield between chunks (see `LintChunkConfig`). */
-const DEFAULT_YIELD_BETWEEN = (): Promise<void> =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
-  });
 
 /**
  * The lint pass itself, written exactly in `lintBook`'s emission order with
@@ -618,9 +600,9 @@ export interface LintPass {
 
 /**
  * Creates the one lint engine for `book` + `options` and returns it paused
- * before the first chunk. `lintBook` runs it synchronously to completion;
- * `lintBookChunked` steps it with scheduler yields between chunks; the pane
- * (plan 19 D4) can drive it directly for progress and stale-run supersession.
+ * before the first chunk. `lintBook` runs it synchronously to completion
+ * (the pinned public API); the pane (plan 19 D4) drives it directly for
+ * progress and stale-run supersession.
  * Pure and read-only: the engine writes into its own collection state and
  * the plan-19 WeakMap memos, never into the book.
  */
@@ -688,35 +670,13 @@ export function createLintPass(
  *
  * The synchronous public API (plan 19 D1): the one engine
  * (`createLintPass`) run to completion at whole-phase chunk sizes. The
- * pinned output contract cannot drift from the chunked variant — both walk
- * the same engine, and the generator's yields never reorder emission.
+ * generator's yields only interleave scheduling — they never reorder
+ * emission, so any chunk cadence produces byte-identical output.
  */
 export function lintBook(book: CharacterBook, options?: LintOptions): LintDiagnostic[] {
   const pass = createLintPass(book, options, SYNC_CHUNK_SIZES);
   while (!pass.step()) {
     // Whole phases per step; the generator's yields are plain pauses here.
-  }
-  return pass.finish();
-}
-
-/**
- * The chunked async driver (plan 19 D1): walks the SAME engine as
- * `lintBook`, awaiting the scheduler between chunks so the main thread can
- * paint. Byte-identical to `lintBook` for the same input+options — the
- * engine holds all state; this driver only interleaves yields. Defaults to
- * the tunable `DEFAULT_CHUNK_SIZES` cadence and a `setTimeout(0)` macrotask
- * yield; tests pin determinism with an immediate scheduler and pathological
- * 1-per-chunk cadences.
- */
-export async function lintBookChunked(
-  book: CharacterBook,
-  options?: LintOptions,
-  config?: LintChunkConfig,
-): Promise<LintDiagnostic[]> {
-  const pass = createLintPass(book, options, config);
-  const yieldBetween = config?.yieldBetween ?? DEFAULT_YIELD_BETWEEN;
-  while (!pass.step()) {
-    await yieldBetween();
   }
   return pass.finish();
 }
@@ -1023,8 +983,8 @@ function cyclePathIn(component: readonly RecursionNode[]): RecursionNode[] {
  *   are safe — unlike `entry-memo.ts`'s lint memo, no id gate is needed.
  * - **Option-independent**: `LintOptions` (muted/ignored/includeGraphRules)
  *   affect filtering only, never matching, so the memos are shared across
- *   option shapes and across both drivers (sync `lintBook` and chunked
- *   `lintBookChunked`).
+ *   option shapes and across every driver cadence (sync `lintBook` and the
+ *   pane's chunked stepping alike).
  * - **Deep-frozen books stay untouched**: the memos write into WeakMaps,
  *   never into the book (the lossless invariant).
  * - A stored verdict is `string | null` (the matched spelling, or `null`

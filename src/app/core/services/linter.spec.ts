@@ -2,9 +2,7 @@ import {
   LARGE_BOOK_THRESHOLD,
   createLintPass,
   lintBook,
-  lintBookChunked,
   lintDiagnosticSignature,
-  type LintChunkConfig,
   type LintDiagnostic,
   type LintOptions,
   type LintPhase,
@@ -1158,20 +1156,10 @@ describe('linter', () => {
   });
 
   // ==========================================================================
-  // Chunked pass engine & pair memos (plan 19 D1/D2)
+  // Resumable pass engine & pair memos (plan 19 D1/D2)
   // ==========================================================================
 
-  describe('chunked pass engine (plan 19 D1)', () => {
-    /** Immediate scheduler — deterministic chunk boundaries for tests. */
-    const IMMEDIATE_YIELD = async (): Promise<void> => undefined;
-
-    /** The pathological cadence: a chunk boundary between every unit. */
-    const PATHOLOGICAL: LintChunkConfig = {
-      entriesPerStep: 1,
-      sourcesPerStep: 1,
-      yieldBetween: IMMEDIATE_YIELD,
-    };
-
+  describe('resumable engine (plan 19 D1)', () => {
     /**
      * A fixture exercising every phase and most rules: two recursion cycles,
      * a self-trigger, an invalid regex, a malformed wrapper, duplicate keys,
@@ -1195,98 +1183,6 @@ describe('linter', () => {
         makeEntry(12, { keys: [], content: '', enabled: false }),
       ]);
     }
-
-    const CADENCES: readonly { name: string; config: LintChunkConfig }[] = [
-      { name: 'defaults (setTimeout scheduler)', config: {} },
-      { name: 'pathological 1 entry / 1 source per chunk', config: PATHOLOGICAL },
-      {
-        name: 'mixed small chunks',
-        config: { entriesPerStep: 2, sourcesPerStep: 3, yieldBetween: IMMEDIATE_YIELD },
-      },
-    ];
-
-    /** Option shapes over the variety book; the `ignored` side subsets the plain run. */
-    function makeOptionShapes(book: CharacterBook): { name: string; options: LintOptions }[] {
-      const plain = lintBook(book);
-      return [
-        { name: 'no options', options: {} },
-        {
-          name: 'ignored signatures',
-          options: {
-            ignored: new Set(plain.filter((_, i) => i % 3 === 0).map(lintDiagnosticSignature)),
-          },
-        },
-        {
-          name: 'muted entry-scoped rule',
-          options: { mutedRules: new Set<LintRuleId>(['invalid-regex']) },
-        },
-        {
-          name: 'muted self-trigger (graph still runs)',
-          options: { mutedRules: new Set<LintRuleId>(['self-trigger']) },
-        },
-        {
-          name: 'muted recursion-cycle (graph still runs)',
-          options: { mutedRules: new Set<LintRuleId>(['recursion-cycle']) },
-        },
-        { name: 'graph-free', options: { includeGraphRules: false } },
-      ];
-    }
-
-    it('produces lintBook-identical diagnostics for every cadence across option shapes', async () => {
-      const book = makeVarietyBook();
-      for (const shape of makeOptionShapes(book)) {
-        const expected = lintBook(book, shape.options);
-        for (const cadence of CADENCES) {
-          const chunked = await lintBookChunked(book, shape.options, cadence.config);
-          expect(chunked, `${cadence.name} / ${shape.name}`).toEqual(expected);
-        }
-      }
-    });
-
-    it('is byte-identical to lintBook (JSON serialization) at every cadence', async () => {
-      const book = makeVarietyBook();
-      const expected = JSON.stringify(lintBook(book));
-      for (const cadence of CADENCES) {
-        const chunked = await lintBookChunked(book, undefined, cadence.config);
-        expect(JSON.stringify(chunked), cadence.name).toBe(expected);
-      }
-    });
-
-    it('applies the >1500-entry skip identically to lintBook in both drivers', async () => {
-      const book = makeLargeBook(LARGE_BOOK_THRESHOLD + 1);
-      const expected = lintBook(book);
-      expect(expected).toHaveLength(1); // the skip note alone
-      for (const cadence of CADENCES) {
-        const chunked = await lintBookChunked(book, undefined, cadence.config);
-        expect(chunked, cadence.name).toEqual(expected);
-      }
-    });
-
-    it('keeps a deep-frozen book untouched through the chunked path', async () => {
-      const book = deepFreeze(makeVarietyBook());
-      const before = JSON.stringify(book);
-
-      const chunked = await lintBookChunked(book, undefined, PATHOLOGICAL);
-
-      expect(JSON.stringify(book)).toBe(before);
-      expect(Object.isFrozen(book)).toBe(true);
-      expect(chunked).toEqual(lintBook(book));
-    });
-
-    it('passes an empty book through both drivers identically (phase-boundary edge)', async () => {
-      // Zero entries: the entry-rules loop never runs, duplicate-keys is its
-      // one chunk and the graph phase completes with total 1 and no pair loop
-      // — every phase boundary fires with nothing to process.
-      const book = deepFreeze(makeBook([]));
-      const expected = lintBook(book);
-      expect(expected).toEqual([]);
-      for (const cadence of CADENCES) {
-        await expect(lintBookChunked(book, undefined, cadence.config), cadence.name).resolves.toEqual(
-          expected,
-        );
-      }
-      expect(Object.isFrozen(book)).toBe(true);
-    });
 
     describe('createLintPass driver', () => {
       it('reports phase-by-phase progress and finishes with the sync output', () => {
@@ -1438,7 +1334,7 @@ describe('linter', () => {
       expect(lintBook(rekeyed)).toEqual(lintBook(coldCopyOf(rekeyed)));
     });
 
-    it('stays identical across repeat runs and both drivers on the same objects', async () => {
+    it('stays identical across repeat runs on the same objects', () => {
       const book = deepFreeze(
         makeBook([
           makeEntry(1, { comment: 'Alpha', keys: ['alpha'], content: 'the beta rises' }),
@@ -1449,14 +1345,6 @@ describe('linter', () => {
       const first = lintBook(book);
       // Second sync run: every pair memo-hits.
       expect(lintBook(book)).toEqual(first);
-      // Chunked run over the same (now warm) frozen objects.
-      await expect(
-        lintBookChunked(book, undefined, {
-          entriesPerStep: 1,
-          sourcesPerStep: 1,
-          yieldBetween: async () => undefined,
-        }),
-      ).resolves.toEqual(first);
     });
 
     it('verdicts are position-independent: reordering the same entries keeps output correct', () => {
