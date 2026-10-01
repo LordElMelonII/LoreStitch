@@ -129,3 +129,63 @@ draft-flush API exists) — type-then-commit e2e waits out
 `:focus-visible` coverage incl. bar-item ring upgrade, skip link, pane
 labels + `aria-expanded`, sr-only h1) + one-shot DevTools a11y audit +
 AFTER screenshots + side-by-side report.
+
+## Phase P3 — A11y mechanics + audit + AFTER screenshots (ui-specialist)
+
+**Status**: ✅ complete — commit `89d3a12` `feat(a11y): keyboard selection, focus baseline, and destructive-action confirmations` (18 files, +462/−22)
+
+**Landed**:
+- `ConfirmDialog` made dual-container (the Batch/Shortcuts twin idiom:
+  optional `MatDialogRef`/`MatBottomSheetRef` + `MAT_DIALOG_DATA ??
+  MAT_BOTTOM_SHEET_DATA`); backward compatible.
+- `commit-history.restore()` through `openResponsive` — "Restore this
+  state?" / locked message / "Restore" (danger); rollback only on accept.
+- `entry-list.delete()` ditto — "Delete entry" / `Delete "<name>"? This
+  cannot be undone.` / "Delete" (danger).
+- Skip link ("Skip to editor", first tabbable, hidden-until-`:focus`,
+  token-styled) + `#editor-content` `tabindex="-1"` target; pane
+  `id`/`aria-label` + `role="complementary"`; sr-only `h1` = project title;
+  topbar `role="banner"` + `entriesOpened`/`historyOpened` inputs +
+  `aria-expanded`/`aria-controls` on both toggles; mobile bar items'
+  state-layer hint → real 2px `:focus-visible` ring; `.sr-only` utility +
+  `.app-confirm-sheet` recipe in `styles.scss`.
+
+**Gates**: build green · full suite **1552/1552** · lint green ·
+typecheck:e2e green · desktop-chrome smoke `entry-list-selection
+batch-and-tokens session-lock` 14P/2S (phone-pinned skips by design).
+
+**Discovery**: NO existing e2e spec clicks row-delete or history-Restore
+(grep-verified) — P5's "migrate instant delete/restore pins" list is EMPTY;
+P5 writes those pins fresh.
+
+**One-shot DevTools-style a11y audit** (CDP `Accessibility.getFullAXTree` +
+contrast checks over 8 real-app states; script kept at
+`__screenshots__/10/audit.mjs`): fixed in-task — (1) pane aria-labels were
+inert on role-less drawers → `role="complementary"` added; (2) row-select
+checkboxes unnamed (host attr never reached MatCheckbox's inner input →
+`[aria-label]` input); (3) `.token-count` contrast 3.46–4.05:1 →
+`--mat-sys-on-surface-variant`; (4) h1→h3 heading skip → drawer titles h2.
+Material-internal, recorded no-action: MatCheckbox `aria-expanded=""` on its
+own inputs; CDK focus-trap aria-hides background landmarks while dialogs
+open (correct modal semantics); mat-tab/mat-select internal wiring.
+
+**AFTER screenshots**: 21 PNGs under `__screenshots__/10/after/` — identical
+pinned conditions to BEFORE + new states 04–07 (skip link focused, delete
+confirm dialog + phone sheet, restore confirm, shortcuts help desktop
+dialog + phone sheet). Side-by-side posted to the user with the task report.
+
+**Deviations**:
+1. Curly quotes in delete copy (house idiom for embedded titles; severity
+   wording untouched).
+2. Batch delete still opens via plain `MatDialog` (it was never on
+   openResponsive — plan grounding said otherwise); migrating it is
+   unrequested scope, flagged for a later pass. Single delete + restore now
+   set the dual-container pattern.
+3. Skip-link first-Tab capture/e2e needs a pointer-free reload (Chromium
+   resumes sequential focus from the last pointer position) — documented in
+   `capture.mjs` state 04, relevant to P5.
+4. Visual reveal of the skip link is proven by screenshots + real-Tab
+   capture (jsdom has no layout engine); unit pins cover order + focus jump.
+
+**Next**: P4 — ts-reviewer typing/lint review of everything touched
+(c779b55, 8db5297, 89d3a12 diffs).
