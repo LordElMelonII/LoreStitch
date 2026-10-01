@@ -94,7 +94,9 @@ function restoreEntriesWidth(): number {
  */
 function checkForUpdateIfVisible(updates: SwUpdate): void {
   if (document.visibilityState === 'visible') {
-    void updates.checkForUpdate().catch(() => {});
+    void updates.checkForUpdate().catch(() => {
+      // Ignored by design: offline is normal, the next visible transition re-checks.
+    });
   }
 }
 
