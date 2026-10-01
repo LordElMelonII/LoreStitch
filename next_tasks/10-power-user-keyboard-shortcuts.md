@@ -10,9 +10,10 @@
 > restructure was **declined** at the same session (roving tabindex over the
 > existing `role="button"` rows instead).
 > **Type**: UX friction + accessibility pass — global shortcut layer over
-> existing actions, keyboard semantics for the entry list, and one small
-> visible-UI delta set (focus rings, skip link, two confirm dialogs) ⇒ design
-> evidence at checkpoint 10-1.
+> existing actions, keyboard semantics for the entry list, a shortcuts help
+> dialog (added 2026-10-01, user decision — discoverability cannot be
+> assumed), and one small visible-UI delta set (focus rings, skip link, two
+> confirm dialogs) ⇒ design evidence at checkpoint 10-1.
 > **Suggested agents**: `core-engine` (lead: pure chord→action model) →
 > `ui-specialist` (two phases) → `ts-reviewer` → `qa-auditor`
 > **Status**: 🟡 Planned — not started (re-grounded at `develop` @ `90bb582`,
@@ -36,6 +37,7 @@
 | `Mod+Shift+D` | Toggle the active entry's enabled state | anywhere but text |
 | `Ctrl+Space` | Toggle selection of the focused row | list focus only |
 | `Shift+↑` / `Shift+↓` | Extend the selection from the anchor | list focus only |
+| `?` | Open the keyboard-shortcuts help dialog (§3.6) | anywhere but text |
 
 (`Mod` = `Ctrl` on Windows/Linux, `Cmd` on macOS. Exact guards in §3.1.)
 
@@ -60,6 +62,11 @@
    custom (non-Material) interactive surfaces, skip-to-content link, labels +
    `aria-expanded` on the two drawer panes/toggles, sr-only `h1` for the
    project shell, `aria-label="Entry name"` on the name input.
+6. **Shortcuts help dialog** (`?` chord + a topbar entry): the chord catalog
+   rendered from the resolver's own table (§3.6) — ten chords with zero
+   in-app discovery is a map nobody learns, and the chords claim browser
+   defaults users will run into. Added 2026-10-01 (user decision:
+   discoverability cannot be assumed).
 
 ## 2. Grounding (develop @ `90bb582`, v1.11.0)
 
@@ -165,7 +172,8 @@ export type ShortcutAction =
   | 'toggle-enabled'
   | 'select-toggle'
   | 'select-extend-prev'
-  | 'select-extend-next';
+  | 'select-extend-next'
+  | 'show-help';
 
 /** 'text' = typing-capable element, 'list' = inside the entry sidebar
  *  (and not text), 'other' = anywhere else. */
@@ -201,6 +209,7 @@ Guard table (the contract checkpoint 10-1 approves):
 | `Mod+Shift+D` | `toggle-enabled` | no | yes | yes | Chrome bookmark-all-tabs on both platforms — claimed |
 | `Ctrl+Space` | `select-toggle` | no | no | **only here** | OS/IME `Ctrl+Space` is safe: list scope excludes text fields |
 | `Shift+↑`/`Shift+↓` | `select-extend-prev`/`next` | no | no | **only here** | anchor extension, task 20 parity |
+| `?` (`key === '?'`, no Mod/Alt) | `show-help` | no | yes | yes | `?` must always type in text fields; `Mod+/` alias is a checkpoint option (AltGr layouts — risk 9) |
 
 Universal guards: `isComposing` ⇒ `null`; unclaimed chords ⇒ `null` and **no**
 `preventDefault`; `Mod` = `metaKey` on `apple`, `ctrlKey` elsewhere (`Ctrl+S`
@@ -311,20 +320,51 @@ silent no-op (welcome screen).
   editor, dialogs); findings triaged and fixed in-task, evidence recorded in
   the ledger. No new dependency.
 
-### 3.6 Visual gate
+### 3.6 Shortcuts help dialog (discoverability)
 
-P3 changes visible UI (focus rings, skip link, confirm dialogs) ⇒ full
-before/after screenshot protocol under `__screenshots__/10/{before,after}/`
-(pinned conditions per AGENTS.md; keyboard-focused states captured by
-driving the real app — focus rings need real `:focus-visible`, the
-`__screenshots__` mock-script precedents). The design evidence (ring token
-choice, skip-link treatment, confirm copy) rides checkpoint 10-1.
+Ten chords with zero in-app discovery is a map nobody learns — and these
+chords claim browser defaults (`Mod+F` replacing browser Find deserves an
+in-app explanation). The lazy implementation is also the correct one: the
+help surface is the resolver's own table rendered — no second source to
+drift.
 
-### 3.7 Test matrix
+- **Catalog export**: `shortcut-map.ts` exports
+  `SHORTCUTS_HELP: readonly ShortcutHelpEntry[]` (chord display string,
+  action, one-line description, group `'global' | 'list'`) beside
+  `resolveShortcut` — one source of truth; the dialog can never disagree
+  with the guards. A unit spec pins completeness (every `ShortcutAction`
+  exactly once).
+- **`?` chord**: action `show-help`, `list`/`other` scope only (§3.1 table).
+- **Component**: `shared/components/shortcuts-dialog/` — presentational,
+  renders the catalog grouped "Everywhere" / "In the entry list", `kbd`-chip
+  chords styled with M3 tokens (exemplar: the batch dialog's grouped list).
+  Opened only through `ResponsiveOverlayService.openResponsive` (dialog on
+  desktop, bottom sheet on phones); no data injection needed.
+- **Topbar entry**: a "Keyboard shortcuts" item in the topbar's About/help
+  cluster — the discovery path that needs no foreknowledge (it names the `?`
+  chord). If it introduces a new icon ligature, stage the
+  `npm run icons:refresh` output with the phase commit.
+- **Optional annotation** (checkpoint call): `aria-keyshortcuts` on mirrored
+  controls (e.g. the filter input carries `Mod+F`).
+- Lands in P2 with the shortcut layer it documents; rides checkpoint 10-1
+  evidence and the P3 AFTER screenshots.
+
+### 3.7 Visual gate
+
+P3 closes the task's visible-UI delta set (focus rings, skip link, confirm
+dialogs, the help dialog) ⇒ full before/after screenshot protocol under
+`__screenshots__/10/{before,after}/` (pinned conditions per AGENTS.md;
+keyboard-focused states captured by driving the real app — focus rings need
+real `:focus-visible`, the `__screenshots__` mock-script precedents). The
+design evidence (ring token choice, skip-link treatment, confirm copy,
+help-dialog layout) rides checkpoint 10-1.
+
+### 3.8 Test matrix
 
 | Tier | Required cases |
 |------|----------------|
-| Unit — `shortcut-map.spec.ts` | full guard table × scope × platform: every row of §3.1 incl. `J` in `text` ⇒ null, `Ctrl+Space` in `text`/`other` ⇒ null, `Alt+↑` in `text` ⇒ null, plain arrows outside `list` ⇒ null, `Ctrl+S` on `apple` ⇒ null, `Cmd+S` on `apple` ⇒ commit, `Alt+Shift+↓` ⇒ move-down, stray-modifier chords ⇒ null, IME composing ⇒ null, unknown chords ⇒ null |
+| Unit — `shortcut-map.spec.ts` | full guard table × scope × platform: every row of §3.1 incl. `J` in `text` ⇒ null, `Ctrl+Space` in `text`/`other` ⇒ null, `Alt+↑` in `text` ⇒ null, plain arrows outside `list` ⇒ null, `Ctrl+S` on `apple` ⇒ null, `Cmd+S` on `apple` ⇒ commit, `Alt+Shift+↓` ⇒ move-down, `?` in `text` ⇒ null / `list`+`other` ⇒ show-help, stray-modifier chords ⇒ null, IME composing ⇒ null, unknown chords ⇒ null |
+| Unit — help catalog | `SHORTCUTS_HELP` completeness: every `ShortcutAction` appears exactly once, grouped `global`/`list` consistently with the §3.1 scope column |
 | Unit — `keyboard-shortcuts.service.spec.ts` | scope classification from real dispatched `KeyboardEvent`s (row div ⇒ list; filter input ⇒ text; row checkbox ⇒ list, not text; editor chrome ⇒ other); `preventDefault` only when handled; overlay gate (open dialog ⇒ inert); listener teardown |
 | Unit — entry-list | roving tabindex render (active row `0`, others `-1`, `aria-current`); bubbling guard (Space on checkbox does not open); `Ctrl+Space` toggle + `Shift+↑/↓` extension parity with shift+click ranges (reuse the `shiftClick` helper style, `entry-list.spec.ts:777-845`); `moveActive` filtered→tree mapping (incl. active-entry-hidden fallback) |
 | Unit — action semantics | auto-message shape + no-commit-on-clean; toggle without active entry; new-entry focus deferral |
@@ -332,16 +372,17 @@ choice, skip-link treatment, confirm copy) rides checkpoint 10-1.
 | E2E — `e2e/keyboard-shortcuts.spec.ts` | `Mod+S` creates a history row with the auto-message; `Mod+N` appends an entry and the **active tab body's** name input holds focus (`activeElement` check); `Mod+F` focuses the filter; `Alt+↓`/`J` moves the active row; `Alt+Shift+↓` reorders (row order changes and persists); typing `jk` into the filter inserts letters (no-hijack pin); `Mod+Shift+D` flips enabled; chords inert inside an open dialog |
 | E2E — `e2e/keyboard-navigation.spec.ts` | first Tab from body hits the skip link; skip jumps to main; Tab into the list stops once (active row); arrows/J/K move roving focus through a list longer than the rendered window (virtual-scroll settle); `Ctrl+Space` + `Shift+↓` select a range then a batch action applies to it; Space on the row checkbox toggles selection **without** opening the editor; Escape in dialogs unchanged |
 | E2E — migrated pins | every existing spec that clicks row-delete or history-Restore now handles the confirm dialog (grep both flows in `e2e/`; mobile projects meet the bottom-sheet confirm) |
+| E2E — shortcuts help dialog | `?` opens it from the shell; the topbar entry opens it; typing `?` in the filter input inserts the character (no-hijack pin); the rendered catalog contains `Mod+S` and the `?` entry itself; Escape closes (CDK default) |
 | Mobile | chords are inert (no hijack, nothing crashes on keydown; the bar still covers the actions); confirm sheets work |
 
 ## 4. Implementation Plan
 
 | Phase | Files | Work |
 |-------|-------|------|
-| **P1 — Resolver** (core-engine) | `core/models/shortcut-map.ts` (+spec), `core/models/README.md` | §3.1 |
-| **Checkpoint 10-1** (user) | — | chord table + guards + auto-message + snackbar/confirm copy + focus-ring/skip-link design evidence (§3.3, §3.5, §3.6) |
-| **P2 — Wiring** (ui-specialist) | `shared/services/keyboard-shortcuts.service.ts` (+spec), `app.ts/.html`, `entry-list.ts/.html/.scss`, `entry-editor.ts`, `entry-name/entry-name.html`, `core/models/README.md` | §3.2–3.4 (service, dispatch, roving list, bubbling fix, nav + move chords, name-field focus) — BEFORE screenshots captured at phase start |
-| **P3 — A11y mechanics** (ui-specialist) | `styles.scss`, `app.html/.scss`, `topbar.*`, `entry-list.*`, `commit-history.*`, confirm wiring | §3.5 + one-shot DevTools audit + AFTER screenshots + side-by-side report |
+| **P1 — Resolver** (core-engine) | `core/models/shortcut-map.ts` (+spec), `core/models/README.md` | §3.1 + the `SHORTCUTS_HELP` catalog export (§3.6) |
+| **Checkpoint 10-1** (user) | — | chord table + guards + auto-message + snackbar/confirm copy + help-dialog design + focus-ring/skip-link design evidence (§3.1, §3.3, §3.5–3.7) |
+| **P2 — Wiring** (ui-specialist) | `shared/services/keyboard-shortcuts.service.ts` (+spec), `shared/components/shortcuts-dialog/`, `app.ts/.html`, `entry-list.ts/.html/.scss`, `entry-editor.ts`, `entry-name/entry-name.html`, `topbar.*` (help entry) | §3.2–3.4 + §3.6 (service, dispatch, roving list, bubbling fix, nav + move chords, name-field focus, help dialog + topbar entry) — BEFORE screenshots captured at phase start |
+| **P3 — A11y mechanics** (ui-specialist) | `styles.scss`, `app.html/.scss`, `topbar.*`, `entry-list.*`, `commit-history.*`, confirm wiring | §3.5 + one-shot DevTools audit + AFTER screenshots (incl. the help dialog) + side-by-side report |
 | **P4 — Review** (ts-reviewer) | all touched | exhaustive action unions, listener teardown, signal purity in `navigate`/`moveActive`, scope-predicate typing |
 | **P5 — E2E** (qa-auditor) | `e2e/keyboard-shortcuts.spec.ts`, `e2e/keyboard-navigation.spec.ts`, migrated pins | §3.7 |
 
@@ -355,11 +396,13 @@ confirmations`, `test(e2e): …`, `docs(next_tasks): …` per phase.
 1. **`core-engine`** — P1 (skills: `typescript-advanced-types`). *Gate:
    `npm run build` + full `npm test` + `npm run lint` + `npm run
    typecheck:e2e`.*
-2. **User checkpoint 10-1** — the §3.1 guard table, §3.3 copy, §3.5/§3.6
-   design evidence. Gate stays open until answered (house rule); an
-   unanswered gate stops the pipeline, never defaults.
-3. **`ui-specialist`** — P2 (skills: `material-3`, `angular-developer`).
-   *Gate: fast gate + `desktop-chrome` smoke of touched specs.*
+2. **User checkpoint 10-1** — the §3.1 guard table, §3.3 copy, §3.5
+   confirm-dialog copy, §3.6 help-dialog design, and the §3.7
+   focus-ring/skip-link evidence. Gate stays open until answered (house
+   rule); an unanswered gate stops the pipeline, never defaults.
+3. **`ui-specialist`** — P2, §3.2–3.4 + §3.6 (skills: `material-3`,
+   `angular-developer`). *Gate: fast gate + `desktop-chrome` smoke of
+   touched specs.*
 4. **`ui-specialist`** — P3 (skills: `material-3`, `frontend-design`).
    *Gate: fast gate + screenshots + audit findings posted.*
 5. **`ts-reviewer`** — P4. *Gate: `npm run lint`.*
@@ -401,3 +444,6 @@ sweep + closing coverage + lint.
    Material's checkbox inputs and select triggers is verified against the
    rendered DOM in P2 and pinned by unit specs; drift across Material
    upgrades is what those specs exist to catch.
+9. **`?` across keyboard layouts**: on layouts where `?` needs an
+   `AltGr`-class chord the no-Alt guard rejects it; the `Mod+/` alias
+   (checkpoint-10-1 option) is the layout-independent fallback.

@@ -23,7 +23,7 @@ level pending the archival pass.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
-| 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`/arrows, `Alt+Shift+↑/↓` reorder, `Mod+Shift+D`, list-scope selection keys — plus the keyboard-a11y pass (roving tabindex, row keydown-bubbling fix, `:focus-visible` baseline, skip link, pane labels, restore/delete confirmations). Rescoped 2026-10-01 (final task); re-grounded at `90bb582` | ✅ Ready (checkpoint 10-1 after P1) |
+| 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`/arrows, `Alt+Shift+↑/↓` reorder, `Mod+Shift+D`, list-scope selection keys, `?` help dialog — plus the keyboard-a11y pass (roving tabindex, row keydown-bubbling fix, `:focus-visible` baseline, skip link, pane labels, restore/delete confirmations). Rescoped 2026-10-01 (final task); re-grounded at `90bb582` | ✅ Ready (checkpoint 10-1 after P1) |
 | 25 | [25-pwa-update-prompt.md](./25-pwa-update-prompt.md) | `SwUpdate` `VERSION_READY` → flush-first reload snackbar in the shell + visible-transition re-check; no new files (session-lock wiring precedent). Real-SW capture script at `__screenshots__/25-pwa-update-prompt/capture.mjs` doubles as manual deploy-hygiene regression tooling (cache-header mistakes, broken hash churn) | ✅ Merged to `develop` 2026-10-01 (fast-forward; ledger [25-PROGRESS.md](./25-PROGRESS.md)) |
 
 ### Queue (sketched during evaluation; planned when their turn comes)
