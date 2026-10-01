@@ -11,8 +11,8 @@
 > **Suggested agents**: `ui-specialist` (lead) → `ts-reviewer` → `qa-auditor`.
 > `core-engine` is not dispatched — nothing touches serialization, VCS or
 > hashing.
-> **Status**: 🟢 Implemented on `feature/25-pwa-update-prompt` (pushed
-> 2026-10-01, awaiting user test — no merge until the explicit go)
+> **Status**: ✅ Merged to `develop` 2026-10-01 (fast-forward, `9e46c86`;
+> archival pass pending)
 
 ---
 

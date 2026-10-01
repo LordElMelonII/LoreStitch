@@ -192,3 +192,11 @@ tests first).
 **Next**: USER gate — test the pushed branch; `git merge --ff-only` into
 `develop` only on the explicit go (then the archival pass moves this plan +
 ledger into `archive/`).
+
+## Post-task — merged to develop (orchestrator)
+
+User gave the explicit go 2026-10-01: `feature/25-pwa-update-prompt`
+fast-forward-merged into `develop` (`5e142ac..9e46c86`, linear — no merge
+commit) and pushed to origin. Plan/README statuses synced to "merged" in the
+same push. Archival pass (plan + ledger → `archive/`) deliberately deferred —
+task 11's documents are still at top level awaiting the same batch pass.
