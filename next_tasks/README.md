@@ -15,12 +15,15 @@ selection + markdown, v1.7.0 — it pre-empted 10/11 by user decision,
 "priority over every other task", shifting the sketch queue numbers: undo →
 13, pinned drawer → 15, 14 stays retired), tasks 16–19 (v1.8.0), tasks 20–21
 (v1.9.0), tasks 22–23 (v1.9.1) and task 24 (brand mark — merged to `develop`
-2026-09-30, unreleased at archival).
+2026-09-30, unreleased at archival). Task 11 (multi-tab session lock — Web
+Locks guard + non-destructive takeover prompt, flush-before-release)
+completed 2026-09-30 on `feature/11-multi-tab-session-lock`, merged to
+`develop` and released as v1.10.0; its plan and ledger remain at the top
+level pending the archival pass.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
 | 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
-| 11 | [11-multi-tab-session-lock.md](./11-multi-tab-session-lock.md) | Web Locks session guard + non-destructive takeover prompt; flush-before-release so no edit is discarded | ✅ Ready (checkpoint 11-1 after P1) |
 
 ### Queue (sketched during evaluation; planned when their turn comes)
 
