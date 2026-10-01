@@ -13,7 +13,7 @@
     align-items: center;
     gap: 8px;
 
-    h3 {
+    h2 {
       margin: 0;
       font: var(--mat-sys-title-medium);
     }
@@ -58,6 +58,14 @@
 
       &:hover {
         background: var(--mat-sys-surface-container-highest);
+      }
+
+      // Focus ring (Task 10 §3.5 sweep — these plain buttons rode the UA
+      // default outline): the read-only-pill's recipe, 2px primary offset
+      // outside the chip's own border.
+      &:focus-visible {
+        outline: 2px solid var(--mat-sys-primary);
+        outline-offset: 2px;
       }
 
       &.active {
@@ -207,7 +215,10 @@
 
     .token-count {
       font: var(--mat-sys-label-small);
-      color: var(--mat-sys-outline);
+      // on-surface-variant, not outline: the audit (Task 10 P3) measured the
+      // outline tone at 3.46-4.05:1 against the row surfaces — under the 4.5
+      // text minimum. The variant tone passes on both.
+      color: var(--mat-sys-on-surface-variant);
       white-space: nowrap;
     }
 

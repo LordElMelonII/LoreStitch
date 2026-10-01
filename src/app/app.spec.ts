@@ -1589,4 +1589,93 @@ describe('App keyboard shortcuts', () => {
     }
     expect(focused).toBe(true);
   });
+
+  // -------------------------------------------------------------------------
+  // Shell landmarks and skip link (Task 10 §3.5).
+  // -------------------------------------------------------------------------
+
+  it('skip link is the first tabbable element and jumps focus to the editor region', async () => {
+    await workspace.createProject('Fuyuki');
+    await createApp();
+    const host = fixture.nativeElement as HTMLElement;
+
+    const skip = host.querySelector<HTMLAnchorElement>('a.skip-link');
+    assert(skip);
+    expect(skip.textContent?.trim()).toBe('Skip to editor');
+    // First tabbable: no focusable element precedes it in DOM order.
+    const focusables = host.querySelectorAll(
+      'a[href], button, input, select, textarea, [tabindex]',
+    );
+    expect(focusables[0]).toBe(skip);
+
+    // The target is the main region, excluded from tab order but
+    // programmatically focusable (tabindex="-1").
+    const main = host.querySelector<HTMLElement>('#editor-content');
+    assert(main);
+    expect(main.getAttribute('role')).toBe('main');
+    expect(main.getAttribute('tabindex')).toBe('-1');
+
+    skip.click();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(main);
+  });
+
+  it('sr-only h1 renders the active project name and only in the project shell', async () => {
+    await createApp();
+    const host = fixture.nativeElement as HTMLElement;
+    // No project: the welcome screen owns the shell's visible h1.
+    expect(host.querySelector('h1.sr-only')).toBeNull();
+
+    await workspace.createProject('Fuyuki');
+    fixture.detectChanges();
+    const h1 = host.querySelector('h1.sr-only');
+    assert(h1);
+    expect(h1.textContent?.trim()).toBe('Fuyuki');
+  });
+
+  it('labels the two drawer panes and wires the toggles to their ids', async () => {
+    await workspace.createProject('Fuyuki');
+    await createApp();
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('#entries-pane')?.getAttribute('aria-label')).toBe('Entries');
+    expect(host.querySelector('#history-pane')?.getAttribute('aria-label')).toBe('Commit history');
+    // aria-controls cross-check: the ids the toggles reference exist.
+    const entriesToggle = host.querySelector<HTMLButtonElement>('[aria-label="Toggle entries panel"]');
+    const historyToggle = host.querySelector<HTMLButtonElement>('[aria-label="Toggle history drawer"]');
+    assert(entriesToggle);
+    assert(historyToggle);
+    expect(entriesToggle.getAttribute('aria-controls')).toBe('entries-pane');
+    expect(historyToggle.getAttribute('aria-controls')).toBe('history-pane');
+    // Both drawers default open on desktop — the toggles report exactly that.
+    expect(entriesToggle.getAttribute('aria-expanded')).toBe('true');
+    expect(historyToggle.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('toggles aria-expanded tracks the drawer state, whichever way it closes', async () => {
+    await workspace.createProject('Fuyuki');
+    const app = await createApp();
+    const host = fixture.nativeElement as HTMLElement;
+    const entriesToggle = host.querySelector<HTMLButtonElement>('[aria-label="Toggle entries panel"]');
+    assert(entriesToggle);
+
+    // The toggle path.
+    entriesToggle.dispatchEvent(new Event('click'));
+    await fixture.whenStable();
+    expect(app['leftOpened']()).toBe(false);
+    expect(entriesToggle.getAttribute('aria-expanded')).toBe('false');
+
+    entriesToggle.dispatchEvent(new Event('click'));
+    await fixture.whenStable();
+    expect(app['leftOpened']()).toBe(true);
+    expect(entriesToggle.getAttribute('aria-expanded')).toBe('true');
+
+    // The sidenav closing itself (backdrop/Escape path) feeds the same fact.
+    const left = fixture.debugElement.query(By.css('.entries-sidenav'));
+    const sidenav = left?.componentInstance as MatSidenav;
+    sidenav.close();
+    await vi.waitFor(() => expect(app['leftOpened']()).toBe(false), { timeout: 5000 });
+    fixture.detectChanges();
+    expect(entriesToggle.getAttribute('aria-expanded')).toBe('false');
+  });
 });

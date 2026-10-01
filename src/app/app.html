@@ -1,4 +1,12 @@
+<!-- Task 10 §3.5: the skip link is the shell's FIRST focusable element —
+     visually hidden until keyboard-focused (fixed position, parked above the
+     viewport; never display:none, so it stays tabbable), then it moves focus
+     to the editor region below (its tabindex="-1" programmatic target). -->
+<a class="skip-link" href="#editor-content" (click)="skipToEditor($event)">Skip to editor</a>
+
 <app-topbar
+  [entriesOpened]="leftOpened()"
+  [historyOpened]="rightOpened()"
   (toggleEntries)="toggleLeft()"
   (toggleHistory)="toggleRight()"
   (openShortcuts)="openShortcutsHelp()"
@@ -9,8 +17,15 @@
        320–480). The binding yields null on the mobile band so the CSS
        full-width contract wins; CSS min/max-width repeat the clamp as
        belt-and-braces behind this binding (app.scss). -->
+  <!-- id + aria-label (Task 10 §3.5): the topbar's entries toggle carries
+       aria-controls="entries-pane". role="complementary" makes the label a
+       real landmark (audit finding: an aria-label on a role-less drawer is
+       inert in the accessibility tree). -->
   <mat-sidenav
     class="entries-sidenav"
+    id="entries-pane"
+    role="complementary"
+    aria-label="Entries"
     #entriesPane
     [mode]="viewport() === 'mobile' ? 'over' : 'side'"
     [opened]="leftOpened()"
@@ -57,7 +72,21 @@
     }
   </mat-sidenav>
 
-  <mat-sidenav-content class="editor-content" role="main">
+  <!-- The skip link's landing region: role="main" plus tabindex="-1" makes it
+       a programmatic focus target (the browser's fragment fallback anchors to
+       the id). The sr-only h1 gives the project shell its document heading,
+       bound to the active project's name — the welcome screen owns its own
+       visible h1 while no project is open. -->
+  <mat-sidenav-content
+    class="editor-content"
+    id="editor-content"
+    #editorContent
+    role="main"
+    tabindex="-1"
+  >
+    @if (workspace.activeProject(); as project) {
+      <h1 class="sr-only">{{ project.title }}</h1>
+    }
     @if (workspace.activeProject()) {
       @defer (on immediate) {
         <app-entry-editor />
@@ -74,8 +103,14 @@
        bar goes inert under the open drawer and releases focus to <body>, so
        the pane must take it for Escape-to-close to work. Tablet/desktop
        triggers keep their focus; the policy is phone-only. -->
+  <!-- aria-label (Task 10 §3.5): the pane's landmark label; the topbar's
+       history toggle carries aria-controls="history-pane" (role mirrors the
+       entries pane — same audit finding). -->
   <mat-sidenav
     class="history-sidenav"
+    id="history-pane"
+    role="complementary"
+    aria-label="Commit history"
     #historyPane
     position="end"
     [mode]="viewport() === 'desktop' ? 'side' : 'over'"

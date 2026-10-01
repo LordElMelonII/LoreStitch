@@ -9,6 +9,9 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { shortHash, VcsService } from '../../core/services/vcs.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
 import { ImportExportService } from '../../core/services/import-export.service';
+import { paneResult } from '../shell/project-actions.service';
+import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
+import { type ConfirmDialogData } from '../../shared/components/confirm-dialog/confirm-dialog.model';
 import { type CommitRow } from './commit-history.model';
 import { DiffViewer } from '../../shared/components/diff-viewer/diff-viewer';
 
@@ -47,6 +50,8 @@ export class CommitHistory {
   protected readonly workspace = inject(WorkspaceService);
   private readonly vcs = inject(VcsService);
   private readonly importer = inject(ImportExportService);
+  /** The destructive-action confirmations open through the dual-container service (Task 10 §3.5). */
+  private readonly overlays = inject(ResponsiveOverlayService);
 
   private readonly messageModel = signal<CommitMessageModel>({ message: '' });
 
@@ -101,7 +106,35 @@ export class CommitHistory {
     });
   }
 
+  /**
+   * Restores an older commit behind its confirm dialog (Task 10 §3.5):
+   * `rollbackTo` silently discards every uncommitted change made since the
+   * target commit, and no undo system exists — the dialog names that cost and
+   * the rollback proceeds only on accept. Dual-container like the delete
+   * confirm (dialog on tablet/desktop, sheet on phones).
+   */
   protected async restore(row: CommitRow): Promise<void> {
+    // Lazy-loaded: keeps the confirm dialog out of the initial bundle.
+    const { ConfirmDialog } = await import('../../shared/components/confirm-dialog/confirm-dialog');
+    const confirmed = await paneResult(
+      this.overlays.openResponsive<
+        InstanceType<typeof ConfirmDialog>,
+        ConfirmDialogData,
+        boolean
+      >(ConfirmDialog, {
+        data: {
+          title: 'Restore this state?',
+          message: 'Every uncommitted change made since this commit will be discarded.',
+          confirmLabel: 'Restore',
+          danger: true,
+        },
+        dialog: { panelClass: 'app-compact-fullscreen-dialog' },
+        sheetPanelClass: 'app-confirm-sheet',
+      }),
+    );
+    if (!confirmed) {
+      return;
+    }
     await this.workspace.rollbackTo(row.commit.id);
   }
 

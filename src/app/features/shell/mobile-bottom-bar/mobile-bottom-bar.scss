@@ -187,6 +187,15 @@
   opacity: 0.08;
 }
 
+// Keyboard focus upgrades the state-layer hint to a real ring (Task 10 §3.5
+// :focus-visible sweep): the entry-row idiom — 2px primary, inset so it hugs
+// the item's own rounded box instead of clipping against the docked bar's
+// edges — on :focus-visible only, mouse focus keeps the state layer alone.
+.bar-item:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: -2px;
+}
+
 .bar-item:focus-visible::after {
   opacity: 0.12;
 }

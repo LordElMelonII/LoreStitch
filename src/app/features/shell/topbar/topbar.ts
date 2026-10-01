@@ -1,4 +1,4 @@
-import { Component, computed, inject, output } from '@angular/core';
+import { Component, computed, inject, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatBadgeModule } from '@angular/material/badge';
@@ -66,6 +66,16 @@ export class Topbar {
   /** Drawer toggles, handled by the shell that owns the sidenav layout. */
   readonly toggleEntries = output<void>();
   readonly toggleHistory = output<void>();
+
+  /**
+   * Drawer-open facts the shell mirrors down (Task 10 §3.5): the toggles'
+   * `aria-expanded` binds to the actual sidenav state — the shell's own
+   * `leftOpened`/`rightOpened` signals — so the attribute tracks every open
+   * path (toggle, sidenav `(closed)` events, viewport-class re-applies),
+   * not just clicks on the buttons themselves.
+   */
+  readonly entriesOpened = input(false);
+  readonly historyOpened = input(false);
 
   /**
    * Request to open the keyboard-shortcuts help dialog (Task 10 §3.6),

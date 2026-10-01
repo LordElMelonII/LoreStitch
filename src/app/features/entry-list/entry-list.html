@@ -1,6 +1,6 @@
 <div class="list-header">
   <div class="title-row">
-    <h3 class="mat-body-strong">Entries</h3>
+    <h2 class="mat-body-strong">Entries</h2>
     <span class="count">{{ filtered().length }}</span>
     <span class="spacer"></span>
     <button
@@ -207,7 +207,7 @@
       (pointerup)="onRowSelectPointerUp()"
       (pointercancel)="onRowSelectPointerCancel()"
       (contextmenu)="onRowSelectContextMenu($event)"
-      [attr.aria-label]="'Select ' + item.title"
+      [aria-label]="'Select ' + item.title"
     />
     <mat-icon class="drag-handle" cdkDragHandle>drag_indicator</mat-icon>
     <div class="item-main">

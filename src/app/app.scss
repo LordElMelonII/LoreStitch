@@ -6,6 +6,43 @@
 }
 
 // ---------------------------------------------------------------------------
+// Skip link (Task 10 §3.5): the shell's first focusable element, visually
+// hidden until keyboard-focused. Fixed so it never participates in layout,
+// parked above the viewport with a transform (never display:none — it must
+// stay tabbable). Quiet token styling: the revealed link is the surface's
+// one emphasis, and it appears instantly (no transition, so no
+// reduced-motion concern).
+// ---------------------------------------------------------------------------
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  // Above the static topbar chrome, below the CDK overlay container (1000):
+  // open dialogs and sheets legitimately cover it.
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px; // touch-target floor (styles.scss token)
+  padding: 8px 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: var(--mat-sys-corner-small);
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-label-large);
+  text-decoration: none;
+  box-shadow: var(--mat-sys-level2);
+  transform: translateY(calc(-100% - 20px));
+
+  // Only a keyboard Tab can focus an element parked off-screen, so :focus is
+  // exactly the keyboard-focus reveal the plan asks for.
+  &:focus {
+    transform: none;
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Workspace layout
 // ---------------------------------------------------------------------------
 

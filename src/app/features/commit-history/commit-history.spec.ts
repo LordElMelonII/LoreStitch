@@ -1,8 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
 import { createEmptyBook } from '../../core/models/lorebook.model';
 import { ProjectWorkspace } from '../../core/models/project.model';
 import { ImportExportService } from '../../core/services/import-export.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
+import { ResponsiveOverlayService } from '../../shared/services/responsive-overlay.service';
+import { ConfirmDialog } from '../../shared/components/confirm-dialog/confirm-dialog';
 import { CommitHistory } from './commit-history';
 
 /** A bare workspace with no commit history at all (the @empty case). */
@@ -22,6 +25,7 @@ function emptyProject(): ProjectWorkspace {
 describe('CommitHistory', () => {
   let workspace: WorkspaceService;
   let importer: ImportExportService;
+  let openResponsive: ReturnType<typeof vi.fn>;
   let fixture: ComponentFixture<CommitHistory>;
 
   function element(): HTMLElement {
@@ -84,7 +88,14 @@ describe('CommitHistory', () => {
   }
 
   beforeEach(async () => {
-    TestBed.configureTestingModule({ imports: [CommitHistory] });
+    // The restore confirm opens through the responsive overlay (dialog or
+    // sheet); the plain-object ref makes the caller take its paneResult
+    // branch — accepted by default, overridden per test.
+    openResponsive = vi.fn().mockReturnValue({ afterDismissed: () => of(true) });
+    TestBed.configureTestingModule({
+      imports: [CommitHistory],
+      providers: [{ provide: ResponsiveOverlayService, useValue: { openResponsive } }],
+    });
     workspace = TestBed.inject(WorkspaceService);
     importer = TestBed.inject(ImportExportService);
     // Allow the workspace's async init() to settle.
@@ -310,7 +321,7 @@ describe('CommitHistory', () => {
   });
 
   describe('rollback', () => {
-    it('restores an older commit and appends a revert commit without rewriting history', async () => {
+    it('gates restore behind the confirm dialog and rolls back only on accept', async () => {
       await workspace.createProject('History');
       const component = await mount();
       await seedTwoCommits('alpha text', 'beta text');
@@ -322,7 +333,29 @@ describe('CommitHistory', () => {
       );
       assert(restore);
       restore.click();
+      // The confirm lazy-imports: the dialog opens a microtask+module-load
+      // after the click, so the wait rides the same settle helper as the
+      // workspace transitions.
+      await vi.waitFor(() => expect(openResponsive).toHaveBeenCalledTimes(1), { timeout: 5000 });
+      const [dialogComponent, config] = openResponsive.mock.calls[0] as unknown as [
+        unknown,
+        {
+          data: { title: string; message: string; confirmLabel: string; danger: boolean };
+          dialog: Record<string, string>;
+          sheetPanelClass: string;
+        },
+      ];
+      expect(dialogComponent).toBe(ConfirmDialog);
+      expect(config.data).toEqual({
+        title: 'Restore this state?',
+        message: 'Every uncommitted change made since this commit will be discarded.',
+        confirmLabel: 'Restore',
+        danger: true,
+      });
+      expect(config.dialog).toEqual({ panelClass: 'app-compact-fullscreen-dialog' });
+      expect(config.sheetPanelClass).toBe('app-confirm-sheet');
 
+      // Accepted (the default mock): the rollback proceeds.
       await settleUntil(() => expect(project().commits).toHaveLength(4));
       await fixture.whenStable();
 
@@ -347,6 +380,24 @@ describe('CommitHistory', () => {
       expect(text('.commit .msg')).toContain(`Revert to ${alpha.id.slice(0, 7)}`);
       expect(element().querySelector('.commit .msg')?.className).toContain('head');
       expect(component['rows']()[0]?.commit.id).toBe(revert.id);
+    });
+
+    it('keeps the working tree when the restore confirm is dismissed', async () => {
+      await workspace.createProject('History');
+      await mount();
+      await seedTwoCommits('alpha text', 'beta text');
+      const rollbackSpy = vi.spyOn(workspace, 'rollbackTo');
+
+      openResponsive.mockReturnValue({ afterDismissed: () => of(undefined) });
+      element()
+        .querySelector<HTMLButtonElement>('[aria-label="Restore Add alpha text"]')
+        ?.click();
+      await vi.waitFor(() => expect(openResponsive).toHaveBeenCalledTimes(1), { timeout: 5000 });
+      await fixture.whenStable();
+
+      expect(openResponsive).toHaveBeenCalledTimes(1);
+      expect(rollbackSpy).not.toHaveBeenCalled();
+      expect(project().commits).toHaveLength(3);
     });
   });
 

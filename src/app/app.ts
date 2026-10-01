@@ -190,6 +190,8 @@ export class App {
     'historyPane',
     { read: ElementRef },
   );
+  /** The main editor region — the skip link's programmatic focus target (Task 10 §3.5). */
+  private readonly editorContent = viewChild('editorContent', { read: ElementRef });
 
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
@@ -498,6 +500,17 @@ export class App {
 
   protected toggleLeft(): void {
     this.leftOpened.update((v) => !v);
+  }
+
+  /**
+   * Skip-link activation (Task 10 §3.5): move focus to the editor region
+   * (its `tabindex="-1"` target). `preventDefault` keeps the fragment
+   * fallback from double-handling the jump and from appending the hash to
+   * the PWA URL — the href stays for semantics (an anchor, and an AT hint).
+   */
+  protected skipToEditor(event: Event): void {
+    event.preventDefault();
+    this.editorContent()?.nativeElement.focus();
   }
 
   protected toggleRight(): void {

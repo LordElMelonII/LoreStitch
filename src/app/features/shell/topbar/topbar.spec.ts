@@ -122,6 +122,29 @@ describe('Topbar', () => {
     expect(badge?.textContent).toBe('!');
   });
 
+  it('binds the drawer toggles aria-expanded/aria-controls to the shell state inputs', async () => {
+    await workspace.createProject('Fuyuki');
+    await createTopbar();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const entriesToggle = el.querySelector<HTMLButtonElement>('[aria-label="Toggle entries panel"]');
+    const historyToggle = el.querySelector<HTMLButtonElement>('[aria-label="Toggle history drawer"]');
+    assert(entriesToggle);
+    assert(historyToggle);
+    // Input defaults (both drawers closed) and the pane ids they control.
+    expect(entriesToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(entriesToggle.getAttribute('aria-controls')).toBe('entries-pane');
+    expect(historyToggle.getAttribute('aria-expanded')).toBe('false');
+    expect(historyToggle.getAttribute('aria-controls')).toBe('history-pane');
+
+    // The shell mirrors its live drawer signals into the inputs.
+    fixture.componentRef.setInput('entriesOpened', true);
+    fixture.componentRef.setInput('historyOpened', true);
+    fixture.detectChanges();
+    expect(entriesToggle.getAttribute('aria-expanded')).toBe('true');
+    expect(historyToggle.getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('parks the history button for phones, where the bottom bar hosts it', async () => {
     await workspace.createProject('Fuyuki');
     await createTopbar();

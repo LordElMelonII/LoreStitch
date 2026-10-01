@@ -14,6 +14,7 @@ import { SEARCH_DEBOUNCE_MS } from '../../shared/constants/search';
 import { installMatchMediaStub } from '../../../testing/match-media-stub';
 import { EntryList, LONG_PRESS_MS } from './entry-list';
 import { BatchOperationsDialog } from './batch-operations-dialog';
+import { ConfirmDialog } from '../../shared/components/confirm-dialog/confirm-dialog';
 import { DelimiterDialog } from '../delimiters/delimiter-dialog';
 import { entryWith as entry, projectOf } from '../../../testing/project-fixtures';
 
@@ -669,14 +670,51 @@ describe('EntryList', () => {
     expect(entries[1]?.id).toBe(2);
   });
 
-  it('deletes a row and drops it from the selection', async () => {
+  it('deletes a row behind its confirm dialog and drops it from the selection', async () => {
+    const deleteSpy = vi.spyOn(workspace, 'deleteEntry');
+    const list = await createList([entry(0, { comment: 'Saber' }), entry(1)]);
+    list['toggleRow'](itemAt(list, 0), true);
+
+    await list['delete'](itemAt(list, 0));
+
+    expect(openResponsive).toHaveBeenCalledTimes(1);
+    const [component, config] = openResponsive.mock.calls[0] as unknown as [
+      unknown,
+      {
+        data: { title: string; message: string; confirmLabel: string; danger: boolean };
+        dialog: Record<string, string>;
+        sheetPanelClass: string;
+      },
+    ];
+    expect(component).toBe(ConfirmDialog);
+    // Checkpoint-locked copy (Task 10 §3.5): the entry is named, the cost is
+    // stated, and the confirm names its action.
+    expect(config.data).toEqual({
+      title: 'Delete entry',
+      message: 'Delete “Saber”? This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    expect(config.dialog).toEqual({ panelClass: 'app-compact-fullscreen-dialog' });
+    expect(config.sheetPanelClass).toBe('app-confirm-sheet');
+
+    expect(deleteSpy).toHaveBeenCalledWith(0);
+    expect(workspace.entries().map((e) => e.id)).toEqual([1]);
+    expect(list['selection']()).toEqual(new Set());
+  });
+
+  it('keeps the row and its selection when the delete confirm is dismissed', async () => {
+    openResponsive.mockReturnValue({ afterDismissed: () => of(undefined) });
+    const deleteSpy = vi.spyOn(workspace, 'deleteEntry');
     const list = await createList([entry(0), entry(1)]);
     list['toggleRow'](itemAt(list, 0), true);
 
-    list['delete'](itemAt(list, 0));
+    await list['delete'](itemAt(list, 0));
 
-    expect(workspace.entries().map((e) => e.id)).toEqual([1]);
-    expect(list['selection']()).toEqual(new Set());
+    expect(openResponsive).toHaveBeenCalledTimes(1);
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(workspace.entries().map((e) => e.id)).toEqual([0, 1]);
+    expect(list['selection']()).toEqual(new Set([0]));
   });
 
   it('reorders entries on drop and keeps display indexes in sync', async () => {

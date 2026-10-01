@@ -1,10 +1,14 @@
-<mat-toolbar class="topbar" aria-label="Application toolbar">
+<!-- role="banner" (Task 10 §3.5): the app's top-bar landmark; the toolbar
+     renders with no role of its own, so the attribute binds cleanly. -->
+<mat-toolbar class="topbar" role="banner" aria-label="Application toolbar">
   <button
     matIconButton
     type="button"
     (click)="toggleEntries.emit()"
     matTooltip="Toggle entries panel"
     aria-label="Toggle entries panel"
+    [attr.aria-expanded]="entriesOpened()"
+    aria-controls="entries-pane"
   >
     <mat-icon>menu</mat-icon>
   </button>
@@ -415,6 +419,8 @@
       (click)="toggleHistory.emit()"
       matTooltip="Toggle history"
       aria-label="Toggle history drawer"
+      [attr.aria-expanded]="historyOpened()"
+      aria-controls="history-pane"
     >
       <mat-icon
         [matBadge]="workspace.hasUnsavedChanges() ? '!' : null"

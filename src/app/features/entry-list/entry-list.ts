@@ -39,6 +39,7 @@ import { debouncedSignal } from '../../shared/util/debounced-signal';
 import { matchesQuery, applyRangeSelection, type EntryListItem } from './entry-list.model';
 import { EntryKeys } from './entry-keys';
 import { type BatchOperationsDialogData } from './batch-operations-dialog';
+import { type ConfirmDialogData } from '../../shared/components/confirm-dialog/confirm-dialog.model';
 import { type DelimiterDialogData } from '../delimiters/delimiter-dialog.model';
 
 /** Form model of the sidebar filter box. */
@@ -836,7 +837,35 @@ export class EntryList {
     });
   }
 
-  protected delete(item: EntryListItem): void {
+  /**
+   * Deletes one entry behind its confirm dialog (Task 10 §3.5 — deletion is
+   * unrecoverable: no undo system exists). Dual-container like the batch
+   * delete's pane: centered dialog on tablet/desktop, bottom sheet on phones
+   * (`ResponsiveOverlayService` owns the viewport branch). Restore proceeds
+   * only on accept; a dismissal leaves the entry and its selection untouched.
+   */
+  protected async delete(item: EntryListItem): Promise<void> {
+    // Lazy-loaded: keeps the confirm dialog out of the initial bundle.
+    const { ConfirmDialog } = await import('../../shared/components/confirm-dialog/confirm-dialog');
+    const confirmed = await paneResult(
+      this.overlays.openResponsive<
+        InstanceType<typeof ConfirmDialog>,
+        ConfirmDialogData,
+        boolean
+      >(ConfirmDialog, {
+        data: {
+          title: 'Delete entry',
+          message: `Delete “${item.title}”? This cannot be undone.`,
+          confirmLabel: 'Delete',
+          danger: true,
+        },
+        dialog: { panelClass: 'app-compact-fullscreen-dialog' },
+        sheetPanelClass: 'app-confirm-sheet',
+      }),
+    );
+    if (!confirmed) {
+      return;
+    }
     this.workspace.deleteEntry(item.id);
     this.selection.update((current) => {
       if (!current.has(item.id)) {

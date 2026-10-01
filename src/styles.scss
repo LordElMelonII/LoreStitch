@@ -151,6 +151,23 @@ body {
   scrollbar-color: var(--mat-sys-outline-variant) transparent;
 }
 
+// ---------------------------------------------------------------------------
+// Screen-reader-only utility (Task 10 §3.5): visually hidden, still announced
+// to assistive tech — the project shell's sr-only h1 uses it. Not display:none
+// (that would remove it from the a11y tree it exists for).
+// ---------------------------------------------------------------------------
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -319,6 +336,18 @@ body {
   background: var(--mat-sys-surface-container-high);
 }
 
+// --- Destructive-action confirmations (src/app/shared/components/confirm-dialog,
+// Task 10 §3.5) --- dialog on tablet/desktop (the caller passes the compact
+// class), content-hugging sheet on phones. The confirm reuses the MDC dialog
+// section classes for its insets on both containers, so the sheet only drops
+// its own padding and carries the 28px top radius plus the dialog's M3
+// surface-container-high (the repair-pane recipe) so both containers match.
+.app-confirm-sheet .mat-bottom-sheet-container {
+  padding: 0;
+  border-radius: 28px 28px 0 0;
+  background: var(--mat-sys-surface-container-high);
+}
+
 // The about tab group must flex within its pane; Material's body wrapper is
 // not a flex-grow item by default (same treatment as the entry editor tabs).
 app-about-dialog .about-tabs .mat-mdc-tab-body-wrapper {
@@ -339,8 +368,11 @@ app-about-dialog .about-tabs .mat-mdc-tab-body-content {
   --mat-dialog-headline-padding: 20px 24px 12px;
 
   // MDC's own selector outranks a bare `.mat-mdc-dialog-title::before`, so
-  // scope through the surface to reliably drop the legacy spacer.
-  .mat-mdc-dialog-surface &::before {
+  // scope through the surface to reliably drop the legacy spacer. Bottom
+  // sheets host the same dialog classes (the dual-container panes) — there
+  // the spacer would read as a phantom 40px gap above the sheet title.
+  .mat-mdc-dialog-surface &::before,
+  .mat-bottom-sheet-container &::before {
     display: none;
   }
 }
