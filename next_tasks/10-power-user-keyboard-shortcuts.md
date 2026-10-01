@@ -1,65 +1,157 @@
-# Task 10 — Power-User Keyboard Navigation
+# Task 10 — Power-User Keyboard Navigation & Keyboard Accessibility
 
 > **Source**: ROADMAP.md (LOW PRIORITY) — *"Lorebook maintenance involves
 > high-volume data entry; relying exclusively on mouse clicks between sidebar
-> lists and inputs causes excessive friction."*
-> **Type**: UX friction fix — global shortcut layer over existing controls (no
-> new visual controls)
+> lists and inputs causes excessive friction."* **Rescoped 2026-10-01** (user
+> decision, final task): absorbs the keyboard-side items from the 2026-09-22
+> app review — keyboard range selection, keyboard reorder,
+> destructive-action confirmations — plus the mechanical focus/ARIA fixes
+> found by the 2026-10-01 keyboard/a11y sweep. The full listbox/option row
+> restructure was **declined** at the same session (roving tabindex over the
+> existing `role="button"` rows instead).
+> **Type**: UX friction + accessibility pass — global shortcut layer over
+> existing actions, keyboard semantics for the entry list, and one small
+> visible-UI delta set (focus rings, skip link, two confirm dialogs) ⇒ design
+> evidence at checkpoint 10-1.
 > **Suggested agents**: `core-engine` (lead: pure chord→action model) →
-> `ui-specialist` (service, shell routing, focus hooks) → `ts-reviewer` →
-> `qa-auditor`
-> **Status**: 🟡 Planned — not started
+> `ui-specialist` (two phases) → `ts-reviewer` → `qa-auditor`
+> **Status**: 🟡 Planned — not started (re-grounded at `develop` @ `90bb582`,
+> v1.11.0)
 
 ---
 
 ## 1. Objective
 
-The five roadmap chords work from anywhere in the studio, claim their browser
-defaults deliberately (`preventDefault` only when handled), and never hijack
-typing:
+### 1.1 Chords
 
-| Chord | Action |
-|---|---|
-| `Mod+S` | Instant VCS snapshot / commit |
-| `Mod+N` | New entry, focus its name field |
-| `Mod+F` | Focus the sidebar quick-filter |
-| `Alt+Up` / `Alt+Down` (and `J`/`K` when the list has focus) | Previous / next entry |
-| `Mod+Shift+D` | Toggle the active entry's enabled/disabled status |
+| Chord | Action | Fires from |
+|---|---|---|
+| `Mod+S` | Instant snapshot commit (auto-message) | anywhere |
+| `Mod+N` | New entry + focus its name field | anywhere |
+| `Mod+F` | Focus the sidebar quick-filter | anywhere |
+| `Alt+↑` / `Alt+↓` | Previous / next entry — active entry moves, DOM focus untouched | anywhere but text |
+| `J` / `K` | Next / previous entry — DOM focus moves with the row | list focus only |
+| `↑` / `↓` | Same as `J`/`K` (natural arrows for the roving list) | list focus only |
+| `Alt+Shift+↑` / `Alt+Shift+↓` | Move the active entry one **visible** position up/down | anywhere but text |
+| `Mod+Shift+D` | Toggle the active entry's enabled state | anywhere but text |
+| `Ctrl+Space` | Toggle selection of the focused row | list focus only |
+| `Shift+↑` / `Shift+↓` | Extend the selection from the anchor | list focus only |
 
 (`Mod` = `Ctrl` on Windows/Linux, `Cmd` on macOS. Exact guards in §3.1.)
 
-## 2. Gap analysis (develop @ `ddc9f04`)
+### 1.2 Keyboard-accessibility fixes landing in the same task
 
-There is no shortcut infrastructure at all — the only keydown handling in the
-app is `(keydown.enter)` on two form inputs (`new-project-dialog.ts:32`,
-`commit-history.html:10`). The mobile bar's charter comment
-(`mobile-bottom-bar.ts:54`) claims "keyboard shortcuts" cover the desktop-only
-actions — aspirational; nothing implements them. Every action the chords need
-already exists as a callable method, which is why this task is wiring, not
-feature work:
+1. **Row keydown bubbling bug** (live today): the row's `(keydown.enter)` /
+   `(keydown.space)` (`entry-list.html:183-184`) fire for keydowns bubbling
+   from nested controls — only *clicks* are stopped (`:199,231,241`) — so
+   Space on the row checkbox both toggles it **and opens the editor**.
+2. **Roving tabindex** on entry rows: one Tab stop in the list (on the active
+   row), `aria-current` on the active row, and a custom `:focus-visible` ring
+   (the row currently rides the UA default outline only;
+   `entry-list.scss:124-128` is focus-*within* reveal, not a ring).
+3. **Keyboard range selection** (`Ctrl+Space`, `Shift+↑/↓`) reusing task 20's
+   anchor/range logic (`entry-list.ts:447-525`).
+4. **Confirmation dialogs** before history restore (`rollbackTo` silently
+   discards uncommitted work, `commit-history.ts:104-106`) and single-entry
+   delete (`entry-list.ts:626-636`) — both unrecoverable (no undo system
+   exists; task 13 never ran). Batch delete already confirms
+   (`entry-list.ts:654-682`) — this reaches parity.
+5. **Mechanical focus/ARIA set**: `:focus-visible` coverage for the app's
+   custom (non-Material) interactive surfaces, skip-to-content link, labels +
+   `aria-expanded` on the two drawer panes/toggles, sr-only `h1` for the
+   project shell, `aria-label="Entry name"` on the name input.
 
-| Action | Exists at |
+## 2. Grounding (develop @ `90bb582`, v1.11.0)
+
+Re-audited 2026-10-01 (anchor refresh + full keyboard/a11y sweep). Drift from
+the 2026-09-22 draft: `project-actions.service.ts` moved
+`core/services` → **`features/shell/`**; `EntryList.filtered` is **protected**
+and `scrollToEntry` **private**; `WorkspaceService.commit()` does no message
+validation itself (the form owns it); there is no public read-only predicate
+on `WorkspaceService`; `relinquishing` is a read-only lock state the old draft
+missed.
+
+### 2.1 Actions the chords wire to (all exist)
+
+| Action | Current anchor |
 |---|---|
-| Commit (message required today) | `WorkspaceService.commit(message)` (`workspace.service.ts:407`); commit box + validation `commit-history.ts:52-65` (message required, max 200) |
-| New entry (opens its tab) | `WorkspaceService.addEntry()` (`:247`) / `ProjectActionsService.createEntry()` (`project-actions.service.ts:329`) |
-| Quick-filter input | `entry-list.html:19-24` (`aria-label="Filter entries"`) |
-| Entry navigation source | `EntryList.filtered()` (`entry-list.ts:238`) — the visible order; active entry = `WorkspaceService.activeTabId` |
-| Enabled toggle | `updateEntry(id, { enabled })` (`workspace.service.ts:221`; the slide-toggle path via `EntryUpdatesService.setFlag` takes a Material event, so the chord calls the workspace mutator directly) |
-| Name field (Ctrl+N focus target) | `entry-name.html` "Name / Comment" input (the `comment` slice — the same field `tabTitle` prefers, `entry-editor.ts:204-207`) |
+| Commit | `WorkspaceService.commit(message)` (`workspace.service.ts:519-529`) — returns `false` on no-project or `writeBlocked()` (pulses `blockedAttempt`); saves immediately on success. Message rules live in the form only (`commit-history.ts:53-67`: required, ≤200 trimmed) ⇒ the chord's auto-message must satisfy them |
+| New entry | `WorkspaceService.addEntry()` (`workspace.service.ts:301-314`) — appends, routes `mutateProject`, **opens the entry's tab** and sets `activeTabId`; sidebar effect reveals it. Thin wrapper `ProjectActionsService.createEntry()` at `features/shell/project-actions.service.ts:588-590` |
+| Quick-filter | `entry-list.html:33-39`, `aria-label="Filter entries"` (line 38) |
+| Entry order / active | `EntryList.filtered` computed (`entry-list.ts:311-330`, **protected**); active = `WorkspaceService.activeTabId` (`workspace.service.ts:81`); `openEntry` (`:499-505`) is idempotent and always sets the active tab |
+| Reorder | `WorkspaceService.moveEntry(prev, cur)` (`:406-424`) — **working-tree indices**, resyncs `display_index`; `EntryList.drop()` (`entry-list.ts:770-788`) holds the filtered→tree index translation to extract and reuse |
+| Enabled toggle | `updateEntry(id, { enabled })` (`workspace.service.ts:275-282`) |
+| Dirty check | `hasUnsavedChanges` computed (`workspace.service.ts:44-48`), public |
+| Name field | `entry-name.html:1-6` — `matInput` with `mat-label "Name / Comment"`, **no `aria-label`**; inactive mat-tab bodies keep inert DOM copies ⇒ focus must scope to `.mat-mdc-tab-body-active` (rule pinned at `entry-content-field.html:28-31`) |
 
-Gaps the wiring must close: a global keydown owner, a chord→action resolver,
-focus entry points on the filter input and the name field (the name input has
-no aria-label or hook today), list-row navigation semantics, and the
-"instant commit" message convention (the commit form requires a typed
-message today — `Mod+S` bypasses the box, so it needs an auto-message).
+### 2.2 Shell wiring surface
+
+- `app.ts` hosts the dispatch precedent: `runBarAction` (`:692-720`) /
+  `runBatchBarAction` (`:751-810`), exhaustive `never` switches;
+  `viewChild(EntryList)` at `:143`, `viewChild(Topbar)` at `:142`.
+- Exactly one global listener exists today (document `visibilitychange`,
+  passive, `DestroyRef`-torn-down — `app.ts:402-405`): the teardown pattern
+  the shortcut service copies.
+- The entries-drawer resize handle is the app's one custom keyboard widget
+  (`app.html:38-51` → `app.ts:617-638`): `role="separator"` + arrow keys +
+  `preventDefault`-only-when-handled — the a11y exemplar to match.
+- Snackbar feedback is direct `MatSnackBar` everywhere (e.g. `app.ts:375`,
+  `entry-list.ts:621,643,679,695`); e2e helper `expectSnackbar`
+  (`e2e/helpers.ts:238`).
+- Overlay gate: `ResponsiveOverlayService.anyOverlayOpen` computed
+  (`responsive-overlay.service.ts:73`) — chords must be inert while a
+  dialog/bottom sheet is open (Material owns keys there; prevents e.g.
+  `Mod+S` double-committing from inside the commit dialog).
+- Lock states: `SessionLockState` = `'idle' | 'acquiring' | 'held' |
+  'blocked' | 'relinquishing' | 'lost'` (`session-lock.service.ts:21-27`);
+  writes allowed iff `state() === 'idle' || canEdit()` (mirror of private
+  `writeBlocked`, `workspace.service.ts:557-563`). All chord targets are
+  mutators that **self-gate** through `mutateProject`/`writeBlocked` and
+  pulse `blockedAttempt` → the shell's read-only snackbar (`app.ts:369-379`)
+  already renders the feedback. The shortcut layer adds no lock logic of its
+  own.
+
+### 2.3 Keyboard/a11y sweep (what exists, what's free, what's missing)
+
+- **Manual key handling today**: 11 template bindings (row Enter/Space,
+  drawer-resize arrows, chip-editor Enter/Escape, three Enter-to-submit
+  inputs, chip separator keys) and **zero** global/`HostListener` keydown
+  handlers. No `isComposing` guard anywhere (IME risk on every existing
+  Enter binding). No `aria-keyshortcuts`, no `accesskey`.
+- **Free from Material/CDK**: tab-group arrows, menu/arrows/typeahead/Escape,
+  dialog+sheet Escape/focus-trap/focus-restore (CDK defaults — no
+  `autoFocus`/`restoreFocus` overrides exist), select/checkbox/toggle/button
+  native keys, chip ListKeyManager. Drawers close on Escape only when focus
+  is inside the pane — the phone focus policy (`app.ts:528-559`) buys that.
+- **Mouse/touch-only surfaces**: drag-reorder (CDK drag has no keyboard;
+  no move-up/down affordance exists — batch menu holds only Duplicate/
+  Enable/Disable/Delete), range selection (shift+click / long-press
+  interceptor, `entry-list.ts:146-150, 466-498`), chip-edit arming (dblclick;
+  keyboard-driven once open).
+- **Focus visibility**: no global `:focus-visible` baseline
+  (`styles.scss` has zero focus rules); six spot-fixes exist (resize handle
+  `app.scss:69-72`, tab close `entry-editor.scss:150-152`, read-only pill
+  `topbar.scss:113-115`, delimiters preview `delimiter-dialog.scss:269-271`,
+  welcome items `welcome-screen.scss:75-77`, bar items
+  `mobile-bottom-bar.scss:190-192`).
+- **Landmarks/labels**: no skip link; topbar is not a landmark
+  (`topbar.html:1`); both `mat-sidenav` panes lack role/aria-label
+  (`app.html:8-16, 73-91`); no `h1` in the project shell; drawer toggles
+  lack `aria-expanded` (`topbar.html:2-10, 404-418`); all 39 icon buttons
+  carry `aria-label` (verified); live regions used correctly beyond
+  snackbar.
+- **Read-only veil**: `sessionVeiled` (`blocked`/`lost`/`relinquishing`)
+  stamps `[attr.inert]` on the editor (`entry-editor.ts:384-403`) — the
+  a11y tree and tab order already exclude veiled content; nothing to add.
 
 ## 3. Design
 
 ### 3.1 Pure resolver — `core/models/shortcut-map.ts`
 
-Bare, framework-free, total (house shape: `st-trigger.ts`). Takes a DOM-ish
-event view + a scope, returns the action or `null` — no DOM access inside, so
-the whole guard table is unit-testable without a browser.
+Bare, framework-free, total (house shape: `st-trigger.ts`, 189 lines, only
+imports `./lorebook.model`). Takes a DOM-ish event view + scope + platform,
+returns the action or `null` — the whole guard table is unit-testable
+without a browser.
 
 ```ts
 export type ShortcutAction =
@@ -68,10 +160,15 @@ export type ShortcutAction =
   | 'focus-filter'
   | 'nav-prev'
   | 'nav-next'
-  | 'toggle-enabled';
+  | 'move-up'
+  | 'move-down'
+  | 'toggle-enabled'
+  | 'select-toggle'
+  | 'select-extend-prev'
+  | 'select-extend-next';
 
-/** Where the event landed: 'text' = input/textarea/contenteditable, 'list' =
- *  the entry sidebar, 'other' = anywhere else (editor chrome, shell, dialogs). */
+/** 'text' = typing-capable element, 'list' = inside the entry sidebar
+ *  (and not text), 'other' = anywhere else. */
 export type ShortcutScope = 'text' | 'list' | 'other';
 
 export interface ShortcutKeyEvent {
@@ -90,139 +187,217 @@ export function resolveShortcut(
 ): ShortcutAction | null;
 ```
 
-The guard table (the contract checkpoint 10-1 approves):
+Guard table (the contract checkpoint 10-1 approves):
 
-| Chord | Action | Fires in `text` scope? | Notes |
-|---|---|---|---|
-| `Mod+S` | `commit-snapshot` | **yes** (saving while drafting is the point) | steals browser Save dialog |
-| `Mod+N` | `new-entry` | **yes** | steals browser New Window/Tab |
-| `Mod+F` | `focus-filter` | **yes** | steals browser Find |
-| `Alt+ArrowUp` / `Alt+ArrowDown` | `nav-prev` / `nav-next` | no | macOS `Option+Up` is a text-editing chord — the `text` guard keeps it safe |
-| `J` / `K` (no modifiers) | `nav-next` / `nav-prev` | no — and only in `list` scope | bare letters must always type |
-| `Mod+Shift+D` | `toggle-enabled` | no | Chrome's "bookmark all tabs" (both platforms) — claimed with `preventDefault` when it fires |
+| Chord | Action | `text`? | `other`? | `list`? | Notes |
+|---|---|---|---|---|---|
+| `Mod+S` | `commit-snapshot` | **yes** | yes | yes | saving while drafting is the point; steals browser Save |
+| `Mod+N` | `new-entry` | **yes** | yes | yes | steals browser New Window/Tab |
+| `Mod+F` | `focus-filter` | **yes** | yes | yes | steals browser Find |
+| `Alt+↑`/`Alt+↓` | `nav-prev`/`nav-next` | no | yes | yes | macOS `Option+↑` is a text chord — `text` guard keeps it safe |
+| `↑`/`↓` (no modifiers) | `nav-prev`/`nav-next` | no | no | **only here** | natural roving-list arrows |
+| `J`/`K` (no modifiers) | `nav-next`/`nav-prev` | no | no | **only here** | bare letters must always type |
+| `Alt+Shift+↑`/`Alt+Shift+↓` | `move-up`/`move-down` | no | yes | yes | reorder chords; text-editing chords everywhere when unguarded |
+| `Mod+Shift+D` | `toggle-enabled` | no | yes | yes | Chrome bookmark-all-tabs on both platforms — claimed |
+| `Ctrl+Space` | `select-toggle` | no | no | **only here** | OS/IME `Ctrl+Space` is safe: list scope excludes text fields |
+| `Shift+↑`/`Shift+↓` | `select-extend-prev`/`next` | no | no | **only here** | anchor extension, task 20 parity |
 
-Additional universal guards: `isComposing` ⇒ `null`; any chord the app does
-not claim ⇒ `null` and **no** `preventDefault` (browser behavior untouched);
-`Mod` resolves as `metaKey` on `apple`, `ctrlKey` elsewhere (a `Ctrl+S` on
-macOS is not a save chord and stays the browser's).
+Universal guards: `isComposing` ⇒ `null`; unclaimed chords ⇒ `null` and **no**
+`preventDefault`; `Mod` = `metaKey` on `apple`, `ctrlKey` elsewhere (`Ctrl+S`
+on macOS stays the browser's); any chord with stray extra modifiers ⇒ `null`.
 
 ### 3.2 Shortcut service — `shared/services/keyboard-shortcuts.service.ts`
 
-`@Service()` (house naming), root-provided, owning exactly one `DOCUMENT`
-keydown listener (bubble phase; `preventDefault`/`stopPropagation` called only
-for a non-null resolution). It computes `ShortcutScope` from `event.target`
-(the `text` predicate: `input`/`textarea`/`[contenteditable]`; `list`: target
-inside the `app-entry-list` host) and `platform` once at startup, calls
-`resolveShortcut`, and hands the action to registered handlers. Dispatch
-follows the Task 06 shell-routing precedent (`app.ts` `runBarAction` /
-`runBatchBarAction`, exhaustive `never` switch):
+`@Service()` (Angular 22 built-in decorator), root-provided, owning exactly
+one `DOCUMENT` keydown listener (bubble phase; `preventDefault` only on a
+non-null resolution; teardown via `DestroyRef` — the `visibilitychange`
+precedent at `app.ts:402-405`). Per event it computes, in order:
 
-- workspace actions (`commit-snapshot`, `new-entry`, `toggle-enabled`) route
-  to `WorkspaceService`/`ProjectActionsService` directly from the handler;
-- view actions (`focus-filter`, `nav-prev`, `nav-next`) route through `App`'s
-  `viewChild(EntryList)` public methods — the bar-contract pattern
-  (`selectionCount` et al., `entry-list.ts:261-285`) extended with
-  `focusFilter()`, `navigate(delta: -1 | 1)`.
+1. **Overlay gate**: `responsiveOverlay.anyOverlayOpen()` ⇒ bail (null).
+2. **Scope** from `event.target`: `text` if typing-capable — `textarea`,
+   `[contenteditable]`, or `input` whose type is text-entry (**excluding**
+   `checkbox`/`radio`/`button`/`submit`/`file`/`range`/`color`, so a focused
+   row checkbox is `list`, not `text`) and not inside a `mat-select` trigger
+   (arrows keep native select behavior → classify `other`); `list` if the
+   target is inside the `app-entry-list` host; else `other`. The `text`
+   predicate wins over `list` (the filter input lives inside the host).
+   Implementation verifies the predicate against the rendered Material DOM;
+   checkpoint 10-1 pins the resulting classification table.
+3. **Platform** once at startup; then `resolveShortcut`.
+4. Dispatch through a single registered handler
+   (`register(fn: (action: ShortcutAction) => void)`), invoked from `app.ts`.
 
-### 3.3 Action semantics
+`app.ts` gains `runShortcutAction(action)` — the `runBarAction` exhaustive
+`never`-switch pattern — routing workspace actions directly and view actions
+through `viewChild` refs. Early guard: `workspace.activeProject()` null ⇒
+silent no-op (welcome screen).
 
-- **`commit-snapshot`**: `WorkspaceService.commit(<auto-message>)` when
-  `hasUnsavedChanges()`; when the tree matches HEAD, a one-line snackbar
-  ("Nothing to commit.") and no empty commit (the content-addressed hash
-  chain would still produce a new id for an unchanged book — history noise).
-  Auto-message: `Snapshot · <local yyyy-mm-dd hh:mm>` — final format at
-  checkpoint 10-1 (the history list renders it verbatim,
-  `commit-history.html:57`). Success feedback: snackbar with the short hash
-  (`shortHash`, `vcs.service.ts:6`).
-- **`new-entry`**: `workspace.addEntry()`, then focus the name input **of the
-  active tab body** (`EntryEditor.focusNameField()` — a public method
-  querying `.mat-mdc-tab-body-active` scoped input). The AGENTS.md e2e lesson
-  applies to the implementation too: inactive mat-tabs keep their inputs in
-  the DOM, so an unscoped query focuses a hidden field. The input gains
-  `aria-label="Entry name"` (stable hook + `getByLabel` fixity).
-- **`focus-filter`**: `EntryList.focusFilter()` — focuses + selects the filter
-  input (`entry-list.html:19`). On phones the sidebar may be closed: opening
-  the entries drawer first is out of scope (the chord set is for
-  keyboard-carrying viewports; the input simply no-ops when unmounted —
-  state in the hint copy only if one is added later).
-- **`nav-prev` / `nav-next`**: move the active entry through `filtered()`
-  order from `activeTabId` (wrap disabled — clamp at the ends), `openEntry`
-  the target (`workspace.service.ts:387` — opening is idempotent and sets the
-  active tab), and bring its row into view (`EntryList.scrollToEntry`
-  precedent, `entry-list.ts:367`, made callable from `navigate`). `J`/`K`
-  additionally move DOM focus to the reached row so the next `J`/`K` keeps
-  firing in `list` scope (row focusability is the one small UI change: a
-  roving `tabindex` on the row's open target).
+### 3.3 Chord action semantics
+
+- **`commit-snapshot`**: if `!hasUnsavedChanges()` ⇒ snackbar "Nothing to
+  commit." and stop (the content-addressed chain would mint a new id for an
+  unchanged book — history noise). Else `commit('Snapshot · <local
+  yyyy-mm-dd hh:mm>')` (≤200 chars, renders verbatim in history
+  `commit-history.html:57`) and snackbar the short hash. Blocked/lost lock ⇒
+  `commit` returns `false` + pulses `blockedAttempt` ⇒ existing read-only
+  snackbar.
+- **`new-entry`**: `workspace.addEntry()` (opens the tab), then focus the
+  name input **of the active tab body** — new public
+  `EntryEditor.focusNameField()` querying `.mat-mdc-tab-body-active` scope
+  (unscoped queries hit the hidden inert copies), deferred one render pass
+  (`afterRenderEffect` precedent: `entry-keys.ts:119-125`). The input gains
+  `aria-label="Entry name"` (hook + `getByLabel` fixity).
+- **`focus-filter`**: `EntryList.focusFilter()` — focus + select
+  (`entry-list.html:33-39`). Drawer closed (phones) ⇒ no-op: the chord set
+  serves keyboard-carrying viewports.
+- **`nav-prev`/`nav-next`**: step `activeTabId` through `filtered()` order
+  (clamp at ends, no wrap), `openEntry(target)`, bring the row into view
+  (`scrollToEntry`, `entry-list.ts:599-607`, made reusable — virtual-scroll
+  settle races handled by its existing deferral). Invoked from `list` scope
+  (J/K, arrows, or Alt+arrows while a row has focus), also move DOM focus to
+  the reached row; from `other` scope (Alt+arrows in the editor), focus is
+  untouched.
+- **`move-up`/`move-down`**: reorder the **active** entry by one **visible**
+  position — extract `drop()`'s filtered→tree index translation
+  (`entry-list.ts:770-788`) into a shared helper; active entry not in
+  `filtered()` ⇒ move one position in tree order. Stays active + scrolled
+  into view; focus follows only when invoked from `list` scope. New public
+  `EntryList.moveActive(delta)`.
 - **`toggle-enabled`**: flip `enabled` on `activeTabId`'s entry via
-  `updateEntry`; no active entry ⇒ snackbar "Open an entry first." (copy at
-  checkpoint).
+  `updateEntry`; no active entry ⇒ snackbar "Open an entry first."
+- **`select-toggle` / `select-extend-*`**: `EntryList` public methods over
+  the existing selection model — `Ctrl+Space` toggles the focused row;
+  `Shift+↑/↓` extends from the task-20 anchor (same range math as
+  shift+click, `entry-list.ts:447-525`). Roving focus moves with the
+  extension.
 
-### 3.6 Test matrix
+### 3.4 Entry-list keyboard model (roving tabindex, rows stay `role="button"`)
+
+- Row `tabindex`: `0` on the **active** entry's row, `-1` on all others
+  (`[attr.tabindex]` binding off `activeTabId`) — one Tab stop in the list,
+  wherever the list is scrolled. `aria-current="true"` on the active row.
+- **Bubbling fix**: the row's Enter/Space handlers ignore events whose
+  `target` is not the row itself (nested checkbox/duplicate/delete keep
+  their native keys; Space on the checkbox toggles selection, nothing else).
+- Custom `:focus-visible` ring on `.entry-item` (primary 2px offset ring,
+  M3 tokens — the resize-handle exemplar's approach), parity with the
+  hover/focus-within reveal (`entry-list.scss:124-128`).
+
+### 3.5 A11y mechanics (phase P3)
+
+- **`:focus-visible` coverage**: extend the six-spot pattern to every custom
+  interactive surface (entry rows above; audit the remaining custom controls
+  — bar items' 12% state-layer is upgraded to a real ring). **No global
+  `*:focus-visible` rule** — Material owns its indicators; a global outline
+  double-rings MDC controls.
+- **Skip link**: first focusable in `app.html`, "Skip to editor", visible on
+  focus only, token-styled; moves focus to the `role="main"` sidenav-content
+  (`app.html:56`, `tabindex="-1"` programmatic target).
+- **Landmarks/labels**: `aria-label` on both `mat-sidenav` panes ("Entries",
+  "Commit history"); `role="banner"` on the topbar host (verify against the
+  rendered DOM); `aria-expanded` on the entries/history toggle buttons
+  (`topbar.html:2-10, 404-418`) bound to drawer state (+ `aria-controls`
+  with pane ids); sr-only `h1` bound to the active project name in the
+  project shell.
+- **Restore confirmation** (`commit-history.ts:104-106`): route `restore()`
+  through `ConfirmDialog` (danger), copy *"Restore this state?"* / body
+  naming that every uncommitted change made since this commit is discarded.
+- **Delete confirmation** (`entry-list.ts:626-636`): `ConfirmDialog`
+  (danger) matching the batch-delete copy shape (`:660-673`) — *"Delete
+  entry <title>? This cannot be undone."* Dual-container behavior free via
+  the house overlay pattern.
+- **One-shot audit** (user-approved method): during P3, one manual Chrome
+  DevTools accessibility-checker pass over the main views (shell, entry
+  editor, dialogs); findings triaged and fixed in-task, evidence recorded in
+  the ledger. No new dependency.
+
+### 3.6 Visual gate
+
+P3 changes visible UI (focus rings, skip link, confirm dialogs) ⇒ full
+before/after screenshot protocol under `__screenshots__/10/{before,after}/`
+(pinned conditions per AGENTS.md; keyboard-focused states captured by
+driving the real app — focus rings need real `:focus-visible`, the
+`__screenshots__` mock-script precedents). The design evidence (ring token
+choice, skip-link treatment, confirm copy) rides checkpoint 10-1.
+
+### 3.7 Test matrix
 
 | Tier | Required cases |
 |------|----------------|
-| Unit — `shortcut-map.spec.ts` | full guard table × scope × platform (including: `J` in `text` scope ⇒ null; `Alt+ArrowUp` in `text` ⇒ null; `Ctrl+S` on `apple` ⇒ null; `Cmd+S` on `apple` ⇒ commit; IME composing ⇒ null; unknown chords never resolve) |
-| Unit — `keyboard-shortcuts.service.spec.ts` | scope detection from real DOM targets (`installMatchMediaStub` house fixture irrelevant here — plain TestBed + dispatched KeyboardEvents); `preventDefault` called only on handled chords (assert on a spy event) |
-| Unit — action semantics | commit auto-message shape + no-commit-on-clean; toggle with/without active entry |
-| E2E — new `e2e/keyboard-shortcuts.spec.ts` | `Mod+S` creates a commit row without the box (typed message absent ⇒ auto-message visible in history); `Mod+N` appends a row and the **active tab body's** name input has focus (`page.evaluate` activeElement check); `Mod+F` focuses the filter; `Alt+ArrowDown`/`J` moves the active row; typing `jk` in the filter input inserts letters (the no-hijack pin); `Mod+Shift+D` flips the row's disabled state |
-| Existing specs | none pin keyboard behavior (§2) — but any spec typing `j`/`k`/`d` through real inputs must stay green (they exercise the `text`-scope guard for free) |
-
-**Visual gate**: none — no control is added or reshaped (the row roving
-`tabindex` in §3.3 is focus-only chrome). The shortcut map is still a
-behavior contract ⇒ checkpoint 10-1 (below), not a design-evidence gate.
+| Unit — `shortcut-map.spec.ts` | full guard table × scope × platform: every row of §3.1 incl. `J` in `text` ⇒ null, `Ctrl+Space` in `text`/`other` ⇒ null, `Alt+↑` in `text` ⇒ null, plain arrows outside `list` ⇒ null, `Ctrl+S` on `apple` ⇒ null, `Cmd+S` on `apple` ⇒ commit, `Alt+Shift+↓` ⇒ move-down, stray-modifier chords ⇒ null, IME composing ⇒ null, unknown chords ⇒ null |
+| Unit — `keyboard-shortcuts.service.spec.ts` | scope classification from real dispatched `KeyboardEvent`s (row div ⇒ list; filter input ⇒ text; row checkbox ⇒ list, not text; editor chrome ⇒ other); `preventDefault` only when handled; overlay gate (open dialog ⇒ inert); listener teardown |
+| Unit — entry-list | roving tabindex render (active row `0`, others `-1`, `aria-current`); bubbling guard (Space on checkbox does not open); `Ctrl+Space` toggle + `Shift+↑/↓` extension parity with shift+click ranges (reuse the `shiftClick` helper style, `entry-list.spec.ts:777-845`); `moveActive` filtered→tree mapping (incl. active-entry-hidden fallback) |
+| Unit — action semantics | auto-message shape + no-commit-on-clean; toggle without active entry; new-entry focus deferral |
+| Unit — confirmations | restore gated on dialog accept/cancel; single delete ditto |
+| E2E — `e2e/keyboard-shortcuts.spec.ts` | `Mod+S` creates a history row with the auto-message; `Mod+N` appends an entry and the **active tab body's** name input holds focus (`activeElement` check); `Mod+F` focuses the filter; `Alt+↓`/`J` moves the active row; `Alt+Shift+↓` reorders (row order changes and persists); typing `jk` into the filter inserts letters (no-hijack pin); `Mod+Shift+D` flips enabled; chords inert inside an open dialog |
+| E2E — `e2e/keyboard-navigation.spec.ts` | first Tab from body hits the skip link; skip jumps to main; Tab into the list stops once (active row); arrows/J/K move roving focus through a list longer than the rendered window (virtual-scroll settle); `Ctrl+Space` + `Shift+↓` select a range then a batch action applies to it; Space on the row checkbox toggles selection **without** opening the editor; Escape in dialogs unchanged |
+| E2E — migrated pins | every existing spec that clicks row-delete or history-Restore now handles the confirm dialog (grep both flows in `e2e/`; mobile projects meet the bottom-sheet confirm) |
+| Mobile | chords are inert (no hijack, nothing crashes on keydown; the bar still covers the actions); confirm sheets work |
 
 ## 4. Implementation Plan
 
 | Phase | Files | Work |
 |-------|-------|------|
 | **P1 — Resolver** (core-engine) | `core/models/shortcut-map.ts` (+spec), `core/models/README.md` | §3.1 |
-| **Checkpoint 10-1** (user) | — | chord table + guards + auto-message + snackbar copy (§3.3) as a behavior contract |
-| **P2 — Wiring** (ui-specialist) | `shared/services/keyboard-shortcuts.service.ts` (+spec), `app.ts`, `entry-list.ts/.html`, `entry-editor.ts`, `entry-name/entry-name.html`, `workspace.service.ts` (none — actions are existing methods) | §3.2 + §3.3 |
-| **P3 — Review** (ts-reviewer) | all touched | exhaustive action unions, listener teardown via `DestroyRef`, signal purity in `navigate` |
-| **P4 — E2E** (qa-auditor) | `e2e/keyboard-shortcuts.spec.ts` | §3.6 |
+| **Checkpoint 10-1** (user) | — | chord table + guards + auto-message + snackbar/confirm copy + focus-ring/skip-link design evidence (§3.3, §3.5, §3.6) |
+| **P2 — Wiring** (ui-specialist) | `shared/services/keyboard-shortcuts.service.ts` (+spec), `app.ts/.html`, `entry-list.ts/.html/.scss`, `entry-editor.ts`, `entry-name/entry-name.html`, `core/models/README.md` | §3.2–3.4 (service, dispatch, roving list, bubbling fix, nav + move chords, name-field focus) — BEFORE screenshots captured at phase start |
+| **P3 — A11y mechanics** (ui-specialist) | `styles.scss`, `app.html/.scss`, `topbar.*`, `entry-list.*`, `commit-history.*`, confirm wiring | §3.5 + one-shot DevTools audit + AFTER screenshots + side-by-side report |
+| **P4 — Review** (ts-reviewer) | all touched | exhaustive action unions, listener teardown, signal purity in `navigate`/`moveActive`, scope-predicate typing |
+| **P5 — E2E** (qa-auditor) | `e2e/keyboard-shortcuts.spec.ts`, `e2e/keyboard-navigation.spec.ts`, migrated pins | §3.7 |
 
-Commits: `feat(shortcuts): power-user keyboard navigation`, `test(e2e): …`,
-`docs(next_tasks): …`.
+Commits: `feat(shortcuts): pure chord→action resolver`,
+`feat(shortcuts): global shortcut service and keyboard entry navigation`,
+`feat(a11y): keyboard selection, focus baseline, and destructive-action
+confirmations`, `test(e2e): …`, `docs(next_tasks): …` per phase.
 
 ## 5. Orchestration
 
 1. **`core-engine`** — P1 (skills: `typescript-advanced-types`). *Gate:
-   `npm test`.*
-2. **User checkpoint 10-1** — the chord/guard/auto-message contract. Gate
-   stays open until answered (house rule).
+   `npm run build` + full `npm test` + `npm run lint` + `npm run
+   typecheck:e2e`.*
+2. **User checkpoint 10-1** — the §3.1 guard table, §3.3 copy, §3.5/§3.6
+   design evidence. Gate stays open until answered (house rule); an
+   unanswered gate stops the pipeline, never defaults.
 3. **`ui-specialist`** — P2 (skills: `material-3`, `angular-developer`).
-   *Gate: `npm test` + `npm run build`.*
-4. **`ts-reviewer`** — P3. *Gate: `npm run lint`.*
-5. **`qa-auditor`** — P4 (skills: `playwright-cli`). *Gate: `npx playwright
-   test keyboard-shortcuts` green on desktop-chrome + one mobile project
-   (mobile: chords are inert, bar covers the actions — pin that the bar still
-   works and nothing crashes on keydown).*
+   *Gate: fast gate + `desktop-chrome` smoke of touched specs.*
+4. **`ui-specialist`** — P3 (skills: `material-3`, `frontend-design`).
+   *Gate: fast gate + screenshots + audit findings posted.*
+5. **`ts-reviewer`** — P4. *Gate: `npm run lint`.*
+6. **`qa-auditor`** — P5 (skills: `playwright-cli`). *Gate: fast gate;
+   `npx playwright test keyboard-shortcuts keyboard-navigation` green on
+   `desktop-chrome` + one mobile project.*
+7. **Branch-final sweep** — three-project Playwright run per project +
+   `npm test --coverage` + `npm run lint`; push `feature/10-keyboard-…`,
+   stop. Never merge — the user merges after manual testing.
 
 ## 6. Verification Gates
 
-`npm run build` · `npm test` · `ng test --coverage` (`shortcut-map` +
-service covered) · `npx playwright test keyboard-shortcuts ui-responsiveness`
-· `npm run lint`.
+Per task: `npm run build` · `CI=true npm test -- --watch=false --coverage` ·
+`npm run lint` · `npm run typecheck:e2e` · desktop-chrome smoke of touched
+specs. Branch-final: full three-project `npx playwright test --project=<name>`
+sweep + closing coverage + lint.
 
 ## 7. Risks & Open Questions
 
-1. **Browser chord collisions** (`Mod+N`, `Mod+F`, `Mod+Shift+D`): the chords
-   are claimed with `preventDefault` — including `Mod+Shift+D` = Chrome's
-   bookmark-all-tabs. Users who want that browser action lose it in-app;
-   this is inherent to the roadmap's chosen map (checkpoint 10-1 states it
-   plainly).
-2. **`Mod+S` on a page with a pending form**: saves from inside text fields by
-   design. It commits the *working tree* (all entries), not "the current
-   field" — flush semantics come free (`commit` → `storage.saveProject`,
-   `workspace.service.ts:413`).
-3. **Auto-message noise in history**: rapid `Mod+S` presses create many tiny
-   snapshots. Acceptable (history is cheap, rollback is O(1)); if the user
-   wants a cooldown or clean-tree suppression beyond §3.3, that is a
-   checkpoint-10-1 answer, not a design change.
-4. **`J`/`K` list-focus definition**: "when list is focused" resolves to
-   `event.target` inside `app-entry-list` — including the filter input, where
-   bare letters must type (the `text` guard wins over `list`). A future
-   row-level focus ring may want `K` from the editor itself; out of scope.
-5. **Ctrl+Z interplay (Task 12 candidate)**: this task claims no editing
-   chords (`Mod+Z`/`Mod+Shift+Z` untouched) so the undo/redo task inherits a
-   clean map.
+1. **Browser chord collisions** (`Mod+N`, `Mod+F`, `Mod+Shift+D` claimed
+   with `preventDefault` — incl. Chrome's bookmark-all-tabs): inherent to
+   the roadmap's map; checkpoint 10-1 states it plainly.
+2. **`Ctrl+Space` / `Shift+arrows` OS collisions**: `Ctrl+Space` is the
+   Windows/macOS IME toggle — safe because the chord fires only in `list`
+   scope, which excludes text fields. Desktop-WM `Alt+Shift+arrows`
+   bindings vary on Linux; in-browser delivery is unaffected.
+3. **Virtual scroll × roving focus**: navigating past the rendered window
+   must scroll before focusing — `scrollToEntry`'s deferral pattern handles
+   it; the long-list e2e case pins the race.
+4. **Confirm-dialog friction**: delete and restore gain one click for
+   everyone (user-approved 2026-10-01); copy rides checkpoint 10-1.
+5. **e2e selector migration**: specs pinning instant delete/restore must
+   migrate in P5, not after (grep `e2e/` for both flows).
+6. **`Mod+S` spam**: rapid presses mint many tiny snapshots — acceptable
+   (history is cheap, rollback O(1)); clean-tree suppression is §3.3.
+7. **Undo chords stay unclaimed** (`Mod+Z`/`Mod+Shift+Z` untouched): task 13
+   never ran and none is scheduled — the map stays clean if it ever does.
+8. **Scope predicate vs Material DOM**: the `text`/`list` classification of
+   Material's checkbox inputs and select triggers is verified against the
+   rendered DOM in P2 and pinned by unit specs; drift across Material
+   upgrades is what those specs exist to catch.

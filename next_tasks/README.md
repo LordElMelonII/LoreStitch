@@ -23,7 +23,7 @@ level pending the archival pass.
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
-| 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`, `Mod+Shift+D` wired over existing actions | ✅ Ready (checkpoint 10-1 after P1) |
+| 10 | [10-power-user-keyboard-shortcuts.md](./10-power-user-keyboard-shortcuts.md) | `Mod+S`/`Mod+N`/`Mod+F`, `Alt+↑/↓` + `J`/`K`/arrows, `Alt+Shift+↑/↓` reorder, `Mod+Shift+D`, list-scope selection keys — plus the keyboard-a11y pass (roving tabindex, row keydown-bubbling fix, `:focus-visible` baseline, skip link, pane labels, restore/delete confirmations). Rescoped 2026-10-01 (final task); re-grounded at `90bb582` | ✅ Ready (checkpoint 10-1 after P1) |
 | 25 | [25-pwa-update-prompt.md](./25-pwa-update-prompt.md) | `SwUpdate` `VERSION_READY` → flush-first reload snackbar in the shell + visible-transition re-check; no new files (session-lock wiring precedent). Real-SW capture script at `__screenshots__/25-pwa-update-prompt/capture.mjs` doubles as manual deploy-hygiene regression tooling (cache-header mistakes, broken hash churn) | ✅ Merged to `develop` 2026-10-01 (fast-forward; ledger [25-PROGRESS.md](./25-PROGRESS.md)) |
 
 ### Queue (sketched during evaluation; planned when their turn comes)
@@ -49,17 +49,16 @@ level pending the archival pass.
   high-impact item). The idea may return later; no plan file was written,
   the ROADMAP sketch is struck through, and the number stays retired —
   re-proposals take the next free number.
-- **UX follow-ups from the 2026-09-22 app review** (branch
-  `feature/2026-09-22-app-review`; surveyed, **none implemented** — each
-  changes a flow or user-facing copy and needs the user's go-ahead first):
-  history restore is destructive with no confirmation (the restore button in
-  `commit-history.html` → `workspace.rollbackTo` silently discards
-  uncommitted changes; route through `ConfirmDialog` naming what is
-  discarded); single-entry delete confirms nothing while batch delete does
-  (row delete icon in `entry-list`); drag-reorder has no keyboard alternative
-  ("move up/down" row-menu leaves through `workspace.moveEntry`); the entry
-  row is `role="button"` wrapping nested interactive controls (a
-  listbox/option restructure would be cleaner but risks e2e selectors).
+- **UX follow-ups from the 2026-09-22 app review** — **absorbed into task 10
+  on 2026-10-01** (user decision, final task): the restore/single-delete
+  confirmations, the drag-reorder keyboard alternative (`Alt+Shift+↑/↓`
+  chords), and the row keydown-bubbling manifestation of the
+  `role="button"`-wrapping-nested-controls issue (guarded; `aria-current`
+  added). The full listbox/option row restructure was **declined** —
+  roving tabindex over the existing rows instead (task 10 §3.4). The same
+  review assessed `workspace.rollbackTo`'s direct-save path
+  (non-debounced, outside `mutateProject`) as **sound by design** — no
+  change wanted there.
   The same review assessed `workspace.rollbackTo`'s direct-save path
   (non-debounced, outside `mutateProject`) as **sound by design** — no
   change wanted there.
