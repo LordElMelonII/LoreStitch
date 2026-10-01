@@ -75,3 +75,43 @@ per plan §5.
 **Next**: P2 — ts-reviewer typing/lint review of the `f3c3d30` diff + ladder
 check (`npm run lint` green on its diff; refactor, if any, lands as its own
 commit).
+
+## Phase P2 — Typing/lint review (ts-reviewer)
+
+**Status**: ✅ complete — one refactor commit `e8cfdf8` `refactor(pwa): satisfy no-empty-function in the update-check catch` (comment-only, +3/−1)
+
+**Verdicts**:
+- **Typing PASS**: no `any`/assertions; explicit return types throughout;
+  `VersionEvent` discriminated-union narrowing correct; `applyUpdate` order
+  matches the data contract (flush internally try/catch-guarded → no unhandled
+  rejection can precede the reload). `onAction()` verified self-terminating in
+  the Material source (completes on action click and on duration dismissal) —
+  not a dangling subscription. `makeSwUpdateFake` cannot structurally satisfy
+  `SwUpdate` (private ctor param) — `overrideProvider`'s `useValue: any` is the
+  only viable, platform-sanctioned seam; no `any` written in the spec, shape
+  pinned via `ReturnType<typeof makeSwUpdateFake>`. `shellDocument` proxy traps
+  contextually typed by `ProxyHandler<Document>`; the armed `{ reload }` lie is
+  deliberate, documented, confined to one spec, disarmed in `finally`.
+- **Lint — ONE finding, fixed**: `@typescript-eslint/no-empty-function` on the
+  `.catch(() => {})` — fixed with the rule's documented comment escape hatch
+  (`e8cfdf8`, zero behavior change). `npm run lint` green on HEAD;
+  `npx tsc -p tsconfig.spec.json --noEmit` exit 0.
+- **Reactivity PASS (pre-briefed)**: the `versionUpdates` subscription is
+  event-stream consumption with `takeUntilDestroyed(this.destroyRef)`; TestBed
+  default teardown destroys fixtures, so no cross-test listener leak.
+- **Ladder CONFIRMED (rung 2)**: zero new files; no update service / signal
+  wrapper / config knob / dedupe state warranted — no finding named a concrete
+  blocker. Collapsing `checkForUpdateIfVisible` into an arrow was considered
+  and rejected (not a defect; the named fn carries the doc contract).
+
+**Residual notes for qa-auditor**: (1) spec 2 arms fake timers after the
+snackbar opens — the 10 s duration timer rides the real clock; any future
+duration-dismissal assertion must fake timers before `open()`. (2) The PWA
+describe overrides `DOCUMENT` for the whole mount — new specs there must keep
+the disarm-in-`finally`/`afterEach` discipline. (3) Spec 4's `visibilityState`
+shadow cleans up via `Reflect.deleteProperty` in `finally` — no residue.
+
+**Next**: P3 — qa-auditor fast gate (`npm run build`, `CI=true npm test --
+--watch=false --coverage`, `npm run lint`, `npm run typecheck:e2e`; no e2e
+smoke — no spec touched, plan §4.2) + §4.3 real-SW capture under
+`__screenshots__/25-pwa-update-prompt/` + before/after evidence pack.
