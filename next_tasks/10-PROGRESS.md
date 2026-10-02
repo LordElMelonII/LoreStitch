@@ -301,3 +301,48 @@ audit scripts kept at `__screenshots__/10/{capture,audit}.mjs`.
 **Next**: USER gate — manual test of the pushed branch; `git merge --ff-only`
 into `develop` only on the explicit go (then the archival batch pass moves
 this plan + ledger + task 11's documents into `archive/`).
+
+## Manual-test fix-forward (orchestrator + ui-specialist)
+
+**Status**: ✅ complete — commit `36764e4` `fix(shortcuts): keyboard range selection shrinks per step and scrolls only at the window edge` (3 files, +169/−24)
+
+The user's manual test reported two bugs; both diagnosed at root cause in the
+P2 code before dispatch:
+
+1. **Shift+↑ after extending down collapsed the range** ("many rows get
+   deselected"): `extendSelection` reused the mouse shift+click gesture
+   (`applyRangeGesture`), which inverts the gesture row's state and paints it
+   over the whole anchor..cursor slice — one step back painted deselect over
+   the entire range. The unit spec at `entry-list.spec.ts:1149` had pinned
+   the collapse. Fix: native listbox semantics — two transient fields
+   (`selectionPaint`, `gestureBase`, non-signal like `selectionCursor`);
+   first extension of a gesture snapshots the selection and takes the
+   anchor's state as paint; every extension repaints the anchor..cursor
+   slice from the base via the same `applyRangeSelection` math; anchor never
+   moves. Gesture resets in `toggleRow`/`clearSelection`/`applyRangeGesture`
+   (mouse ends the keyboard gesture). Mouse shift+click untouched.
+2. **Auto-scroll lurch on held Shift+arrow**: `scrollToEntry` called
+   `viewport.scrollToIndex(index, 'smooth')` unconditionally — CDK aligns the
+   target to the viewport TOP, so every step smooth-scrolled even when the
+   row was visible; key auto-repeat piled queued scrolls. Fix in the shared
+   function: scroll only when the target is outside
+   `viewport.getRenderedRange()` (deferral + jsdom try/catch kept).
+
+Specs: rewritten keyboard-extension truth table (shrink-by-one regression
+pin, re-grow, upward growth across the anchor, deselect gesture; mouse
+parity block unchanged) + new `scrollToEntry` rendered-range guard test +
+new e2e case (extend down 3, up 2 → count drops one per press). Failing-first
+verified (pre-fix run failed exactly on the two pins).
+
+Gates: build green · full unit suite **1553/1553** · lint green ·
+typecheck:e2e green · `keyboard-navigation` desktop-chrome 9P · insurance
+`keyboard-shortcuts` desktop-chrome 14P/3S (orchestrator, rides the changed
+scroll path).
+
+Deviations (minor): Bug-2 test flushes the deferral via the file's
+`advanceTimersByTimeAsync` idiom (the file runs fake timers — a bare
+macrotask await would hang); upward-growth block sits last in the rewritten
+test (`createList` reassigns the shared fixture).
+
+**Next**: USER gate (resumed) — re-test the two fixed interactions; on the
+explicit go, `git merge --ff-only` into `develop`.
