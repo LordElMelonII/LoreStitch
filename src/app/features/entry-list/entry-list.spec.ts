@@ -1117,7 +1117,7 @@ describe('EntryList', () => {
     expect(list['selection']()).toEqual(new Set([0, 1]));
   });
 
-  it('Shift+arrows extend with the exact shift+click range math (anchor never moves)', async () => {
+  it('Shift+arrows extend as a continuing gesture: the anchor slice repaints from the base (anchor never moves)', async () => {
     const list = await createList([entry(0), entry(1), entry(2)]);
     fixture.detectChanges();
     workspace.openEntry(0);
@@ -1129,8 +1129,26 @@ describe('EntryList', () => {
     expect(list['selection']()).toEqual(new Set([0, 1]));
     list.extendSelection(1);
     expect(list['selection']()).toEqual(new Set([0, 1, 2]));
-    // The anchor stayed on row 0 through both extensions (task 20 D1).
+    // The anchor stayed on row 0 through both extensions (the anchor never
+    // moves on a keyboard extension).
     expect(list['selectionAnchor']()).toBe(0);
+
+    // Stepping back up shrinks by exactly ONE row per press (the continuing
+    // gesture repaints the base slice — it must NOT re-invert the range just
+    // because the cursor landed on an already-selected row).
+    list.extendSelection(-1);
+    expect(list['selection']()).toEqual(new Set([0, 1]));
+    list.extendSelection(-1);
+    expect(list['selection']()).toEqual(new Set([0]));
+    // Clamped at the view's top: one more step up changes nothing.
+    list.extendSelection(-1);
+    expect(list['selection']()).toEqual(new Set([0]));
+
+    // Re-growing downward within the same gesture repaints from the same base.
+    list.extendSelection(1);
+    expect(list['selection']()).toEqual(new Set([0, 1]));
+    list.extendSelection(1);
+    expect(list['selection']()).toEqual(new Set([0, 1, 2]));
 
     // Mouse parity: the same anchor + gesture row through shift+click yields
     // the same set.
@@ -1140,22 +1158,52 @@ describe('EntryList', () => {
     await settle();
     expect(list['selection']()).toEqual(new Set([0, 1, 2]));
 
-    // Deselect branch, keyboard: the cursor parks on the selected end row
-    // (Ctrl+Space), then extending back applies the gesture row's new state
-    // over its whole range (shift+click parity — the anchor never moves).
+    // Deselect branch, keyboard: a Ctrl+Space toggle-OFF anchors a DESELECT
+    // gesture — the paint is the anchor's state at gesture start, so
+    // extending repaints the slice as deselected (the mouse invert would
+    // instead re-select the rows the cursor re-crosses).
     checkboxInput(checkboxAt(2)).focus();
     list.toggleFocusedSelection(); // row 2 was selected: toggles OFF, cursor+anchor → 2
     expect(list['selection']()).toEqual(new Set([0, 1]));
-    list.extendSelection(-1); // gesture row 1: the 1..2 slice takes its deselected state
+    list.extendSelection(-1); // paint = deselected: the 1..2 slice unselects
     expect(list['selection']()).toEqual(new Set([0]));
+    list.extendSelection(-1); // the 0..2 slice unselects
+    expect(list['selection']()).toEqual(new Set());
 
-    // Clamped at the view's end: cursor sits on 1 after the extension, so one
-    // step re-selects the gesture row 2 (slice 2..2), and the next step —
-    // already at the last row — changes nothing.
-    list.extendSelection(1);
-    expect(list['selection']()).toEqual(new Set([0, 2]));
-    list.extendSelection(1); // 2 is the last row — clamped
-    expect(list['selection']()).toEqual(new Set([0, 2]));
+    // Upward growth across the anchor (fresh gesture): an anchor BELOW the
+    // cursor paints the rows above it — the gesture survives stepping past
+    // where it started.
+    const upList = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    workspace.openEntry(1);
+    upList.toggleFocusedSelection();
+    expect(upList['selection']()).toEqual(new Set([1]));
+    upList.extendSelection(-1);
+    expect(upList['selection']()).toEqual(new Set([0, 1]));
+    upList.extendSelection(-1); // row 0 is the first row — clamped
+    expect(upList['selection']()).toEqual(new Set([0, 1]));
+  });
+
+  it('scrollToEntry only scrolls when the target sits outside the rendered window', async () => {
+    const list = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    workspace.openEntry(0);
+    const vp = list['viewport']();
+    const rangeSpy = vi.spyOn(vp, 'getRenderedRange').mockReturnValue({ start: 0, end: 10 });
+    const scrollSpy = vi.spyOn(vp, 'scrollToIndex');
+
+    // In-window target: the reached row is already rendered — no scroll, so
+    // held Shift+arrows / J/K steps never lurch the window around.
+    list.navigate(1, false); // active entry → row 1 (index 1, inside 0..10)
+    await vi.advanceTimersByTimeAsync(0); // scrollToEntry defers one macrotask
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    // Out-of-window target: the guard lets the standard CDK scroll through.
+    rangeSpy.mockReturnValue({ start: 3, end: 10 });
+    list.navigate(1, false); // active entry → row 2 (index 2, before start 3)
+    await vi.advanceTimersByTimeAsync(0);
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
+    expect(scrollSpy).toHaveBeenCalledWith(2, 'smooth');
   });
 
   it('navigates the active entry through the filtered order, clamped at the ends', async () => {

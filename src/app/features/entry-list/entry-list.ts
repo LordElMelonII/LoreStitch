@@ -399,7 +399,11 @@ export class EntryList {
   protected toggleRow(item: EntryListItem, checked: boolean): void {
     // A plain (change)-path toggle is a non-gesture toggle: it always moves
     // the range anchor (task 20 D1) — including when a range gesture
-    // degrades to this plain path.
+    // degrades to this plain path. It also ends any in-flight keyboard
+    // extension gesture (Ctrl+Space and extendSelection's degrade path land
+    // here): the next Shift+arrow starts a fresh gesture from this state.
+    this.selectionPaint = null;
+    this.gestureBase = null;
     this.selectionAnchor.set(item.id);
     this.selection.update((current) => {
       const next = new Set(current);
@@ -417,9 +421,11 @@ export class EntryList {
   clearSelection(): void {
     this.selection.set(new Set());
     // A cleared selection has no anchor to range from (task 20 D1) — and no
-    // keyboard cursor either (Task 10 §3.4).
+    // keyboard cursor either (Task 10 §3.4), nor a gesture to continue.
     this.selectionAnchor.set(null);
     this.selectionCursor = null;
+    this.selectionPaint = null;
+    this.gestureBase = null;
   }
 
   // -------------------------------------------------------------------------
@@ -461,6 +467,10 @@ export class EntryList {
     if (anchorId !== null) {
       const next = applyRangeSelection(current, this.filtered(), anchorId, item.id, target);
       if (next !== current) {
+        // A mouse shift+click (or fired long-press) ends any in-flight
+        // keyboard extension gesture — the next Shift+arrow starts fresh.
+        this.selectionPaint = null;
+        this.gestureBase = null;
         this.selection.set(next);
         return;
       }
@@ -590,6 +600,25 @@ export class EntryList {
   private selectionCursor: number | null = null;
 
   /**
+   * The in-flight keyboard extension gesture's base selection snapshot and
+   * paint state, captured at its first Shift+arrow: every extension repaints
+   * the inclusive anchor..cursor slice from `gestureBase` with
+   * `selectionPaint` — the anchor's state at gesture start (a
+   * Ctrl+Space-selected anchor paints select, a toggled-OFF anchor paints
+   * deselect). The native listbox continuing-gesture model, deliberately NOT
+   * the mouse shift+click invert: a fresh click gesture re-derives the paint
+   * from the clicked row, while a keyboard extension must survive its cursor
+   * re-crossing already-painted rows (stepping back up shrinks ONE row per
+   * press, never the whole range). Transient gesture state, deliberately not
+   * signals — nothing renders from them (task 20 D5 idiom); both `null`
+   * means no gesture is in flight. Reset wherever the gesture context ends:
+   * every plain toggle (`toggleRow`), `clearSelection`, and the mouse's own
+   * range path in `applyRangeGesture`.
+   */
+  private selectionPaint: boolean | null = null;
+  private gestureBase: Set<number> | null = null;
+
+  /**
    * Focuses and selects the sidebar filter input (the Mod+F chord, Task 10
    * §3.3). No-op when the input is not rendered — the shell only routes the
    * chord here while the drawer is open.
@@ -691,13 +720,21 @@ export class EntryList {
   }
 
   /**
-   * Extends the selection from the anchor (Shift+↑/↓, Task 10 §3.4) with
-   * exactly the shift+click range math: the row the cursor lands on becomes
-   * the gesture row of `applyRangeGesture` (task 20 D1 — the inclusive
-   * filtered slice between the anchor and the gesture row takes its new
-   * state, anchor never moves). Roving DOM focus moves with the extension;
-   * the active entry does NOT follow (opening every extended row would spam
-   * the editor with tabs).
+   * Extends the selection from the anchor (Shift+↑/↓, Task 10 §3.4) as a
+   * CONTINUING gesture — the native listbox model, deliberately not the
+   * shift+click math: a mouse shift+click is one fresh gesture whose clicked
+   * row inverts the whole slice, while a keyboard extension must survive its
+   * cursor re-crossing already-painted rows (growing down then stepping back
+   * up shrinks ONE row per press, never the whole range). The anchor never
+   * moves; the first extension of a gesture snapshots the selection
+   * (`gestureBase`) and adopts the anchor's state at that moment as the
+   * paint (`selectionPaint`); every extension then repaints the inclusive
+   * filtered slice between anchor and cursor from the base via
+   * `applyRangeSelection` (task 20's slice math, reseeded from the base).
+   * With no anchor, or an anchor gone from the current view, the step
+   * degrades to a plain toggle of the reached row exactly like a click.
+   * Roving DOM focus moves with the extension; the active entry does NOT
+   * follow (opening every extended row would spam the editor with tabs).
    */
   extendSelection(delta: -1 | 1): void {
     const view = this.filtered();
@@ -716,8 +753,25 @@ export class EntryList {
     if (!target) {
       return;
     }
+    const anchorId = this.selectionAnchor();
+    if (anchorId === null || !view.some((item) => item.id === anchorId)) {
+      // Degrade to the plain non-gesture toggle (which also ends any
+      // in-flight gesture via `toggleRow`'s reset), anchor moving with it.
+      this.toggleRow(target, !this.selection().has(target.id));
+    } else {
+      let base = this.gestureBase;
+      let paint = this.selectionPaint;
+      if (base === null || paint === null) {
+        // First extension of this gesture: snapshot the selection and adopt
+        // the anchor's state at gesture start as the paint.
+        base = new Set(this.selection());
+        paint = base.has(anchorId);
+        this.gestureBase = base;
+        this.selectionPaint = paint;
+      }
+      this.selection.set(applyRangeSelection(base, view, anchorId, target.id, paint));
+    }
     this.selectionCursor = target.id;
-    this.applyRangeGesture(target);
     this.scrollToEntry(target.id);
     this.focusRow(target.id);
   }
@@ -810,7 +864,16 @@ export class EntryList {
       const index = this.filtered().findIndex((item) => item.id === entryId);
       if (index >= 0) {
         try {
-          this.viewport().scrollToIndex(index, 'smooth');
+          // Only scroll when the target sits outside the rendered window:
+          // CDK's scrollToIndex aligns the row to the viewport TOP, so an
+          // unconditional call lurches the window on every held Shift+arrow
+          // / J/K step even when the reached row is already fully visible —
+          // and with key auto-repeat the queued smooth scrolls pile up and
+          // fight each other.
+          const range = this.viewport().getRenderedRange();
+          if (index < range.start || index >= range.end) {
+            this.viewport().scrollToIndex(index, 'smooth');
+          }
         } catch {
           // Exotic environments (bare jsdom) expose no Element.scrollTo — the
           // reveal is best-effort UI, never worth crashing over (the same

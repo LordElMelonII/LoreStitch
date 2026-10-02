@@ -250,6 +250,40 @@ test.describe('keyboard selection (desktop)', () => {
     await expect(page.locator('.entry-item.selected.disabled-entry')).toHaveCount(2);
   });
 
+  test('Shift+ArrowUp after extending down shrinks the selection one row per press', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await importLorebook(page, FATE_PATH);
+
+    await keyboardToActiveRow(page); // focus on the active row (row 0)
+
+    await page.keyboard.press('Control+Space');
+    await expect(
+      page.getByRole('checkbox', { name: 'Select all shown entries (1 selected)' }),
+    ).toBeVisible();
+
+    // Extend down three (pacing: assert the settled count before every next
+    // press — machine-speed repeats outrun the zoneless render flush).
+    for (const count of [2, 3, 4]) {
+      await page.keyboard.press('Shift+ArrowDown');
+      await expect(
+        page.getByRole('checkbox', { name: `Select all shown entries (${count} selected)` }),
+      ).toBeVisible();
+    }
+
+    // Stepping back up is a continuing gesture: each press deselects exactly
+    // ONE row — it must never collapse the whole range at once.
+    await page.keyboard.press('Shift+ArrowUp');
+    await expect(
+      page.getByRole('checkbox', { name: 'Select all shown entries (3 selected)' }),
+    ).toBeVisible();
+    await page.keyboard.press('Shift+ArrowUp');
+    await expect(
+      page.getByRole('checkbox', { name: 'Select all shown entries (2 selected)' }),
+    ).toBeVisible();
+  });
+
   test('Space on a row checkbox toggles selection without opening the editor', async ({
     page,
   }) => {
