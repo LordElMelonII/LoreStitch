@@ -1046,6 +1046,38 @@ describe('EntryList', () => {
     expect(rows[2]?.getAttribute('aria-current')).toBeNull();
   });
 
+  it('keeps every non-active row inner control out of Tab order (manual-test round-4)', async () => {
+    // The manual-test report: tabbing from the list toured every rendered
+    // row's duplicate/delete buttons (hover-revealed affordances riding
+    // residual tab stops) before reaching the editor. Same roving principle
+    // as the row stops: only the ACTIVE row's checkbox/duplicate/delete are
+    // Tab stops, so Tab exits the list right after them.
+    await createList([entry(0), entry(1), entry(2)]);
+    workspace.openEntry(1);
+    fixture.detectChanges();
+
+    const rowControls = (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+      '.entry-item .row-select input, .entry-item button.ghost',
+    );
+    expect(rowControls.length).toBe(9); // 3 controls × 3 rows
+    const tabIndexOf = (el: Element | null | undefined) => {
+      assert(el instanceof HTMLElement);
+      return el.tabIndex;
+    };
+    // Row 1 is active: its inner controls keep tabindex 0; every other
+    // row's are -1. (Row order in the selector: row0 checkbox+ghosts,
+    // row1, row2.)
+    expect(tabIndexOf(rowControls[0])).toBe(-1);
+    expect(tabIndexOf(rowControls[1])).toBe(-1);
+    expect(tabIndexOf(rowControls[2])).toBe(-1);
+    expect(tabIndexOf(rowControls[3])).toBe(0); // active row checkbox
+    expect(tabIndexOf(rowControls[4])).toBe(0); // active row Duplicate
+    expect(tabIndexOf(rowControls[5])).toBe(0); // active row Delete
+    expect(tabIndexOf(rowControls[6])).toBe(-1);
+    expect(tabIndexOf(rowControls[7])).toBe(-1);
+    expect(tabIndexOf(rowControls[8])).toBe(-1);
+  });
+
   it('opens from the row itself on Space/Enter, never from a nested control', async () => {
     const list = await createList([entry(0)]);
     fixture.detectChanges();

@@ -147,22 +147,29 @@ test.describe('roving entry list (desktop)', () => {
     expect(rendered.filter((r) => r.tabindex === '0')).toHaveLength(1);
     expect(rendered.every((r) => (r.current === 'true') === (r.tabindex === '0'))).toBe(true);
 
-    // Forward exit from the active row: every stop is an in-row control (the
-    // row's own checkbox/duplicate/delete and the following rendered rows')
-    // — never another row-level stop. The walk is bounded BY DESIGN: focusing
-    // controls scrolls the virtual viewport, which renders MORE rows ahead,
-    // so a walk to the resize handle would chase it through all 70 entries
-    // (probe-verified P5, __screenshots__/10/probe-tab-walk.mjs). Fifteen
-    // stops cover five rows' worth of controls — plenty to prove the row
-    // divs at tabindex -1 never take a stop.
-    for (let i = 0; i < 15; i++) {
+    // Forward from the active row: the row's own checkbox/duplicate/delete,
+    // then the editor content region — the round-4 fix took every
+    // non-active row's inner controls out of Tab order (the manual-test
+    // report: the walk toured hover-revealed duplicate/delete buttons of
+    // all rendered rows before reaching the editor). The row divs at
+    // tabindex -1 never take a stop.
+    await page.keyboard.press('Tab');
+    expect((await focusedTarget(page)).isRow).toBe(false);
+    for (let i = 0; i < 2; i += 1) {
       await page.keyboard.press('Tab');
-      const info = await focusedTarget(page);
-      expect(info.isRow, `forward stop ${i + 1} must not be a row-level stop`).toBe(false);
-      expect(info.isResizeHandle, `forward stop ${i + 1} must still be inside the list`).toBe(
-        false,
+      const inRow = await page.evaluate(
+        () => (document.activeElement as HTMLElement | null)?.closest('.entry-item') !== null,
       );
+      expect(inRow, `row-control stop ${i + 1} must stay in the active row`).toBe(true);
     }
+    await page.keyboard.press('Tab');
+    // The next stop is past the rows entirely (drawer chrome or the editor
+    // region) — the contract is that no further row-control stop exists,
+    // not where exactly the shell places the next focusable.
+    const pastRows = await page.evaluate(
+      () => (document.activeElement as HTMLElement | null)?.closest('.entry-item') === null,
+    );
+    expect(pastRows).toBe(true);
   });
 
   test('arrows and J/K move roving focus through a list longer than the rendered window', async ({
