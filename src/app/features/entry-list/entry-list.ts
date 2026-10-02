@@ -402,9 +402,13 @@ export class EntryList {
     // degrades to this plain path. It also ends any in-flight keyboard
     // extension gesture (Ctrl+Space and extendSelection's degrade path land
     // here): the next Shift+arrow starts a fresh gesture from this state.
+    // The toggle parks the keyboard cursor on the row too — a mouse toggle
+    // is a row touch, and a stale cursor would hijack the next extension.
+    this.selectionCursor = item.id;
     this.selectionPaint = null;
     this.gestureBase = null;
     this.selectionAnchor.set(item.id);
+    this.anchorPaint = checked;
     this.selection.update((current) => {
       const next = new Set(current);
       if (checked) {
@@ -461,6 +465,9 @@ export class EntryList {
    * the anchor moves to it.
    */
   private applyRangeGesture(item: EntryListItem): void {
+    // The gesture row becomes the keyboard position, so a following
+    // Shift+arrow continues the range from it even when DOM focus moved on.
+    this.selectionCursor = item.id;
     const anchorId = this.selectionAnchor();
     const current = this.selection();
     const target = !current.has(item.id);
@@ -592,10 +599,15 @@ export class EntryList {
   // -------------------------------------------------------------------------
 
   /**
-   * The row the keyboard selection cursor sits on (Ctrl+Space sets it,
-   * Shift+arrows move it). Transient gesture state, deliberately not a
-   * signal — nothing renders from it (task 20 D5 idiom); it only seeds the
-   * next extension when DOM focus can't answer.
+   * The row the user last touched — a checkbox toggle (mouse or Ctrl+Space),
+   * a shift+click gesture row, a row activation, or the last Shift+arrow
+   * target. It seeds the next Shift+arrow extension, falling back to the
+   * focused/active row only when nothing has been touched yet; every touch
+   * MUST update it, or extensions start from an unrelated stale row (the
+   * manual-test round-2 bug: a mouse checkbox toggle after a keyboard
+   * extension left the old cursor in charge and the sweep started from it).
+   * Transient gesture state, deliberately not a signal — nothing renders
+   * from it (task 20 D5 idiom).
    */
   private selectionCursor: number | null = null;
 
@@ -603,11 +615,11 @@ export class EntryList {
    * The in-flight keyboard extension gesture's base selection snapshot and
    * paint state, captured at its first Shift+arrow: every extension repaints
    * the inclusive anchor..cursor slice from `gestureBase` with
-   * `selectionPaint` — the anchor's state at gesture start (a
-   * Ctrl+Space-selected anchor paints select, a toggled-OFF anchor paints
-   * deselect). The native listbox continuing-gesture model, deliberately NOT
-   * the mouse shift+click invert: a fresh click gesture re-derives the paint
-   * from the clicked row, while a keyboard extension must survive its cursor
+   * `selectionPaint` — seeded from `anchorPaint` (how the anchor was placed:
+   * a toggle paints its checked state, an activation paints select). The
+   * native listbox continuing-gesture model, deliberately NOT the mouse
+   * shift+click invert: a fresh click gesture re-derives the paint from the
+   * clicked row, while a keyboard extension must survive its cursor
    * re-crossing already-painted rows (stepping back up shrinks ONE row per
    * press, never the whole range). Transient gesture state, deliberately not
    * signals — nothing renders from them (task 20 D5 idiom); both `null`
@@ -617,6 +629,17 @@ export class EntryList {
    */
   private selectionPaint: boolean | null = null;
   private gestureBase: Set<number> | null = null;
+
+  /**
+   * The paint state a keyboard extension sweeps with, fixed where the range
+   * anchor is placed: `toggleRow` paints its checked state (a Ctrl+Space
+   * deselect extends a deselection), row activation paints select — opening
+   * a row does not select it, but Shift+arrows from it must still ADD rows
+   * (the manual-test round-2 V1/V7 probes: deriving the paint from the
+   * anchor's selection bit made extensions after a plain open select
+   * nothing). Not a signal — nothing renders from it (task 20 D5 idiom).
+   */
+  private anchorPaint = false;
 
   /**
    * Focuses and selects the sidebar filter input (the Mod+F chord, Task 10
@@ -656,6 +679,9 @@ export class EntryList {
       return;
     }
     this.workspace.openEntry(target.id);
+    // Navigation moves the keyboard position (native arrow semantics) but
+    // never the range anchor — only toggles and activation re-anchor.
+    this.selectionCursor = target.id;
     this.scrollToEntry(target.id);
     if (focusFollows) {
       this.focusRow(target.id);
@@ -706,16 +732,14 @@ export class EntryList {
    * Toggles selection of the focused row (Ctrl+Space, Task 10 §3.4): the row
    * holding DOM focus (which can be a non-active row's nested checkbox),
    * falling back to the active entry when no row is focused. A plain
-   * non-gesture toggle — the range anchor moves to it, exactly like a
-   * checkbox click — and the keyboard cursor lands there for a following
-   * Shift+arrow extension.
+   * non-gesture toggle — the range anchor and the keyboard cursor both move
+   * to it, exactly like a checkbox click.
    */
   toggleFocusedSelection(): void {
     const item = this.focusedRowItem() ?? this.activeRowItem();
     if (!item) {
       return;
     }
-    this.selectionCursor = item.id;
     this.toggleRow(item, !this.selection().has(item.id));
   }
 
@@ -763,9 +787,10 @@ export class EntryList {
       let paint = this.selectionPaint;
       if (base === null || paint === null) {
         // First extension of this gesture: snapshot the selection and adopt
-        // the anchor's state at gesture start as the paint.
+        // the anchor's placement paint (toggle checked-state, or select for
+        // an activation anchor — `anchorPaint`).
         base = new Set(this.selection());
-        paint = base.has(anchorId);
+        paint = this.anchorPaint;
         this.gestureBase = base;
         this.selectionPaint = paint;
       }
@@ -848,6 +873,14 @@ export class EntryList {
   // -------------------------------------------------------------------------
 
   protected open(item: EntryListItem): void {
+    // Activation is a row touch that REPOSITIONS the user: it parks the
+    // keyboard cursor here and moves the range anchor too (native click
+    // semantics — the manual-test round-2 report showed a sweep still
+    // originating from a checkbox toggled long before when only the cursor
+    // followed). Selection itself is untouched: activation never selects.
+    this.selectionCursor = item.id;
+    this.selectionAnchor.set(item.id);
+    this.anchorPaint = true;
     this.workspace.openEntry(item.id);
   }
 

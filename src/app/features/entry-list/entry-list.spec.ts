@@ -1184,6 +1184,56 @@ describe('EntryList', () => {
     expect(upList['selection']()).toEqual(new Set([0, 1]));
   });
 
+  it('every row touch repositions the keyboard cursor and activation re-anchors (manual-test round-2 regressions)', async () => {
+    // A mouse checkbox toggle after a keyboard extension must NOT leave the
+    // stale keyboard cursor in charge: the next extension starts from the
+    // toggled row (V4 probe — the round-2 report's phantom rows).
+    const list = await createList([entry(0), entry(1), entry(2), entry(3), entry(4)]);
+    fixture.detectChanges();
+    list['toggleRow'](itemAt(list, 0), true);
+    list.extendSelection(1);
+    expect(list['selection']()).toEqual(new Set([0, 1]));
+    list['toggleRow'](itemAt(list, 3), true); // mouse toggle: anchor + cursor → 3
+    expect(list['selection']()).toEqual(new Set([0, 1, 3]));
+    list.extendSelection(1); // from cursor 3 — NOT the stale 1 (which would sweep row 2)
+    expect(list['selection']()).toEqual(new Set([0, 1, 3, 4]));
+
+    // Activation (row click / Enter) repositions the cursor AND the anchor
+    // and paints select, so extending from an opened-but-unselected row ADDS
+    // rows (V1/V7 probes — deriving the paint from the anchor's selection
+    // bit made Shift+arrows after a plain open select nothing).
+    const openList = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    openList['toggleRow'](itemAt(openList, 0), true);
+    openList['open'](itemAt(openList, 2));
+    expect(openList['selection']()).toEqual(new Set([0])); // activation never selects
+    expect(openList['selectionAnchor']()).toBe(2);
+    openList.extendSelection(-1); // paint = select: the 1..2 slice joins
+    expect(openList['selection']()).toEqual(new Set([0, 1, 2]));
+
+    // A shift+click gesture parks the keyboard cursor on its gesture row
+    // (V6): the next Shift+arrow continues the range from it.
+    const gestureList = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    gestureList['toggleRow'](itemAt(gestureList, 0), true);
+    shiftClick(checkboxAt(1));
+    await settle();
+    expect(gestureList['selection']()).toEqual(new Set([0, 1]));
+    gestureList.extendSelection(1); // continues from the gesture row, anchor 0
+    expect(gestureList['selection']()).toEqual(new Set([0, 1, 2]));
+    expect(gestureList['selectionAnchor']()).toBe(0);
+
+    // Navigation (J/K/Alt+arrows) moves the cursor but never the anchor.
+    const navList = await createList([entry(0), entry(1), entry(2)]);
+    fixture.detectChanges();
+    workspace.openEntry(0);
+    navList['toggleRow'](itemAt(navList, 0), true);
+    navList.navigate(1, false);
+    expect(navList['selectionAnchor']()).toBe(0);
+    navList.extendSelection(1); // from the navigated-to row 1, anchor 0
+    expect(navList['selection']()).toEqual(new Set([0, 1, 2]));
+  });
+
   it('scrollToEntry only scrolls when the target sits outside the rendered window', async () => {
     const list = await createList([entry(0), entry(1), entry(2)]);
     fixture.detectChanges();

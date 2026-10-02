@@ -250,6 +250,34 @@ test.describe('keyboard selection (desktop)', () => {
     await expect(page.locator('.entry-item.selected.disabled-entry')).toHaveCount(2);
   });
 
+  test('a mouse checkbox toggle re-anchors the next Shift+ArrowDown (no stale keyboard cursor)', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await importLorebook(page, FATE_PATH);
+
+    // A keyboard extension parks the cursor on row 1...
+    await keyboardToActiveRow(page);
+    await page.keyboard.press('Control+Space');
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(
+      page.getByRole('checkbox', { name: 'Select all shown entries (2 selected)' }),
+    ).toBeVisible();
+
+    // ...then a plain mouse toggle on a far row re-anchors everything: the
+    // next extension must add exactly ONE row from the toggled row (the
+    // round-2 manual-test bug extended from the stale cursor and swept the
+    // rows in between).
+    await page.locator('.entry-item').nth(4).locator('.row-select').click();
+    await expect(
+      page.getByRole('checkbox', { name: 'Select all shown entries (3 selected)' }),
+    ).toBeVisible();
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(
+      page.getByRole('checkbox', { name: 'Select all shown entries (4 selected)' }),
+    ).toBeVisible();
+  });
+
   test('Shift+ArrowUp after extending down shrinks the selection one row per press', async ({
     page,
   }) => {
