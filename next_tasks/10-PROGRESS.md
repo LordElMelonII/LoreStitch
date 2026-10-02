@@ -405,3 +405,47 @@ unpatched rather than fix speculatively.
 
 **Next**: USER gate (resumed) — re-test the selection variants; on the
 explicit go, `git merge --ff-only` into `develop`.
+
+## Manual-test fix-forward round 3 (orchestrator, probe-verified)
+
+**Status**: ✅ complete — commit `9af9bc5` `fix(editor): only the active tab's close button is a Tab stop in a paginated strip` (3 files, +79)
+
+The user asked how Tab traversal works between editor and sidenavs, and
+reported: with many tabs open, tabbing reached the close buttons of
+OFF-SCREEN tabs (tooltip visible, row clipped away) and never a tab label —
+"cannot select a tab, only close it".
+
+**Probed** (temporary e2e harness, deleted after): with a paginated
+7-tab header, focus walked via Tab/Shift+Tab in both directions + Arrow/Enter
+on tab labels. Findings: Material keeps only the SELECTED tab label as a Tab
+stop (ArrowRight moves focus, Enter activates — verified), but every tab's
+close button was `tabindex` 0 — the backward walk through the strip ran
+close-button, close-button… including tabs translated left of the viewport,
+and labels of non-selected tabs were never stops.
+
+**Fix (one line + pins)**: the close button's `tabindex` binds to
+`tab.id === workspace.activeTabId()` — the strip's single close stop rides
+the active tab, which Material always scrolls into view, so no off-screen
+close button can ever take focus. Tab activation (arrows + Enter on the
+label) is native Material behavior, verified unchanged.
+
+**Pins**: new `entry-editor.spec` test (non-active close −1 / active 0, and
+it follows `activeTabId`) + new e2e case in `keyboard-navigation.spec`
+(the paginated-strip traversal: Shift+Tab ×4 backward + forward stop never
+lands on a non-active close; the stop after the label is the active tab's
+own close).
+
+**Gates**: build green · full unit suite **1555/1555** · lint green ·
+typecheck:e2e green · `keyboard-navigation keyboard-shortcuts`
+desktop-chrome **25 passed**.
+
+**Traverse question answered with probe data**: Tab moves linearly across
+every region — skip link → topbar → entries drawer (filter, roving active
+row + inner controls) → tab strip (active label, active close) → name
+input → content textarea → delimiters/focus buttons → enabled switch →
+type rate radios → options toggle → history commit field → bottom bar;
+Shift+Tab walks back over the same path, so editor ⇄ side panels traverse
+freely.
+
+**Next**: USER gate (resumed) — on the explicit go, `git merge --ff-only`
+into `develop`.
