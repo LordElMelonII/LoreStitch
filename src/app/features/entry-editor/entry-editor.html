@@ -27,6 +27,7 @@
               class="close-btn"
               (click)="closeTab($event, tab.id)"
               [attr.aria-label]="'Close tab ' + tab.title"
+              [attr.tabindex]="tab.id === workspace.activeTabId() ? 0 : -1"
               matTooltip="Close tab"
             >
               <mat-icon>close</mat-icon>

@@ -412,3 +412,55 @@ test.describe('escape in dialogs (desktop)', () => {
     await expect(pane).toBeHidden();
   });
 });
+
+test.describe('tab strip keyboard traversal (desktop)', () => {
+  test.skip(
+    ({ viewport }) => (viewport?.width ?? 0) < 768,
+    'the tab-strip pins run on the desktop project',
+  );
+
+  test('close buttons of non-active tabs are unreachable by Tab in a paginated strip', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await importLorebook(page, FATE_PATH);
+
+    // Five tabs so the header paginates — tabs translate left of the header
+    // viewport (the manual-test report: their close buttons took focus and
+    // only them, since tab labels of non-selected tabs are not Tab stops).
+    for (const [i, index] of [2, 3, 4, 6, 7].entries()) {
+      await rows(page).nth(index).locator('.item-title').click();
+      await page.waitForTimeout(150);
+      void i;
+    }
+    await expect(page.locator('.mat-mdc-tab-header')).toBeVisible();
+
+    const activeTab = page.locator('.mat-mdc-tab[aria-selected="true"]').first();
+    const offender = () =>
+      page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        const label = el?.getAttribute('aria-label');
+        if (!label?.startsWith('Close tab ')) return false;
+        return el?.closest('.mat-mdc-tab')?.getAttribute('aria-selected') !== 'true';
+      });
+
+    // Backward through the strip — the manual-test broken path — must never
+    // land on a non-active close button; it exits into the entries drawer.
+    await activeTab.focus();
+    for (let i = 0; i < 4; i += 1) {
+      await page.keyboard.press('Shift+Tab');
+      expect(await offender()).toBe(false);
+    }
+
+    // Forward from the active label: the ONLY close button reachable is the
+    // active tab's own (Material always scrolls the active tab into view).
+    await activeTab.focus();
+    await page.keyboard.press('Tab');
+    expect(await offender()).toBe(false);
+    expect(
+      await page.evaluate(
+        () => (document.activeElement as HTMLElement | null)?.classList.contains('close-btn'),
+      ),
+    ).toBe(true);
+  });
+});

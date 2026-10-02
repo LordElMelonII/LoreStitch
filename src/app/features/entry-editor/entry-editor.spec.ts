@@ -629,6 +629,32 @@ describe('EntryEditor workspace wiring', () => {
     expect(workspace.activeTabId()).toBe(0);
   });
 
+  it('keeps every non-active tab close button out of Tab order (manual-test round-3)', async () => {
+    // With per-tab close buttons all in Tab order, tabbing backward through
+    // a many-tabs strip landed on close buttons of tabs translated off the
+    // header (only closable — the tab labels themselves were never stops),
+    // and the off-screen buttons showed tooltips while invisible. The active
+    // tab's close button is the strip's single close stop: Material always
+    // scrolls the active tab into view, so it can never be off-screen.
+    await createEditor();
+    const closeButtons = [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.close-btn'),
+    ];
+    expect(closeButtons).toHaveLength(2);
+    const [closeSaber, closeRin] = closeButtons;
+    assert(closeSaber);
+    assert(closeRin);
+
+    expect(closeSaber.getAttribute('tabindex')).toBe('0'); // active: Saber
+    expect(closeRin.getAttribute('tabindex')).toBe('-1'); // Rin
+
+    // The single stop follows the active tab.
+    workspace.activeTabId.set(1);
+    fixture.detectChanges();
+    expect(closeSaber.getAttribute('tabindex')).toBe('-1');
+    expect(closeRin.getAttribute('tabindex')).toBe('0');
+  });
+
   it('renders the empty state and creates a tab from "New entry"', async () => {
     workspace.activeProject.set({
       id: 'empty-project',
