@@ -449,3 +449,30 @@ freely.
 
 **Next**: USER gate (resumed) — on the explicit go, `git merge --ff-only`
 into `develop`.
+
+## Manual-test fix-forward round 4 (orchestrator)
+
+**Status**: ✅ complete — commit `93885d3` `fix(editor): only the active row's inner controls are Tab stops in the entry list` (3 files, +55/−13)
+
+User report: tabbing out of the entry list toured every rendered row's
+duplicate/delete buttons (hover-revealed affordances with residual tab
+stops) before reaching the editor. Fix: the same roving principle as the
+row stops — only the ACTIVE row's checkbox/Duplicate/Delete are Tab stops;
+every non-active row's inner controls leave Tab order. MatCheckbox's
+`[tabIndex]` input (null keeps the active row's native 0; −1 for the rest)
++ `[tabindex]` on the ghosts — note the binding is the DIRECTIVE input
+(`matIconButton` owns `tabindex`, host-bound to `_getTabIndex()`); an
+`[attr.tabindex]` binding is silently overridden (unit spec caught it).
+Keyboard routes preserved: selection via roving focus + Ctrl+Space; a
+non-active row's delete = activate the row (arrows/Enter), then Tab to its
+now-stoppable delete.
+
+Updated the roving e2e's forward-exit contract (stops = the active row's
+three controls, then past the rows) + new unit pin (3×3 tabIndex matrix).
+
+**Gates**: full unit suite **1556/1556** · lint green · build green ·
+typecheck:e2e green · `keyboard-navigation keyboard-shortcuts`
+desktop-chrome **25 passed**.
+
+**Next**: USER gate (resumed) — on the explicit go, `git merge --ff-only`
+into `develop`.
