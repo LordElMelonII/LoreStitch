@@ -220,3 +220,43 @@ direct `onRowKeydown` calls — P5 e2e is the real pin.
 `e2e/keyboard-navigation.spec.ts` (§3.8, incl. help-dialog cases), fresh
 delete/restore confirm pins (migration list empty), fast gate, smoke on
 desktop-chrome + one mobile project.
+
+## Phase P5 — E2E coverage (qa-auditor)
+
+**Status**: ✅ complete — commit `73f241b` `test(e2e): keyboard shortcuts and navigation coverage` (2 spec files + helpers, 25 tests: 22 desktop + 3 phone-pinned)
+
+**`e2e/keyboard-shortcuts.spec.ts`** (17): global chords (Mod+S dirty/clean,
+Mod+N active-tab-body focus `toBeFocused`, Mod+F, Alt+↓ focus-untouched,
+J/K roving, Alt+Shift+↓ reorder + reload persistence, Mod+Shift+D both ways,
+filter no-hijack `jk` + `?`) · help dialog (?/topbar/Escape/inert-while-open,
+exact-`kbd` Mod+S + ? pins) · delete confirm (exact copy, cancel/accept) ·
+restore confirm (cancel keeps dirty, accept rolls back) · phone: bottom-sheet
+confirm `.app-confirm-sheet`, chords inert, bar covers actions.
+
+**`e2e/keyboard-navigation.spec.ts`** (8): skip link first-Tab (pointer-free
+reload recipe) + Enter jump to `#editor-content` · roving contract (ONE
+row-level stop, `aria-current` iff tabbable, bounded 15-stop forward window)
+· 22 paced arrow/J/K steps past the rendered window (scrollTop + window
+first-row polls) · Ctrl+Space/Shift+↓ range + batch Disable applies · Space
+on checkbox toggles WITHOUT opening (bubbling-fix pin) + Enter on row opens ·
+Escape closes confirm + help.
+
+Helpers added to `e2e/helpers.ts` (`FIRST_ROW_TITLE`, `focusBody`,
+`entryRowTitle`, `focusedTarget`) — no duplication.
+
+**Gates**: typecheck:e2e green ×2 · build green · full unit suite 1552/1552 ·
+lint green ×2 · desktop-chrome scoped run 22P/3S (1.2 m) · mobile-chrome
+3P/22S (13 s) · proactive mobile-safari 3P/22S (19 s).
+
+**Stabilizations (probe-verified, scripts in `__screenshots__/10/`)**:
+fixture renders in `order` (row 0 = "The Greater Holy Grail…", not first
+JSON key) ⇒ `FIRST_ROW_TITLE` + dynamic reads; Escape-vs-CDK-focus-trap race
+⇒ assert in-pane focus before Escape-on-dialog (3/3 repro before fix);
+forward tab walk unbounded by design (virtual scroll renders ahead) ⇒
+bounded 15-stop window; batch toolbar unmounts at zero selection ⇒
+`toHaveCount(0)`; strict-mode `exact: true` on the Commit button. One fixed
+`SAVE_FLUSH_MS = 700` window before reorder-reload (debounced IndexedDB
+save, `EDIT_COMMIT_FLUSH_MS` precedent).
+
+**Next**: branch-final sweep — three-project Playwright matrix per project +
+closing `npm test --coverage` + `npm run lint`, then push + stop.
