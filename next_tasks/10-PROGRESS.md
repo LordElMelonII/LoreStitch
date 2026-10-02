@@ -346,3 +346,62 @@ test (`createList` reassigns the shared fixture).
 
 **Next**: USER gate (resumed) — re-test the two fixed interactions; on the
 explicit go, `git merge --ff-only` into `develop`.
+
+## Manual-test fix-forward round 2 (orchestrator, probe-verified)
+
+**Status**: ✅ complete — commit `de31fa4` `fix(shortcuts): keyboard selection cursor follows every row touch` (3 files, +126/−15)
+
+The user re-tested and reported the behavior still unpredictable across
+three variants (row-body click vs checkbox click before Shift+↓), plus the
+mid-turn ask: verify every variant in a real browser, incl. shift+click on
+row/checkbox and arrows with shift held. The orchestrator drove a temporary
+7-variant Playwright probe against the real app (e2e harness, Fate fixture,
+fresh page per variant, selection state read from the rendered DOM) —
+deleted after verification, evidence below.
+
+**Probe findings (before the fix)**:
+- V4 isolated the root cause: a keyboard extension parks `selectionCursor`,
+  a later MOUSE checkbox toggle moves the anchor but not the cursor, and the
+  next Shift+↓ then extended from the STALE cursor (7 rows swept instead of
+  5). The user's variants 2–3 extra rows were accumulated stale state across
+  attempts, not fresh-state behavior.
+- V1 (row-body click then Shift+↓) swept from the OLD anchor (6–7 rows):
+  activation moved neither cursor nor anchor.
+
+**Fix (all in `entry-list.ts`, the "last touched row" model)**:
+- `toggleRow`, `applyRangeGesture`, `open`, `navigate` now all update
+  `selectionCursor` — it can never go stale (round-1 reset only the
+  paint/base).
+- Row ACTIVATION (`open`, row click / Enter) also moves the range anchor —
+  native click semantics; activation still never selects.
+- New `anchorPaint` field: the gesture paint is fixed at anchor placement
+  (toggle → its checked state; activation → SELECT), replacing the
+  `base.has(anchor)` read — deriving from the anchor's selection bit made
+  Shift+↓ after a plain open select nothing (caught by probe iteration,
+  fixed before landing).
+
+**Post-fix probe (all variants, real browser)**: user's three scenarios ALL
+converge on {anchor-retained rows + clicked row + its neighbor} (3 rows in
+the probe geometry); shift+click on a row BODY opens without selecting
+(task-20 by design); shift+click on a CHECKBOX sweeps and Shift+arrows
+continue/shrink one row per press; no-anchor keyboard-only start degrades to
+per-row toggles; arrows (J/K/Alt) move the cursor but never the anchor.
+
+**Pins**: new unit test (cursor after mouse toggle — the V4 discriminator
+{0,1,3,4} not {0,1,2,3}; activation re-anchor + select-paint; shift+click
+parks the cursor; navigate moves cursor, never anchor) + new e2e case
+(mouse toggle re-anchors the next Shift+ArrowDown). Round-1 truth table and
+all task-20 mouse pins untouched and green.
+
+**Gates**: build green · full unit suite **1554/1554** · lint green ·
+typecheck:e2e green · `keyboard-navigation keyboard-shortcuts`
+desktop-chrome **24 passed** ×2 consecutive runs.
+
+**Flake note**: one cold combined run red on the pre-existing "chords are
+inert" Escape pin (pane stayed open); it passes isolated and in two
+consecutive combined runs after warm-up — same Escape-vs-focus-trap race
+class P5 documented, not touched by this diff. Unreproduced since; left
+unpatched rather than fix speculatively.
+
+**Next**: USER gate (resumed) — re-test the selection variants; on the
+explicit go, `git merge --ff-only` into `develop`.
