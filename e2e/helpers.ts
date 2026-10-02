@@ -18,6 +18,14 @@ export const FATE_PATH = join(
 );
 
 /**
+ * Ground truth against that fixture (recompute when it changes — the
+ * search-responsiveness.spec precedent): the entry list renders in the
+ * book's insertion order, whose first row is NOT the first JSON key —
+ * "User apartment" carries order 100, this entry order 40.
+ */
+export const FIRST_ROW_TITLE = 'The Greater Holy Grail & Three Founding Families';
+
+/**
  * A committed hand-crafted book carrying exactly the four fixable id/value
  * defects the repair dialog's approved copy was verified against (plan 09,
  * checkpoint 09-1): a duplicate id 2 ("Gate house" / "River dock"), a string
@@ -324,6 +332,71 @@ export async function setEntryContent(page: Page, content: string): Promise<void
  */
 export async function readEntryContent(page: Page): Promise<string> {
   return activeEditorPane(page).getByLabel('Entry content', { exact: true }).inputValue();
+}
+
+// -----------------------------------------------------------------------------
+// Keyboard shortcuts / navigation (task 10 P5) — shared focus + row readers
+// -----------------------------------------------------------------------------
+
+/**
+ * Moves DOM focus to `<body>` — the keyboard-neutral way to park focus in the
+ * shortcut resolver's `'other'` scope (no pointer interaction, so the
+ * keyboard suites stay pointer-free where the pin demands it). Chord specs
+ * blur explicitly because the preceding action may have parked focus in a
+ * text field whose scope would swallow (or misdeliver) the chord.
+ */
+export async function focusBody(page: Page): Promise<void> {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+}
+
+/**
+ * Reads an entry row's rendered title by visible-list index. The text may
+ * carry the uncommitted-changes `*` marker (a dirty row), so callers compare
+ * with `toContainText` — never string equality.
+ */
+export async function entryRowTitle(page: Page, index: number): Promise<string> {
+  return (await page.locator('.entry-item .item-title').nth(index).innerText()).trim();
+}
+
+/** One-pass read of the focused element's identity in the shell. */
+export interface FocusedTargetInfo {
+  /** The entry row div ITSELF holds focus (a roving stop). */
+  readonly isRow: boolean;
+  /** The sidebar quick-filter input. */
+  readonly isFilter: boolean;
+  /** The entries drawer's resize handle (the docked drawer's last focusable). */
+  readonly isResizeHandle: boolean;
+  /** The focused row's `data-entry-id` (null when focus is off the rows). */
+  readonly entryId: string | null;
+  /** The focused row is the ACTIVE row (`aria-current="true"`). */
+  readonly isCurrent: boolean;
+}
+
+/**
+ * Reads what holds DOM focus — the discriminator suite for the keyboard
+ * suites: roving stops, skip-link landings and chord scope boundaries are all
+ * `document.activeElement` facts no locator can see.
+ */
+export async function focusedTarget(page: Page): Promise<FocusedTargetInfo> {
+  return page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el) {
+      return {
+        isRow: false,
+        isFilter: false,
+        isResizeHandle: false,
+        entryId: null,
+        isCurrent: false,
+      };
+    }
+    return {
+      isRow: el.classList.contains('entry-item'),
+      isFilter: el.getAttribute('aria-label') === 'Filter entries',
+      isResizeHandle: el.getAttribute('aria-label') === 'Resize entries panel',
+      entryId: el.dataset['entryId'] ?? null,
+      isCurrent: el.getAttribute('aria-current') === 'true',
+    };
+  });
 }
 
 // -----------------------------------------------------------------------------
