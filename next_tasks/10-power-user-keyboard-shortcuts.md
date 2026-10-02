@@ -16,8 +16,9 @@
 > confirm dialogs) ⇒ design evidence at checkpoint 10-1.
 > **Suggested agents**: `core-engine` (lead: pure chord→action model) →
 > `ui-specialist` (two phases) → `ts-reviewer` → `qa-auditor`
-> **Status**: 🟡 Planned — not started (re-grounded at `develop` @ `90bb582`,
-> v1.11.0)
+> **Status**: ✅ Implemented 2026-10-01 — branch `feature/10-keyboard-shortcuts-a11y`
+> pushed for user testing (checkpoint 10-1 approved; ledger
+> [10-PROGRESS.md](./10-PROGRESS.md); awaiting manual test + `git merge --ff-only`)
 
 ---
 

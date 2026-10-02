@@ -260,3 +260,44 @@ save, `EDIT_COMMIT_FLUSH_MS` precedent).
 
 **Next**: branch-final sweep — three-project Playwright matrix per project +
 closing `npm test --coverage` + `npm run lint`, then push + stop.
+
+## Branch-final sweep + push (orchestrator)
+
+**Status**: ✅ sweep green at `73f241b`; branch pushed; STOPPED (no merge —
+user tests first)
+
+Sweep results (one project at a time, then closing unit+lint):
+- `npx playwright test --project=desktop-chrome`: **113 passed / 23
+  skipped** (5.1 m) — green.
+- `npx playwright test --project=mobile-chrome`: **57 passed / 79 skipped**
+  (3.4 m) — green.
+- `npx playwright test --project=mobile-safari`: **55 passed / 81 skipped**
+  (4.9 m) — green. (Large skip counts by design — phone-pinned tests skip on
+  desktop and vice versa.)
+- `CI=true npm test -- --watch=false --coverage`: exit 0 — 66 files,
+  **1552/1552**; global coverage 95.66 / 90.13 / 91.68 / 96.54
+  (stmts/branches/funcs/lines vs 80/75/80/80 floors).
+- `npm run lint`: green ("All files pass linting").
+
+**Branch history** (linear, off `develop` @ `90bb582`):
+- `8fe8b80` docs(next_tasks): task 10 adds the shortcuts help dialog (pre-task)
+- `c779b55` feat(shortcuts): pure chord→action resolver (P1)
+- `4572abd` docs(next_tasks): task 10 phase P1 progress
+- `f64eca9` docs(next_tasks): task 10 checkpoint 10-1 approved
+- `8db5297` feat(shortcuts): global shortcut service and keyboard entry navigation (P2)
+- `3253e10` docs(next_tasks): task 10 phase P2 progress
+- `89d3a12` feat(a11y): keyboard selection, focus baseline, and destructive-action confirmations (P3)
+- `c8ad1d1` docs(next_tasks): task 10 phase P3 progress
+- `f100d60` docs(next_tasks): task 10 phase P4 progress (review clean, no fix commit)
+- `73f241b` test(e2e): keyboard shortcuts and navigation coverage (P5)
+- `b72114d` docs(next_tasks): task 10 phase P5 progress
+- final docs commit: sweep entry + plan/README status sync (this commit)
+
+**Visual baseline** (gitignored): `__screenshots__/10/before/` (9 PNGs,
+pre-task) vs `__screenshots__/10/after/` (21 PNGs, post-P3) — identical
+pinned conditions; side-by-side posted with the task report. Capture +
+audit scripts kept at `__screenshots__/10/{capture,audit}.mjs`.
+
+**Next**: USER gate — manual test of the pushed branch; `git merge --ff-only`
+into `develop` only on the explicit go (then the archival batch pass moves
+this plan + ledger + task 11's documents into `archive/`).
