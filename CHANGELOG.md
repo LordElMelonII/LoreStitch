@@ -2,6 +2,26 @@
 
 What's new in LoreStitch. This file also powers the in-app **About → Changelog** viewer.
 
+## 1.12.0 — October 2, 2026
+
+### Highlights
+
+- **Keyboard shortcuts** — Ctrl+S (Cmd on a Mac) commits a snapshot on the spot, Ctrl+N starts a
+  new entry, Ctrl+F jumps to the sidebar filter — even mid-sentence. "Keyboard shortcuts…" in the
+  top bar opens the full map; so does the ? key outside a text field.
+- **Walk the book without the mouse** — Alt+↑/↓ opens the previous or next entry, Alt+Shift+↑/↓
+  moves the active entry up or down the list, Ctrl+Shift+D switches it on or off.
+- **Select from the keyboard** — in the entry list, ↑/↓ and J/K walk the rows, Ctrl+Space toggles
+  a row, Shift+↑/↓ grows the selection run — the same ranges shift-click paints.
+- **Deleting and restoring ask first** — deleting an entry and rolling back a history snapshot
+  confirm before anything irreversible happens.
+- **Keyboard accessibility** — a skip link leaps past the chrome to the editor, focus rings mark
+  every stop, and Tab tours the app once instead of visiting every row's buttons.
+
+### Fixed
+
+- Space on a row's checkbox no longer also opens the editor.
+
 ## 1.11.0 — October 1, 2026
 
 ### Highlights
